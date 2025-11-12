@@ -8,6 +8,10 @@
  * @module
  */
 
+import type * as auth from "../auth.js";
+import type * as category from "../category.js";
+import type * as http from "../http.js";
+import type * as seed from "../seed.js";
 import type * as video from "../video.js";
 
 import type {
@@ -25,6 +29,10 @@ import type {
  * ```
  */
 declare const fullApi: ApiFromModules<{
+  auth: typeof auth;
+  category: typeof category;
+  http: typeof http;
+  seed: typeof seed;
   video: typeof video;
 }>;
 declare const fullApiWithMounts: typeof fullApi;

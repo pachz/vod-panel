@@ -1,248 +1,177 @@
-import { CSSProperties, FormEvent, useMemo, useState } from "react";
-import { useMutation, useQuery } from "convex/react";
+import { useCallback, useMemo, useState } from "react";
+import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
+import { useConvexAuth } from "convex/react";
+import { useAuthActions } from "@convex-dev/auth/react";
+import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
-import { api } from "../convex/_generated/api";
-import type { Doc } from "../convex/_generated/dataModel";
+import LoginPage from "./LoginPage";
+import Dashboard from "@/pages/Dashboard";
+import Categories from "@/pages/Categories";
+import Courses from "@/pages/Courses";
+import CourseDetail from "@/pages/CourseDetail";
+import Lessons from "@/pages/Lessons";
+import NotFound from "@/pages/NotFound";
+import VideoPanel from "@/pages/VideoPanel";
+import { ThemeProvider } from "@/components/ThemeProvider";
+import { ThemeToggle } from "@/components/ThemeToggle";
+import { TooltipProvider } from "@/components/ui/tooltip";
+import { Toaster } from "@/components/ui/toaster";
+import { Toaster as Sonner } from "@/components/ui/sonner";
+import {
+  SidebarProvider,
+  SidebarTrigger,
+} from "@/components/ui/sidebar";
+import { AdminSidebar } from "@/components/AdminSidebar";
+import { Button } from "@/components/ui/button";
 
-type VideoDoc = Doc<"videos">;
-
-const isVimeoPlayerUrl = (value: string): boolean =>
-  /^https:\/\/player\.vimeo\.com\/video\/\d+/.test(value);
-
-const mainStyle: CSSProperties = {
-  maxWidth: "960px",
-  margin: "0 auto",
-  padding: "2.5rem 1.5rem 4rem",
-  fontFamily:
-    "'Inter', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif",
-  color: "#0f172a",
-  display: "grid",
-  gap: "2rem",
+type LocationState = {
+  from?: {
+    pathname?: string;
+    search?: string;
+    hash?: string;
+  };
 };
 
-const sectionStyle: CSSProperties = {
-  backgroundColor: "#f8fafc",
-  border: "1px solid #e2e8f0",
-  borderRadius: "16px",
-  padding: "1.75rem",
-  boxShadow: "0 24px 48px -24px rgba(15, 23, 42, 0.2)",
-};
+const queryClient = new QueryClient();
 
-const panelStyle: CSSProperties = {
-  ...sectionStyle,
-  display: "flex",
-  flexDirection: "column",
-  gap: "1rem",
-};
-
-const controlsStyle: CSSProperties = {
-  display: "flex",
-  flexWrap: "wrap",
-  gap: "0.75rem",
-};
-
-const inputStyle: CSSProperties = {
-  flex: "1 1 240px",
-  padding: "0.75rem 1rem",
-  borderRadius: "10px",
-  border: "1px solid #cbd5f5",
-  fontSize: "1rem",
-  backgroundColor: "#fff",
-};
-
-const buttonStyle: CSSProperties = {
-  flex: "none",
-  padding: "0.75rem 1.5rem",
-  borderRadius: "10px",
-  border: "none",
-  background: "linear-gradient(135deg, #2563eb, #7c3aed)",
-  color: "#fff",
-  fontWeight: 600,
-  cursor: "pointer",
-};
-
-const hintStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "0.9rem",
-  color: "#64748b",
-};
-
-const errorStyle: CSSProperties = {
-  margin: 0,
-  color: "#b91c1c",
-  fontWeight: 600,
-};
-
-const statusStyle: CSSProperties = {
-  margin: 0,
-  color: "#64748b",
-};
-
-const listStyle: CSSProperties = {
-  display: "grid",
-  gap: "0.75rem",
-  listStyle: "none",
-  padding: 0,
-  margin: 0,
-  fontFamily:
-    "ui-monospace, SFMono-Regular, SFMono, Menlo, Monaco, Consolas, 'Liberation Mono', 'Courier New', monospace",
-  fontSize: "0.9rem",
-  color: "#1e293b",
-};
-
-const listItemStyle: CSSProperties = {
-  wordBreak: "break-word",
-  padding: "0.65rem 0.75rem",
-  borderRadius: "8px",
-  backgroundColor: "rgba(148, 163, 184, 0.15)",
-};
-
-const vimeoWrapperStyle: CSSProperties = {
-  width: "100%",
-  maxWidth: "640px",
-  margin: "0 auto",
-  borderRadius: "12px",
-  overflow: "hidden",
-};
-
-const iframeStyle: CSSProperties = {
-  display: "block",
-  width: "100%",
-  height: "360px",
-  border: 0,
-  borderRadius: "12px",
-  background: "#0f172a",
-};
-
-const headingStyle: CSSProperties = {
-  marginTop: 0,
-  marginBottom: "1rem",
-};
-
-const titleStyle: CSSProperties = {
-  margin: 0,
-  fontSize: "2rem",
-  fontWeight: 700,
-};
-
-const subtitleStyle: CSSProperties = {
-  margin: 0,
-  color: "#475569",
-  lineHeight: 1.5,
-};
-
-const VimeoEmbed = ({ url, title }: { url: string; title?: string }) => (
-  <div style={vimeoWrapperStyle}>
-    <iframe
-      src={url}
-      title={title ?? "Saved Vimeo video"}
-      allow="autoplay; fullscreen; picture-in-picture; clipboard-write; encrypted-media; web-share"
-      referrerPolicy="strict-origin-when-cross-origin"
-      style={iframeStyle}
-      allowFullScreen
-    />
+const LoadingScreen = () => (
+  <div className="min-h-screen flex items-center justify-center bg-background">
+    <div className="rounded-3xl border border-border/40 bg-card/70 px-10 py-8 shadow-card">
+      <p className="text-muted-foreground">Checking your session…</p>
+    </div>
   </div>
 );
 
-const App = () => {
-  const [url, setUrl] = useState("");
-  const [error, setError] = useState<string | null>(null);
+const PrivateRoute = () => {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const location = useLocation();
 
-  const videos = useQuery(api.video.listVideos);
-  const addVideo = useMutation(api.video.addVideo);
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
 
-  const videoList = useMemo<VideoDoc[]>(() => videos ?? [], [videos]);
-  const latestVideo = videoList[0];
+  if (!isAuthenticated) {
+    const redirectTarget = `${location.pathname}${location.search}${location.hash}`;
+    const searchParams = new URLSearchParams();
+    searchParams.set("redirect", redirectTarget || "/");
 
-  const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
-    event.preventDefault();
-    const trimmed = url.trim();
+    return (
+      <Navigate
+        to={`/login?${searchParams.toString()}`}
+        replace
+        state={{ from: location }}
+      />
+    );
+  }
 
-    if (!trimmed) {
-      setError("Please paste a Vimeo embed URL before saving.");
+  return <Outlet />;
+};
+
+const PublicRoute = () => {
+  const { isAuthenticated, isLoading } = useConvexAuth();
+  const location = useLocation();
+  const state = location.state as LocationState | null;
+  const redirectFromQuery = new URLSearchParams(location.search).get("redirect");
+
+  const redirectFromState = state?.from
+    ? `${state.from.pathname ?? ""}${state.from.search ?? ""}${state.from.hash ?? ""}`
+    : undefined;
+
+  const redirectPath =
+    redirectFromQuery?.startsWith("/") ? redirectFromQuery : redirectFromState?.startsWith("/") ? redirectFromState : "/";
+
+  if (isLoading) {
+    return <LoadingScreen />;
+  }
+
+  if (isAuthenticated) {
+    return <Navigate to={redirectPath} replace />;
+  }
+
+  return <Outlet />;
+};
+
+const DashboardProviders = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <SidebarProvider>
+          <DashboardLayout />
+        </SidebarProvider>
+      </TooltipProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
+
+const DashboardLayout = () => {
+  const { signOut } = useAuthActions();
+  const [isSigningOut, setIsSigningOut] = useState(false);
+
+  const handleSignOut = useCallback(async () => {
+    if (isSigningOut) {
       return;
     }
 
-    if (!isVimeoPlayerUrl(trimmed)) {
-      setError("The URL should look like https://player.vimeo.com/video/123456789.");
-      return;
-    }
-
+    setIsSigningOut(true);
     try {
-      await addVideo({ url: trimmed });
-      setUrl("");
-      setError(null);
-    } catch (cause) {
-      console.error(cause);
-      setError("Something went wrong while saving the video. Please try again.");
+      await signOut();
+    } finally {
+      setIsSigningOut(false);
     }
-  };
+  }, [isSigningOut, signOut]);
+
+  const signOutLabel = useMemo(
+    () => (isSigningOut ? "Signing out…" : "Sign out"),
+    [isSigningOut],
+  );
 
   return (
-    <main style={mainStyle}>
-      <section style={panelStyle}>
-        <h1 style={titleStyle}>VOD Panel</h1>
-        <p style={subtitleStyle}>
-          Add a Vimeo embed URL to save it in Convex and preview the video instantly.
-        </p>
-
-        <form onSubmit={handleSubmit} style={{ display: "flex", flexDirection: "column", gap: "0.5rem" }}>
-          <label htmlFor="videoUrl" style={{ fontWeight: 600 }}>
-            Vimeo embed URL
-          </label>
-          <div style={controlsStyle}>
-            <input
-              id="videoUrl"
-              name="videoUrl"
-              type="url"
-              inputMode="url"
-              placeholder="https://player.vimeo.com/video/1130646892"
-              value={url}
-              onChange={(event) => setUrl(event.target.value)}
-              style={inputStyle}
-            />
-            <button type="submit" style={buttonStyle}>
-              Save link
-            </button>
+    <div className="relative min-h-screen w-full bg-background">
+      <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
+      <div className="relative z-10 flex min-h-screen w-full">
+        <AdminSidebar />
+        <main className="flex flex-1 flex-col">
+          <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 bg-background/80 px-6 backdrop-blur">
+            <SidebarTrigger />
+            <div className="flex-1" />
+            <ThemeToggle />
+            <Button
+              variant="outline"
+              onClick={handleSignOut}
+              disabled={isSigningOut}
+              className="border-border/60"
+            >
+              {signOutLabel}
+            </Button>
+          </header>
+          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+            <Outlet />
           </div>
-          <p style={hintStyle}>
-            Example embed code URLs look like the one above. Paste the full player URL.
-          </p>
-        </form>
-        {error && <p style={errorStyle}>{error}</p>}
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={headingStyle}>Latest video</h2>
-        {latestVideo ? (
-          <VimeoEmbed url={latestVideo.url} title="Latest saved Vimeo video" />
-        ) : videos === undefined ? (
-          <p style={statusStyle}>Loading saved videos…</p>
-        ) : (
-          <p style={statusStyle}>No videos saved yet.</p>
-        )}
-      </section>
-
-      <section style={sectionStyle}>
-        <h2 style={headingStyle}>Saved links</h2>
-        {videoList.length === 0 ? (
-          videos === undefined ? (
-            <p style={statusStyle}>Loading…</p>
-          ) : (
-            <p style={statusStyle}>Nothing stored yet.</p>
-          )
-        ) : (
-          <ul style={listStyle}>
-            {videoList.map((video) => (
-              <li key={video._id} style={listItemStyle}>
-                {video.url}
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-    </main>
+        </main>
+      </div>
+    </div>
   );
 };
+
+const App = () => (
+  <Routes>
+    <Route element={<PublicRoute />}>
+      <Route path="/login" element={<LoginPage />} />
+    </Route>
+    <Route element={<PrivateRoute />}>
+      <Route element={<DashboardProviders />}>
+        <Route path="/" element={<Dashboard />} />
+        <Route path="/categories" element={<Categories />} />
+        <Route path="/courses" element={<Courses />} />
+        <Route path="/courses/:id" element={<CourseDetail />} />
+        <Route path="/lessons" element={<Lessons />} />
+        <Route path="/video-panel" element={<VideoPanel />} />
+        <Route path="*" element={<NotFound />} />
+      </Route>
+    </Route>
+  </Routes>
+);
 
 export default App;
