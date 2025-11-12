@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Plus, Pencil, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
@@ -62,6 +62,37 @@ const Categories = () => {
     description: "",
     descriptionAr: "",
   });
+  const descriptionRef = useRef<HTMLTextAreaElement | null>(null);
+  const descriptionArRef = useRef<HTMLTextAreaElement | null>(null);
+
+  const adjustTextareaHeight = useCallback((element: HTMLTextAreaElement | null) => {
+    if (!element) {
+      return;
+    }
+
+    const minHeight = 3 * 24; // ~3 lines at 24px line height
+    element.style.minHeight = `${minHeight}px`;
+    element.style.height = "auto";
+
+    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : undefined;
+    const reservedSpace = 420; // headers, other fields, actions, and padding
+    const availableSpace = viewportHeight
+      ? Math.max(viewportHeight - reservedSpace, minHeight)
+      : undefined;
+    const maxHeight = availableSpace ? Math.max(minHeight, availableSpace / 2) : undefined;
+
+    const desiredHeight = element.scrollHeight;
+
+    if (maxHeight) {
+      const nextHeight = Math.min(desiredHeight, maxHeight);
+      element.style.height = `${nextHeight}px`;
+      element.style.maxHeight = `${maxHeight}px`;
+      element.style.overflowY = desiredHeight > maxHeight ? "auto" : "hidden";
+    } else {
+      element.style.height = `${desiredHeight}px`;
+      element.style.overflowY = "hidden";
+    }
+  }, []);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -83,7 +114,28 @@ const Categories = () => {
         descriptionAr: "",
       });
     }
-  }, [editingCategory, isDialogOpen]);
+
+    requestAnimationFrame(() => {
+      adjustTextareaHeight(descriptionRef.current);
+      adjustTextareaHeight(descriptionArRef.current);
+    });
+  }, [adjustTextareaHeight, editingCategory, isDialogOpen]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    adjustTextareaHeight(descriptionRef.current);
+  }, [adjustTextareaHeight, formValues.description, isDialogOpen]);
+
+  useEffect(() => {
+    if (!isDialogOpen) {
+      return;
+    }
+
+    adjustTextareaHeight(descriptionArRef.current);
+  }, [adjustTextareaHeight, formValues.descriptionAr, isDialogOpen]);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = categories === undefined;
@@ -256,8 +308,12 @@ const Categories = () => {
                   onChange={(event) =>
                     setFormValues((prev) => ({ ...prev, description: event.target.value }))
                   }
+                  onInput={(event) => adjustTextareaHeight(event.currentTarget)}
+                  ref={descriptionRef}
                   required
                   maxLength={1024}
+                  rows={3}
+                  className="min-h-[6.75rem] resize-none"
                 />
               </div>
               <div className="space-y-2">
@@ -269,10 +325,13 @@ const Categories = () => {
                   onChange={(event) =>
                     setFormValues((prev) => ({ ...prev, descriptionAr: event.target.value }))
                   }
+                  onInput={(event) => adjustTextareaHeight(event.currentTarget)}
+                  ref={descriptionArRef}
                   required
                   maxLength={1024}
                   dir="rtl"
-                  className="text-right"
+                  rows={3}
+                  className="min-h-[6.75rem] resize-none text-right"
                 />
               </div>
               <Button type="submit" variant="cta" className="w-full" disabled={isSaving}>
