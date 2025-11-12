@@ -26,8 +26,7 @@ const LoginHeader = () => (
   <header className="login-header">
     <h1>Welcome back</h1>
     <p>
-      Sign in to manage your VOD links. Use the credentials provided by your
-      administrator.
+      CoursHub Management Panel
     </p>
   </header>
 );
