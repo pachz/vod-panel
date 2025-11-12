@@ -34,12 +34,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
+import { categoryInputSchema } from "../../shared/validation/category";
 
 type CategoryDoc = Doc<"categories">;
 
 type FormValues = {
   name: string;
+  nameAr: string;
   description: string;
+  descriptionAr: string;
 };
 
 const Categories = () => {
@@ -55,7 +58,9 @@ const Categories = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>({
     name: "",
+    nameAr: "",
     description: "",
+    descriptionAr: "",
   });
 
   useEffect(() => {
@@ -66,12 +71,16 @@ const Categories = () => {
     if (editingCategory) {
       setFormValues({
         name: editingCategory.name,
+        nameAr: editingCategory.name_ar ?? "",
         description: editingCategory.description ?? "",
+        descriptionAr: editingCategory.description_ar ?? "",
       });
     } else {
       setFormValues({
         name: "",
+        nameAr: "",
         description: "",
+        descriptionAr: "",
       });
     }
   }, [editingCategory, isDialogOpen]);
@@ -98,15 +107,15 @@ const Categories = () => {
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
-    if (!formValues.name.trim()) {
-      toast.error("Name is required.");
+    const validation = categoryInputSchema.safeParse(formValues);
+
+    if (!validation.success) {
+      const issue = validation.error.errors[0];
+      toast.error(issue?.message ?? "Please check the form and try again.");
       return;
     }
 
-    if (!formValues.description.trim()) {
-      toast.error("Description is required.");
-      return;
-    }
+    const { name, nameAr, description, descriptionAr } = validation.data;
 
     setIsSaving(true);
 
@@ -114,14 +123,18 @@ const Categories = () => {
       if (editingCategory) {
         await updateCategory({
           id: editingCategory._id,
-          name: formValues.name.trim(),
-          description: formValues.description.trim(),
+          name,
+          description,
+          nameAr,
+          descriptionAr,
         });
         toast.success("Category updated successfully");
       } else {
         await createCategory({
-          name: formValues.name.trim(),
-          description: formValues.description.trim(),
+          name,
+          description,
+          nameAr,
+          descriptionAr,
         });
         toast.success("Category created successfully");
       }
@@ -153,6 +166,26 @@ const Categories = () => {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  const getPreview = (value: string | null | undefined) => {
+    if (!value) {
+      return "—";
+    }
+
+    const trimmed = value.trim();
+    if (!trimmed) {
+      return "—";
+    }
+
+    const firstLine = trimmed.split(/\r?\n/)[0] ?? "";
+    const maxLength = 80;
+    const truncated =
+      firstLine.length > maxLength ? firstLine.slice(0, maxLength) : firstLine;
+    const needsEllipsis =
+      firstLine.length > maxLength || trimmed.length > firstLine.length;
+
+    return `${truncated}${needsEllipsis ? "…" : ""}`;
   };
 
   return (
@@ -198,6 +231,20 @@ const Categories = () => {
                   value={formValues.name}
                   onChange={(event) => setFormValues((prev) => ({ ...prev, name: event.target.value }))}
                   required
+                  maxLength={24}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="nameAr">Arabic Name</Label>
+                <Input
+                  id="nameAr"
+                  name="nameAr"
+                  value={formValues.nameAr}
+                  onChange={(event) => setFormValues((prev) => ({ ...prev, nameAr: event.target.value }))}
+                  required
+                  maxLength={24}
+                  dir="rtl"
+                  className="text-right"
                 />
               </div>
               <div className="space-y-2">
@@ -210,6 +257,22 @@ const Categories = () => {
                     setFormValues((prev) => ({ ...prev, description: event.target.value }))
                   }
                   required
+                  maxLength={1024}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="descriptionAr">Arabic Description</Label>
+                <Textarea
+                  id="descriptionAr"
+                  name="descriptionAr"
+                  value={formValues.descriptionAr}
+                  onChange={(event) =>
+                    setFormValues((prev) => ({ ...prev, descriptionAr: event.target.value }))
+                  }
+                  required
+                  maxLength={1024}
+                  dir="rtl"
+                  className="text-right"
                 />
               </div>
               <Button type="submit" variant="cta" className="w-full" disabled={isSaving}>
@@ -251,9 +314,7 @@ const Categories = () => {
               categoryList.map((category) => (
                 <TableRow key={category._id}>
                   <TableCell className="font-medium">{category.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {category.description ?? "—"}
-                  </TableCell>
+                  <TableCell className="text-muted-foreground">{getPreview(category.description)}</TableCell>
                   <TableCell>{category.course_count} courses</TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">

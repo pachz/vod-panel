@@ -2,6 +2,11 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 
+import {
+  categoryInputSchema,
+  type CategoryInput,
+} from "../shared/validation/category";
+
 const requireUser = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
 
@@ -37,16 +42,25 @@ export const createCategory = mutation({
   args: {
     name: v.string(),
     description: v.string(),
+    nameAr: v.string(),
+    descriptionAr: v.string(),
   },
-  handler: async (ctx, { name, description }) => {
+  handler: async (ctx, { name, description, nameAr, descriptionAr }) => {
     await requireUser(ctx);
 
-    const slug = slugify(name);
+    const validated = validateCategoryInput({
+      name,
+      description,
+      nameAr,
+      descriptionAr,
+    });
+
+    const slug = slugify(validated.name);
     const now = Date.now();
 
     const existing = await ctx.db
       .query("categories")
-      .withIndex("name", (q) => q.eq("name", name))
+      .withIndex("name", (q) => q.eq("name", validated.name))
       .first();
 
     if (existing && existing.deletedAt === undefined) {
@@ -57,8 +71,10 @@ export const createCategory = mutation({
     }
 
     const id = await ctx.db.insert("categories", {
-      name,
-      description,
+      name: validated.name,
+      description: validated.description,
+      name_ar: validated.nameAr,
+      description_ar: validated.descriptionAr,
       slug,
       course_count: 0,
       createdAt: now,
@@ -73,8 +89,10 @@ export const updateCategory = mutation({
     id: v.id("categories"),
     name: v.string(),
     description: v.string(),
+    nameAr: v.string(),
+    descriptionAr: v.string(),
   },
-  handler: async (ctx, { id, name, description }) => {
+  handler: async (ctx, { id, name, description, nameAr, descriptionAr }) => {
     await requireUser(ctx);
 
     const category = await ctx.db.get(id);
@@ -86,11 +104,18 @@ export const updateCategory = mutation({
       });
     }
 
-    const slug = slugify(name);
+    const validated = validateCategoryInput({
+      name,
+      description,
+      nameAr,
+      descriptionAr,
+    });
+
+    const slug = slugify(validated.name);
 
     const duplicates = await ctx.db
       .query("categories")
-      .withIndex("name", (q) => q.eq("name", name))
+      .withIndex("name", (q) => q.eq("name", validated.name))
       .collect();
 
     const hasDuplicate = duplicates.some(
@@ -105,12 +130,28 @@ export const updateCategory = mutation({
     }
 
     await ctx.db.patch(id, {
-      name,
-      description,
+      name: validated.name,
+      description: validated.description,
+      name_ar: validated.nameAr,
+      description_ar: validated.descriptionAr,
       slug,
     });
   },
 });
+
+const validateCategoryInput = (input: CategoryInput) => {
+  const result = categoryInputSchema.safeParse(input);
+
+  if (!result.success) {
+    const issue = result.error.errors[0];
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: issue?.message ?? "Invalid category input.",
+    });
+  }
+
+  return result.data;
+};
 
 export const deleteCategory = mutation({
   args: {

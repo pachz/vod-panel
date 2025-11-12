@@ -24,9 +24,9 @@ export default defineSchema({
 
   categories: defineTable({
     name: v.string(),
-    name_ar: v.optional(v.string()),
-    description: v.optional(v.string()),
-    description_ar: v.optional(v.string()),
+    name_ar: v.string(),
+    description: v.string(),
+    description_ar: v.string(),
     slug: v.string(),
     course_count: v.number(),
     createdAt: v.number(),
