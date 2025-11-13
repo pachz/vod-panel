@@ -1034,12 +1034,14 @@ const CourseDetail = () => {
                 <Input
                   id="durationMinutes"
                   value={formValues.durationMinutes}
-                  onChange={(event) =>
+                  onChange={(event) => {
+                    const rawValue = event.target.value;
+                    const sanitizedValue = rawValue.replace(/\D/g, "");
                     setFormValues((prev) => ({
                       ...prev,
-                      durationMinutes: event.target.value,
-                    }))
-                  }
+                      durationMinutes: sanitizedValue,
+                    }));
+                  }}
                   inputMode="numeric"
                   pattern="^[0-9]*$"
                   placeholder="e.g., 120"
