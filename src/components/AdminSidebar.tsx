@@ -33,12 +33,17 @@ export function AdminSidebar() {
         {/* Logo Header */}
         <div className="px-5 py-6 transition-all duration-300">
           <div className="flex items-center gap-3">
-            <div className="h-10 w-10 rounded-xl bg-gradient-to-br from-primary to-primary-glow flex items-center justify-center shadow-lg shadow-primary/20">
-              <GraduationCap className="h-5 w-5 text-white drop-shadow-sm" />
-            </div>
+            <img
+              src="/RehamDivaLogo.png"
+              alt="Reham Diva"
+              className={cn(
+                "rounded-xl object-cover transition-all duration-300",
+                collapsed ? "h-10 w-10" : "h-12 w-12",
+              )}
+            />
             {!collapsed && (
               <div className="space-y-1">
-                <h2 className="font-semibold text-base tracking-tight">CourseHub</h2>
+                <h2 className="font-semibold text-base tracking-tight">Reham Diva</h2>
                 <p className="text-xs text-sidebar-foreground/60">Admin Panel</p>
               </div>
             )}
