@@ -250,6 +250,27 @@ export const updateCourse = mutation({
       fallbackSlug: "course",
     });
 
+    if (validated.status === "published") {
+      const hasDescriptions =
+        validated.description !== undefined &&
+        validated.descriptionAr !== undefined;
+      const hasDuration =
+        validated.durationMinutes !== undefined && validated.durationMinutes > 0;
+      const hasCoverImages =
+        typeof course.banner_image_url === "string" &&
+        course.banner_image_url.trim().length > 0 &&
+        typeof course.thumbnail_image_url === "string" &&
+        course.thumbnail_image_url.trim().length > 0;
+
+      if (!hasDescriptions || !hasDuration || !hasCoverImages) {
+        throw new ConvexError({
+          code: "COURSE_INCOMPLETE",
+          message:
+            "Published courses must include English and Arabic descriptions, a duration, and cover images.",
+        });
+      }
+    }
+
     if (course.category_id !== categoryId) {
       const currentCategory = await ctx.db.get(course.category_id);
 

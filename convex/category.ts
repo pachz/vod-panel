@@ -169,6 +169,13 @@ export const deleteCategory = mutation({
       });
     }
 
+    if (category.course_count > 0) {
+      throw new ConvexError({
+        code: "CATEGORY_IN_USE",
+        message: "You must move or delete courses assigned to this category before deleting it.",
+      });
+    }
+
     await ctx.db.patch(id, {
       deletedAt: Date.now(),
     });
