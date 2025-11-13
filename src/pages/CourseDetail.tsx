@@ -9,7 +9,6 @@ import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -33,6 +32,7 @@ import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { RichTextarea } from "@/components/RichTextarea";
 import { courseUpdateSchema } from "../../shared/validation/course";
 
 type CourseDoc = Doc<"courses">;
@@ -599,77 +599,71 @@ const CourseDetail = () => {
             <Separator />
 
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="shortDescription">Short description</Label>
-                <Textarea
-                  id="shortDescription"
-                  value={formValues.shortDescription}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortDescription: event.target.value,
-                    }))
-                  }
-                  required
-                  maxLength={512}
-                  rows={3}
-                  className="resize-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shortDescriptionAr">Arabic short description</Label>
-                <Textarea
-                  id="shortDescriptionAr"
-                  value={formValues.shortDescriptionAr}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortDescriptionAr: event.target.value,
-                    }))
-                  }
-                  required
-                  maxLength={512}
-                  dir="rtl"
-                  rows={3}
-                  className="resize-none text-right"
-                />
-              </div>
+              <RichTextarea
+                id="shortDescription"
+                label="Short description"
+                value={formValues.shortDescription}
+                onChange={(nextValue) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    shortDescription: nextValue,
+                  }))
+                }
+                required
+                maxLength={512}
+                rows={3}
+                modalTitle="Edit short description"
+              />
+              <RichTextarea
+                id="shortDescriptionAr"
+                label="Arabic short description"
+                value={formValues.shortDescriptionAr}
+                onChange={(nextValue) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    shortDescriptionAr: nextValue,
+                  }))
+                }
+                required
+                maxLength={512}
+                rows={3}
+                dir="rtl"
+                textareaClassName="text-right"
+                modalTitle="Edit Arabic short description"
+              />
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="description">Full description</Label>
-                <Textarea
-                  id="description"
-                  value={formValues.description}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      description: event.target.value,
-                    }))
-                  }
-                  maxLength={4096}
-                  rows={5}
-                  className="resize-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="descriptionAr">Arabic full description</Label>
-                <Textarea
-                  id="descriptionAr"
-                  value={formValues.descriptionAr}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      descriptionAr: event.target.value,
-                    }))
-                  }
-                  maxLength={4096}
-                  dir="rtl"
-                  rows={5}
-                  className="resize-none text-right"
-                />
-              </div>
+              <RichTextarea
+                id="description"
+                label="Full description"
+                value={formValues.description}
+                onChange={(nextValue) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    description: nextValue,
+                  }))
+                }
+                maxLength={4096}
+                rows={5}
+                modalTitle="Edit full description"
+              />
+              <RichTextarea
+                id="descriptionAr"
+                label="Arabic full description"
+                value={formValues.descriptionAr}
+                onChange={(nextValue) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    descriptionAr: nextValue,
+                  }))
+                }
+                maxLength={4096}
+                rows={5}
+                dir="rtl"
+                textareaClassName="text-right"
+                modalTitle="Edit Arabic full description"
+              />
             </div>
 
             <Separator />
