@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
+import type { DragEvent, KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Image as ImageIcon, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
@@ -31,6 +32,7 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 
+import { cn } from "@/lib/utils";
 import { courseUpdateSchema } from "../../shared/validation/course";
 
 type CourseDoc = Doc<"courses">;
@@ -47,7 +49,6 @@ type FormValues = {
   status: CourseDoc["status"];
   trialVideoUrl: string;
   durationMinutes: string;
-  instructor: string;
 };
 
 const initialFormValues: FormValues = {
@@ -61,13 +62,139 @@ const initialFormValues: FormValues = {
   status: "draft",
   trialVideoUrl: "",
   durationMinutes: "",
-  instructor: "",
 };
 
 const statusLabels: Record<CourseDoc["status"], string> = {
   draft: "Draft",
   published: "Published",
   archived: "Archived",
+};
+
+type ImageDropzoneProps = {
+  id: string;
+  label: string;
+  helperText?: string;
+  aspectRatioClass: string;
+  value: string | null;
+  onSelectFile: (file: File) => void;
+};
+
+const ImageDropzone = ({
+  id,
+  label,
+  helperText,
+  aspectRatioClass,
+  value,
+  onSelectFile,
+}: ImageDropzoneProps) => {
+  const inputRef = useRef<HTMLInputElement>(null);
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const handleFiles = (files: FileList | null) => {
+    if (!files || files.length === 0) {
+      return;
+    }
+
+    const imageFile = Array.from(files).find((file) => file.type.startsWith("image/"));
+
+    if (!imageFile) {
+      toast.warning("Please choose an image file.");
+      return;
+    }
+
+    onSelectFile(imageFile);
+
+    if (inputRef.current) {
+      inputRef.current.value = "";
+    }
+  };
+
+  const handleClick = () => {
+    inputRef.current?.click();
+  };
+
+  const handleKeyDown = (event: KeyboardEvent<HTMLDivElement>) => {
+    if (event.key === "Enter" || event.key === " ") {
+      event.preventDefault();
+      handleClick();
+    }
+  };
+
+  const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    event.dataTransfer.dropEffect = "copy";
+    setIsDragOver(true);
+  };
+
+  const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    event.preventDefault();
+    setIsDragOver(false);
+    handleFiles(event.dataTransfer.files);
+  };
+
+  return (
+    <div className="space-y-2">
+      <Label id={`${id}-label`} htmlFor={id}>
+        {label}
+      </Label>
+      <div
+        role="button"
+        tabIndex={0}
+        aria-labelledby={`${id}-label`}
+        aria-describedby={helperText ? `${id}-helper-text` : undefined}
+        onClick={handleClick}
+        onKeyDown={handleKeyDown}
+        onDragOver={handleDragOver}
+        onDragEnter={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+        className={cn(
+          "group relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted/30 text-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+          aspectRatioClass,
+          isDragOver && "border-primary bg-primary/10",
+        )}
+      >
+        <input
+          ref={inputRef}
+          id={id}
+          type="file"
+          accept="image/*"
+          className="hidden"
+          onChange={(event) => handleFiles(event.target.files)}
+        />
+        {value ? (
+          <>
+            <img
+              src={value}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+            <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-end bg-gradient-to-t from-black/50 via-black/0 to-transparent p-4 text-xs font-medium text-white opacity-0 transition-opacity group-hover:opacity-100">
+              <span>Click or drag to replace</span>
+            </div>
+          </>
+        ) : (
+          <div className="pointer-events-none flex flex-col items-center justify-center gap-2 px-6 py-8 text-muted-foreground">
+            <ImageIcon className="h-12 w-12" />
+            <div className="space-y-1">
+              <p className="text-sm font-medium">Click to browse</p>
+              <p className="text-xs">or drag and drop an image</p>
+            </div>
+          </div>
+        )}
+      </div>
+      {helperText ? (
+        <p id={`${id}-helper-text`} className="text-xs text-muted-foreground">
+          {helperText}
+        </p>
+      ) : null}
+    </div>
+  );
 };
 
 const CourseDetail = () => {
@@ -85,9 +212,14 @@ const CourseDetail = () => {
   const deleteCourse = useMutation(api.course.deleteCourse);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
+  const [initialValues, setInitialValues] = useState<FormValues | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
+  const [thumbnailImageFile, setThumbnailImageFile] = useState<File | null>(null);
+  const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
+  const [thumbnailImagePreview, setThumbnailImagePreview] = useState<string | null>(null);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = course === undefined || categories === undefined;
@@ -97,7 +229,7 @@ const CourseDetail = () => {
       return;
     }
 
-    setFormValues({
+    const nextValues: FormValues = {
       name: course.name,
       nameAr: course.name_ar,
       shortDescription: course.short_description,
@@ -111,15 +243,84 @@ const CourseDetail = () => {
         course.duration !== undefined && course.duration !== null
           ? String(course.duration)
           : "",
-      instructor: course.instructor ?? "",
+    };
+
+    setFormValues((previous) => {
+      const prevJson = JSON.stringify(previous);
+      const nextJson = JSON.stringify(nextValues);
+      if (prevJson === nextJson) {
+        return previous;
+      }
+      return nextValues;
     });
+
+    setInitialValues(nextValues);
   }, [course, courseId]);
 
   useEffect(() => {
-    if (!isLoading && isDeleteDialogOpen) {
-      setIsDeleteDialogOpen(false);
+    if (!course) {
+      return;
     }
-  }, [isLoading, isDeleteDialogOpen]);
+
+    if (!coverImageFile) {
+      const nextCoverUrl = course.banner_image_url ?? null;
+      setCoverImagePreview((previous) => {
+        if (previous === nextCoverUrl) {
+          return previous;
+        }
+        if (previous && previous.startsWith("blob:")) {
+          URL.revokeObjectURL(previous);
+        }
+        return nextCoverUrl;
+      });
+    }
+
+    if (!thumbnailImageFile) {
+      const nextThumbnailUrl = course.thumbnail_image_url ?? null;
+      setThumbnailImagePreview((previous) => {
+        if (previous === nextThumbnailUrl) {
+          return previous;
+        }
+        if (previous && previous.startsWith("blob:")) {
+          URL.revokeObjectURL(previous);
+        }
+        return nextThumbnailUrl;
+      });
+    }
+  }, [
+    course,
+    coverImageFile,
+    coverImagePreview,
+    thumbnailImageFile,
+    thumbnailImagePreview,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      if (coverImagePreview && coverImagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(coverImagePreview);
+      }
+    };
+  }, [coverImagePreview]);
+
+  useEffect(() => {
+    return () => {
+      if (thumbnailImagePreview && thumbnailImagePreview.startsWith("blob:")) {
+        URL.revokeObjectURL(thumbnailImagePreview);
+      }
+    };
+  }, [thumbnailImagePreview]);
+
+  const hasFormChanges = useMemo(() => {
+    if (!initialValues) {
+      return false;
+    }
+
+    return JSON.stringify(initialValues) !== JSON.stringify(formValues);
+  }, [formValues, initialValues]);
+
+  const hasChanges =
+    hasFormChanges || coverImageFile !== null || thumbnailImageFile !== null;
 
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -155,7 +356,6 @@ const CourseDetail = () => {
       status: formValues.status,
       trialVideoUrl: formValues.trialVideoUrl,
       durationMinutes: formValues.durationMinutes,
-      instructor: formValues.instructor,
     });
 
     if (!validation.success) {
@@ -193,10 +393,28 @@ const CourseDetail = () => {
         status,
         trialVideoUrl,
         durationMinutes,
-        instructor,
       });
 
       toast.success("Course updated successfully");
+      const savedValues: FormValues = {
+        name,
+        nameAr,
+        shortDescription,
+        shortDescriptionAr,
+        description: description ?? "",
+        descriptionAr: descriptionAr ?? "",
+        categoryId,
+        status,
+        trialVideoUrl: trialVideoUrl ?? "",
+        durationMinutes:
+          durationMinutes !== undefined && durationMinutes !== null
+            ? String(durationMinutes)
+            : "",
+      };
+      setInitialValues(savedValues);
+      setFormValues(savedValues);
+      setCoverImageFile(null);
+      setThumbnailImageFile(null);
     } catch (error) {
       console.error(error);
       toast.error(getErrorMessage(error));
@@ -224,6 +442,28 @@ const CourseDetail = () => {
       setIsDeleting(false);
       setIsDeleteDialogOpen(false);
     }
+  };
+
+  const handleCoverImageSelect = (file: File) => {
+    const nextUrl = URL.createObjectURL(file);
+    setCoverImageFile(file);
+    setCoverImagePreview((previous) => {
+      if (previous && previous.startsWith("blob:")) {
+        URL.revokeObjectURL(previous);
+      }
+      return nextUrl;
+    });
+  };
+
+  const handleThumbnailImageSelect = (file: File) => {
+    const nextUrl = URL.createObjectURL(file);
+    setThumbnailImageFile(file);
+    setThumbnailImagePreview((previous) => {
+      if (previous && previous.startsWith("blob:")) {
+        URL.revokeObjectURL(previous);
+      }
+      return nextUrl;
+    });
   };
 
   if (!courseId) {
@@ -469,64 +709,23 @@ const CourseDetail = () => {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="instructor">Instructor</Label>
-              <Input
-                id="instructor"
-                value={formValues.instructor}
-                onChange={(event) =>
-                  setFormValues((prev) => ({
-                    ...prev,
-                    instructor: event.target.value,
-                  }))
-                }
-                maxLength={128}
-              />
-            </div>
-
-            <Separator />
-
             <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
-              <div className="space-y-3">
-                <Label>Cover image</Label>
-                <div className="relative flex aspect-video items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
-                  {course.banner_image_url ? (
-                    <img
-                      src={course.banner_image_url}
-                      alt="Course cover"
-                      className="h-full w-full rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="text-center text-muted-foreground">
-                      <ImageIcon className="mx-auto mb-2 h-12 w-12" />
-                      <p className="text-sm font-medium">Cover image coming soon</p>
-                      <p className="text-xs">
-                        You&apos;ll be able to upload an image here later.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="space-y-3">
-                <Label>Thumbnail image</Label>
-                <div className="relative flex aspect-[3/4] items-center justify-center rounded-lg border-2 border-dashed border-border bg-muted/30">
-                  {course.thumbnail_image_url ? (
-                    <img
-                      src={course.thumbnail_image_url}
-                      alt="Course thumbnail"
-                      className="h-full w-full rounded-lg object-cover"
-                    />
-                  ) : (
-                    <div className="text-center text-muted-foreground">
-                      <ImageIcon className="mx-auto mb-2 h-10 w-10" />
-                      <p className="text-sm font-medium">Thumbnail coming soon</p>
-                      <p className="text-xs">
-                        You&apos;ll be able to upload a portrait image here later.
-                      </p>
-                    </div>
-                  )}
-                </div>
-              </div>
+              <ImageDropzone
+                id="coverImage"
+                label="Cover image"
+                helperText="16:9 ratio. Click to browse or drop an image. The center will be cropped automatically."
+                aspectRatioClass="aspect-video"
+                value={coverImagePreview}
+                onSelectFile={handleCoverImageSelect}
+              />
+              <ImageDropzone
+                id="thumbnailImage"
+                label="Thumbnail image"
+                helperText="3:4 ratio. Click to browse or drop an image. The center will be cropped automatically."
+                aspectRatioClass="aspect-[3/4]"
+                value={thumbnailImagePreview}
+                onSelectFile={handleThumbnailImageSelect}
+              />
             </div>
           </CardContent>
         </Card>
@@ -534,11 +733,11 @@ const CourseDetail = () => {
         <div className="flex flex-col gap-3 sm:flex-row sm:justify-between">
           <Button
             type="button"
-            variant="ghost"
+            variant="secondary"
             className="sm:w-auto"
             onClick={() => navigate("/courses")}
           >
-            Cancel
+            Back
           </Button>
           <div className="flex flex-col gap-3 sm:flex-row">
             <Button
@@ -553,8 +752,11 @@ const CourseDetail = () => {
             <Button
               type="submit"
               variant="cta"
-              className="w-full sm:w-auto"
-              disabled={isSaving}
+              className={cn(
+                "w-full sm:w-auto font-semibold transition-opacity",
+                isSaving || !hasChanges ? "opacity-60" : "opacity-100",
+              )}
+              disabled={isSaving || !hasChanges}
             >
               {isSaving ? "Saving…" : "Save changes"}
             </Button>
