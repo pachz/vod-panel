@@ -6,6 +6,7 @@ import {
   categoryInputSchema,
   type CategoryInput,
 } from "../shared/validation/category";
+import { generateUniqueSlug, slugify } from "./utils/slug";
 
 const requireUser = async (ctx: QueryCtx | MutationCtx) => {
   const identity = await ctx.auth.getUserIdentity();
@@ -19,14 +20,6 @@ const requireUser = async (ctx: QueryCtx | MutationCtx) => {
 
   return identity;
 };
-
-const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
 
 export const listCategories = query(async (ctx) => {
   await requireUser(ctx);
@@ -55,7 +48,10 @@ export const createCategory = mutation({
       descriptionAr,
     });
 
-    const slug = slugify(validated.name);
+    const baseSlug = slugify(validated.name);
+    const slug = await generateUniqueSlug(ctx, "categories", baseSlug, {
+      fallbackSlug: "category",
+    });
     const now = Date.now();
 
     const existing = await ctx.db
@@ -111,7 +107,11 @@ export const updateCategory = mutation({
       descriptionAr,
     });
 
-    const slug = slugify(validated.name);
+    const baseSlug = slugify(validated.name);
+    const slug = await generateUniqueSlug(ctx, "categories", baseSlug, {
+      excludeId: id,
+      fallbackSlug: "category",
+    });
 
     const duplicates = await ctx.db
       .query("categories")

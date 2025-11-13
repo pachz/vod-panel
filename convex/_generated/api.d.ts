@@ -10,8 +10,10 @@
 
 import type * as auth from "../auth.js";
 import type * as category from "../category.js";
+import type * as course from "../course.js";
 import type * as http from "../http.js";
 import type * as seed from "../seed.js";
+import type * as utils_slug from "../utils/slug.js";
 import type * as video from "../video.js";
 
 import type {
@@ -31,8 +33,10 @@ import type {
 declare const fullApi: ApiFromModules<{
   auth: typeof auth;
   category: typeof category;
+  course: typeof course;
   http: typeof http;
   seed: typeof seed;
+  "utils/slug": typeof utils_slug;
   video: typeof video;
 }>;
 declare const fullApiWithMounts: typeof fullApi;
