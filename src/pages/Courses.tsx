@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Eye } from "lucide-react";
+import { Plus, Eye, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -41,6 +41,16 @@ import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { courseInputSchema } from "../../shared/validation/course";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
@@ -66,10 +76,13 @@ const Courses = () => {
   const courses = useQuery(api.course.listCourses);
   const categories = useQuery(api.category.listCategories);
   const createCourse = useMutation(api.course.createCourse);
+  const deleteCourse = useMutation(api.course.deleteCourse);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
+  const [courseToDelete, setCourseToDelete] = useState<CourseDoc | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const shortDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const shortDescriptionArRef = useRef<HTMLTextAreaElement | null>(null);
@@ -425,6 +438,13 @@ const Courses = () => {
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        onClick={() => setCourseToDelete(course)}
+                      >
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
                     </div>
                   </TableCell>
                 </TableRow>
@@ -433,6 +453,54 @@ const Courses = () => {
           </TableBody>
         </Table>
       </div>
+
+      <AlertDialog
+        open={courseToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCourseToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete course?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove{" "}
+              <span className="font-medium text-foreground">
+                {courseToDelete?.name ?? "this course"}
+              </span>{" "}
+              for everyone. You can&apos;t undo this action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!courseToDelete) {
+                  return;
+                }
+                setIsDeleting(true);
+
+                try {
+                  await deleteCourse({ id: courseToDelete._id });
+                  toast.success("Course deleted successfully");
+                  setCourseToDelete(null);
+                } catch (error) {
+                  console.error(error);
+                  toast.error(getErrorMessage(error));
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

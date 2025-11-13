@@ -1,5 +1,37 @@
 import { z } from "zod";
 
+const optionalTrimmedString = (max: number, message: string) =>
+  z.preprocess((value) => {
+    if (typeof value !== "string") {
+      return value;
+    }
+    const trimmed = value.trim();
+    return trimmed.length === 0 ? undefined : trimmed;
+  }, z.string().max(max, message).optional());
+
+const optionalUrl = z.preprocess((value) => {
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  return trimmed.length === 0 ? undefined : trimmed;
+}, z.string().url("Please enter a valid URL.").max(2048, "URL must be 2048 characters or less.").optional());
+
+const optionalDuration = z.preprocess((value) => {
+  if (typeof value === "number") {
+    return value;
+  }
+  if (typeof value !== "string") {
+    return value;
+  }
+  const trimmed = value.trim();
+  if (trimmed.length === 0) {
+    return undefined;
+  }
+  const parsed = Number(trimmed);
+  return Number.isFinite(parsed) ? parsed : value;
+}, z.number().int().min(0, "Duration must be 0 or greater.").max(100000, "Duration seems too large.").optional());
+
 export const courseInputSchema = z.object({
   name: z
     .string({
@@ -37,5 +69,23 @@ export const courseInputSchema = z.object({
     .min(1, "Category is required."),
 });
 
-export type CourseInput = z.infer<typeof courseInputSchema>;
+export const courseUpdateSchema = courseInputSchema.extend({
+  description: optionalTrimmedString(
+    4096,
+    "Full description must be 4096 characters or less.",
+  ),
+  descriptionAr: optionalTrimmedString(
+    4096,
+    "Arabic full description must be 4096 characters or less.",
+  ),
+  status: z.enum(["draft", "published", "archived"]),
+  trialVideoUrl: optionalUrl,
+  durationMinutes: optionalDuration,
+  instructor: optionalTrimmedString(
+    128,
+    "Instructor name must be 128 characters or less.",
+  ),
+});
 
+export type CourseInput = z.infer<typeof courseInputSchema>;
+export type CourseUpdateInput = z.infer<typeof courseUpdateSchema>;

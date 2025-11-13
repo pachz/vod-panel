@@ -4,7 +4,9 @@ import { ConvexError, v } from "convex/values";
 
 import {
   courseInputSchema,
+  courseUpdateSchema,
   type CourseInput,
+  type CourseUpdateInput,
 } from "../shared/validation/course";
 import { generateUniqueSlug, slugify } from "./utils/slug";
 
@@ -23,6 +25,20 @@ const requireUser = async (ctx: QueryCtx | MutationCtx) => {
 
 const validateCourseInput = (input: CourseInput) => {
   const result = courseInputSchema.safeParse(input);
+
+  if (!result.success) {
+    const issue = result.error.errors[0];
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: issue?.message ?? "Invalid course input.",
+    });
+  }
+
+  return result.data;
+};
+
+const validateCourseUpdateInput = (input: CourseUpdateInput) => {
+  const result = courseUpdateSchema.safeParse(input);
 
   if (!result.success) {
     const issue = result.error.errors[0];
@@ -108,6 +124,13 @@ export const createCourse = mutation({
       status: "draft",
       createdAt: now,
       lesson_count: 0,
+      description: undefined,
+      description_ar: undefined,
+      trial_video_url: undefined,
+      duration: undefined,
+      instructor: undefined,
+      banner_image_url: undefined,
+      thumbnail_image_url: undefined,
     });
 
     await ctx.db.patch(categoryId, {
@@ -115,6 +138,177 @@ export const createCourse = mutation({
     });
 
     return courseId;
+  },
+});
+
+export const getCourse = query({
+  args: {
+    id: v.id("courses"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || course.deletedAt) {
+      return null;
+    }
+
+    return course;
+  },
+});
+
+export const updateCourse = mutation({
+  args: {
+    id: v.id("courses"),
+    name: v.string(),
+    nameAr: v.string(),
+    shortDescription: v.string(),
+    shortDescriptionAr: v.string(),
+    description: v.optional(v.string()),
+    descriptionAr: v.optional(v.string()),
+    categoryId: v.id("categories"),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    ),
+    trialVideoUrl: v.optional(v.string()),
+    durationMinutes: v.optional(v.number()),
+    instructor: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    {
+      id,
+      name,
+      nameAr,
+      shortDescription,
+      shortDescriptionAr,
+      description,
+      descriptionAr,
+      categoryId,
+      status,
+      trialVideoUrl,
+      durationMinutes,
+      instructor,
+    },
+  ) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Course not found.",
+      });
+    }
+
+    const validated = validateCourseUpdateInput({
+      name,
+      nameAr,
+      shortDescription,
+      shortDescriptionAr,
+      description,
+      descriptionAr,
+      categoryId,
+      status,
+      trialVideoUrl,
+      durationMinutes,
+      instructor,
+    });
+
+    const targetCategory = await ctx.db.get(categoryId);
+
+    if (!targetCategory || targetCategory.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_CATEGORY",
+        message: "Selected category does not exist.",
+      });
+    }
+
+    const duplicates = await ctx.db
+      .query("courses")
+      .withIndex("name", (q) => q.eq("name", validated.name))
+      .collect();
+
+    const hasDuplicate = duplicates.some(
+      (item) => item._id !== id && item.deletedAt === undefined,
+    );
+
+    if (hasDuplicate) {
+      throw new ConvexError({
+        code: "COURSE_EXISTS",
+        message: "A course with this name already exists.",
+      });
+    }
+
+    const baseSlug = slugify(validated.name);
+    const slug = await generateUniqueSlug(ctx, "courses", baseSlug, {
+      excludeId: id,
+      fallbackSlug: "course",
+    });
+
+    if (course.category_id !== categoryId) {
+      const currentCategory = await ctx.db.get(course.category_id);
+
+      if (currentCategory && currentCategory.deletedAt === undefined) {
+        await ctx.db.patch(course.category_id, {
+          course_count: Math.max(currentCategory.course_count - 1, 0),
+        });
+      }
+
+      await ctx.db.patch(categoryId, {
+        course_count: targetCategory.course_count + 1,
+      });
+    }
+
+    await ctx.db.patch(id, {
+      name: validated.name,
+      name_ar: validated.nameAr,
+      short_description: validated.shortDescription,
+      short_description_ar: validated.shortDescriptionAr,
+      description: validated.description,
+      description_ar: validated.descriptionAr,
+      category_id: categoryId,
+      status: validated.status,
+      trial_video_url: validated.trialVideoUrl,
+      duration: validated.durationMinutes,
+      instructor: validated.instructor,
+      slug,
+    });
+  },
+});
+
+export const deleteCourse = mutation({
+  args: {
+    id: v.id("courses"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Course not found.",
+      });
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      deletedAt: now,
+    });
+
+    const category = await ctx.db.get(course.category_id);
+
+    if (category && category.deletedAt === undefined) {
+      await ctx.db.patch(course.category_id, {
+        course_count: Math.max(category.course_count - 1, 0),
+      });
+    }
   },
 });
 

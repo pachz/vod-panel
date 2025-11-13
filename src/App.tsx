@@ -37,7 +37,7 @@ const queryClient = new QueryClient();
 const LoadingScreen = () => (
   <div className="min-h-screen flex items-center justify-center bg-background">
     <div className="rounded-3xl border border-border/40 bg-card/70 px-10 py-8 shadow-card">
-      <p className="text-muted-foreground">Checking your session…</p>
+      <p className="text-muted-foreground">Loading...</p>
     </div>
   </div>
 );
