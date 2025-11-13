@@ -302,6 +302,76 @@ export const updateCourse = mutation({
   },
 });
 
+export const generateImageUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const updateCourseImages = mutation({
+  args: {
+    id: v.id("courses"),
+    bannerStorageId: v.optional(v.id("_storage")),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, { id, bannerStorageId, thumbnailStorageId }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Course not found.",
+      });
+    }
+
+    const patch: Partial<typeof course> = {};
+    let bannerImageUrl = course.banner_image_url;
+    let thumbnailImageUrl = course.thumbnail_image_url;
+
+    if (bannerStorageId) {
+      const url = await ctx.storage.getUrl(bannerStorageId);
+
+      if (!url) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate cover image URL.",
+        });
+      }
+
+      patch.banner_image_url = url;
+      bannerImageUrl = url;
+    }
+
+    if (thumbnailStorageId) {
+      const url = await ctx.storage.getUrl(thumbnailStorageId);
+
+      if (!url) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate thumbnail image URL.",
+        });
+      }
+
+      patch.thumbnail_image_url = url;
+      thumbnailImageUrl = url;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(id, patch);
+    }
+
+    return {
+      bannerImageUrl,
+      thumbnailImageUrl,
+    };
+  },
+});
+
 export const deleteCourse = mutation({
   args: {
     id: v.id("courses"),

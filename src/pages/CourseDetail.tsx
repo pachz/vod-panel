@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -70,6 +71,12 @@ const statusLabels: Record<CourseDoc["status"], string> = {
   archived: "Archived",
 };
 
+type ImageUploadState = {
+  status: "idle" | "uploading" | "success" | "error";
+  progress: number;
+  errorMessage?: string;
+};
+
 type ImageDropzoneProps = {
   id: string;
   label: string;
@@ -77,6 +84,9 @@ type ImageDropzoneProps = {
   aspectRatioClass: string;
   value: string | null;
   onSelectFile: (file: File) => void;
+  uploadState?: ImageUploadState;
+  onRetry?: () => void;
+  disabled?: boolean;
 };
 
 const ImageDropzone = ({
@@ -86,11 +96,20 @@ const ImageDropzone = ({
   aspectRatioClass,
   value,
   onSelectFile,
+  uploadState,
+  onRetry,
+  disabled = false,
 }: ImageDropzoneProps) => {
   const inputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
+  const isUploading = uploadState?.status === "uploading";
+  const isDisabled = disabled || isUploading;
 
   const handleFiles = (files: FileList | null) => {
+    if (isDisabled) {
+      return;
+    }
+
     if (!files || files.length === 0) {
       return;
     }
@@ -110,6 +129,10 @@ const ImageDropzone = ({
   };
 
   const handleClick = () => {
+    if (isDisabled) {
+      return;
+    }
+
     inputRef.current?.click();
   };
 
@@ -121,17 +144,29 @@ const ImageDropzone = ({
   };
 
   const handleDragOver = (event: DragEvent<HTMLDivElement>) => {
+    if (isDisabled) {
+      return;
+    }
+
     event.preventDefault();
     event.dataTransfer.dropEffect = "copy";
     setIsDragOver(true);
   };
 
   const handleDragLeave = (event: DragEvent<HTMLDivElement>) => {
+    if (isDisabled) {
+      return;
+    }
+
     event.preventDefault();
     setIsDragOver(false);
   };
 
   const handleDrop = (event: DragEvent<HTMLDivElement>) => {
+    if (isDisabled) {
+      return;
+    }
+
     event.preventDefault();
     setIsDragOver(false);
     handleFiles(event.dataTransfer.files);
@@ -147,6 +182,7 @@ const ImageDropzone = ({
         tabIndex={0}
         aria-labelledby={`${id}-label`}
         aria-describedby={helperText ? `${id}-helper-text` : undefined}
+        aria-busy={isUploading}
         onClick={handleClick}
         onKeyDown={handleKeyDown}
         onDragOver={handleDragOver}
@@ -157,6 +193,7 @@ const ImageDropzone = ({
           "group relative flex cursor-pointer items-center justify-center overflow-hidden rounded-lg border-2 border-dashed border-border bg-muted/30 text-center transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
           aspectRatioClass,
           isDragOver && "border-primary bg-primary/10",
+          isDisabled && "cursor-not-allowed opacity-80",
         )}
       >
         <input
@@ -187,6 +224,55 @@ const ImageDropzone = ({
             </div>
           </div>
         )}
+        {uploadState && uploadState.status !== "idle" ? (
+          <div
+            className={cn(
+              "absolute inset-0 flex flex-col justify-end gap-2 bg-black/60 p-4 text-white transition-opacity",
+              uploadState.status === "error" ? "pointer-events-auto" : "pointer-events-none",
+            )}
+          >
+            {uploadState.status === "uploading" ? (
+              <>
+                <div className="flex items-center justify-between text-xs font-medium uppercase tracking-wide text-white/80">
+                  <span>Uploading</span>
+                  <span>{Math.round(uploadState.progress * 100)}%</span>
+                </div>
+                <Progress
+                  value={Math.min(100, Math.round(uploadState.progress * 100))}
+                  className="h-1 w-full bg-white/30"
+                />
+              </>
+            ) : null}
+            {uploadState.status === "success" ? (
+              <div className="flex h-8 items-center justify-center rounded-full bg-white/20 text-xs font-medium text-white/90">
+                Image updated
+              </div>
+            ) : null}
+            {uploadState.status === "error" ? (
+              <div className="flex flex-col gap-2 rounded-lg border border-destructive/50 bg-destructive/60 p-3 text-xs">
+                <span className="font-semibold uppercase tracking-wide">
+                  Upload failed
+                </span>
+                {uploadState.errorMessage ? (
+                  <span className="text-[11px]/5 text-destructive-foreground/80">
+                    {uploadState.errorMessage}
+                  </span>
+                ) : null}
+                {onRetry ? (
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    size="sm"
+                    className="pointer-events-auto h-7 border-white/30 bg-white/20 text-xs font-semibold text-white shadow-none hover:bg-white/30"
+                    onClick={onRetry}
+                  >
+                    Try again
+                  </Button>
+                ) : null}
+              </div>
+            ) : null}
+          </div>
+        ) : null}
       </div>
       {helperText ? (
         <p id={`${id}-helper-text`} className="text-xs text-muted-foreground">
@@ -210,6 +296,8 @@ const CourseDetail = () => {
 
   const updateCourse = useMutation(api.course.updateCourse);
   const deleteCourse = useMutation(api.course.deleteCourse);
+  const generateImageUploadUrl = useMutation(api.course.generateImageUploadUrl);
+  const updateCourseImages = useMutation(api.course.updateCourseImages);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
@@ -220,6 +308,20 @@ const CourseDetail = () => {
   const [thumbnailImageFile, setThumbnailImageFile] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
   const [thumbnailImagePreview, setThumbnailImagePreview] = useState<string | null>(null);
+  const [coverUploadState, setCoverUploadState] = useState<ImageUploadState>({
+    status: "idle",
+    progress: 0,
+  });
+  const [thumbnailUploadState, setThumbnailUploadState] = useState<ImageUploadState>({
+    status: "idle",
+    progress: 0,
+  });
+  const coverUploadPromiseRef = useRef<Promise<void> | null>(null);
+  const thumbnailUploadPromiseRef = useRef<Promise<void> | null>(null);
+  const coverUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const thumbnailUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const pendingCoverUrlRef = useRef<string | null>(null);
+  const pendingThumbnailUrlRef = useRef<string | null>(null);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = course === undefined || categories === undefined;
@@ -264,28 +366,58 @@ const CourseDetail = () => {
 
     if (!coverImageFile) {
       const nextCoverUrl = course.banner_image_url ?? null;
-      setCoverImagePreview((previous) => {
-        if (previous === nextCoverUrl) {
-          return previous;
+
+      if (
+        pendingCoverUrlRef.current !== null &&
+        pendingCoverUrlRef.current !== nextCoverUrl
+      ) {
+        // Wait until the server reflects the new cover image URL to avoid reverting the preview.
+      } else {
+        setCoverImagePreview((previous) => {
+          if (previous === nextCoverUrl) {
+            return previous;
+          }
+          if (previous && previous.startsWith("blob:")) {
+            URL.revokeObjectURL(previous);
+          }
+          return nextCoverUrl;
+        });
+
+        if (
+          pendingCoverUrlRef.current !== null &&
+          pendingCoverUrlRef.current === nextCoverUrl
+        ) {
+          pendingCoverUrlRef.current = null;
         }
-        if (previous && previous.startsWith("blob:")) {
-          URL.revokeObjectURL(previous);
-        }
-        return nextCoverUrl;
-      });
+      }
     }
 
     if (!thumbnailImageFile) {
       const nextThumbnailUrl = course.thumbnail_image_url ?? null;
-      setThumbnailImagePreview((previous) => {
-        if (previous === nextThumbnailUrl) {
-          return previous;
+
+      if (
+        pendingThumbnailUrlRef.current !== null &&
+        pendingThumbnailUrlRef.current !== nextThumbnailUrl
+      ) {
+        // Wait until the server reflects the new thumbnail image URL to avoid reverting the preview.
+      } else {
+        setThumbnailImagePreview((previous) => {
+          if (previous === nextThumbnailUrl) {
+            return previous;
+          }
+          if (previous && previous.startsWith("blob:")) {
+            URL.revokeObjectURL(previous);
+          }
+          return nextThumbnailUrl;
+        });
+
+        if (
+          pendingThumbnailUrlRef.current !== null &&
+          pendingThumbnailUrlRef.current === nextThumbnailUrl
+        ) {
+          pendingThumbnailUrlRef.current = null;
         }
-        if (previous && previous.startsWith("blob:")) {
-          URL.revokeObjectURL(previous);
-        }
-        return nextThumbnailUrl;
-      });
+      }
     }
   }, [
     course,
@@ -311,6 +443,17 @@ const CourseDetail = () => {
     };
   }, [thumbnailImagePreview]);
 
+  useEffect(() => {
+    return () => {
+      if (coverUploadResetTimeoutRef.current) {
+        clearTimeout(coverUploadResetTimeoutRef.current);
+      }
+      if (thumbnailUploadResetTimeoutRef.current) {
+        clearTimeout(thumbnailUploadResetTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const hasFormChanges = useMemo(() => {
     if (!initialValues) {
       return false;
@@ -321,6 +464,9 @@ const CourseDetail = () => {
 
   const hasChanges =
     hasFormChanges || coverImageFile !== null || thumbnailImageFile !== null;
+
+  const isUploadingImages =
+    coverUploadState.status === "uploading" || thumbnailUploadState.status === "uploading";
 
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -335,6 +481,178 @@ const CourseDetail = () => {
     }
 
     return "Something went wrong. Please try again.";
+  };
+
+  const uploadFileWithProgress = (
+    uploadUrl: string,
+    file: File,
+    onProgress: (progress: number) => void,
+  ) =>
+    new Promise<{ storageId: string }>((resolve, reject) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", uploadUrl);
+        xhr.responseType = "json";
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        onProgress(0);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            const progress = Math.min(1, event.loaded / event.total);
+            onProgress(progress);
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Network error while uploading the image."));
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response =
+                xhr.response && typeof xhr.response === "object"
+                  ? xhr.response
+                  : JSON.parse(xhr.responseText);
+
+              if (response && typeof response.storageId === "string") {
+                onProgress(1);
+                resolve({ storageId: response.storageId });
+                return;
+              }
+
+              reject(new Error("Upload completed but no storage ID was returned."));
+            } catch (parseError) {
+              reject(
+                parseError instanceof Error
+                  ? parseError
+                  : new Error("Failed to parse upload response."),
+              );
+            }
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}.`));
+          }
+        };
+
+        xhr.send(file);
+      } catch (error) {
+        reject(
+          error instanceof Error
+            ? error
+            : new Error("Unexpected error while preparing the upload."),
+        );
+      }
+    });
+
+  const startImageUpload = (kind: "cover" | "thumbnail", file: File) => {
+    if (!courseId) {
+      toast.error("Invalid course ID.");
+      return;
+    }
+
+    const setUploadState =
+      kind === "cover" ? setCoverUploadState : setThumbnailUploadState;
+    const uploadPromiseRef =
+      kind === "cover" ? coverUploadPromiseRef : thumbnailUploadPromiseRef;
+    const resetTimeoutRef =
+      kind === "cover" ? coverUploadResetTimeoutRef : thumbnailUploadResetTimeoutRef;
+
+    if (kind === "cover") {
+      pendingCoverUrlRef.current = null;
+    } else {
+      pendingThumbnailUrlRef.current = null;
+    }
+
+    if (resetTimeoutRef.current) {
+      clearTimeout(resetTimeoutRef.current);
+      resetTimeoutRef.current = null;
+    }
+
+    setUploadState({
+      status: "uploading",
+      progress: 0,
+    });
+
+    const uploadTask = (async () => {
+      try {
+        const uploadUrl = await generateImageUploadUrl();
+        const { storageId } = await uploadFileWithProgress(uploadUrl, file, (progress) => {
+          setUploadState({
+            status: "uploading",
+            progress,
+          });
+        });
+
+        const storageIdentifier = storageId as Id<"_storage">;
+
+        const result = await updateCourseImages({
+          id: courseId,
+          bannerStorageId: kind === "cover" ? storageIdentifier : undefined,
+          thumbnailStorageId: kind === "thumbnail" ? storageIdentifier : undefined,
+        });
+
+        if (!result) {
+          throw new Error("Failed to update the course with the uploaded image.");
+        }
+
+        if (kind === "cover") {
+          const nextBannerUrl = result.bannerImageUrl ?? null;
+          pendingCoverUrlRef.current = nextBannerUrl;
+          setCoverImagePreview((previous) => {
+            if (previous && previous.startsWith("blob:")) {
+              URL.revokeObjectURL(previous);
+            }
+            return nextBannerUrl;
+          });
+          setCoverImageFile(null);
+        } else {
+          const nextThumbnailUrl = result.thumbnailImageUrl ?? null;
+          pendingThumbnailUrlRef.current = nextThumbnailUrl;
+          setThumbnailImagePreview((previous) => {
+            if (previous && previous.startsWith("blob:")) {
+              URL.revokeObjectURL(previous);
+            }
+            return nextThumbnailUrl;
+          });
+          setThumbnailImageFile(null);
+        }
+
+        setUploadState({
+          status: "success",
+          progress: 1,
+        });
+
+        resetTimeoutRef.current = setTimeout(() => {
+          setUploadState({
+            status: "idle",
+            progress: 0,
+          });
+          resetTimeoutRef.current = null;
+        }, 1500);
+      } catch (error) {
+        console.error(error);
+        const message = getErrorMessage(error);
+        setUploadState({
+          status: "error",
+          progress: 0,
+          errorMessage: message,
+        });
+        if (kind === "cover") {
+          pendingCoverUrlRef.current = null;
+        } else {
+          pendingThumbnailUrlRef.current = null;
+        }
+        toast.error(message);
+        throw error;
+      } finally {
+        uploadPromiseRef.current = null;
+      }
+    })();
+
+    uploadPromiseRef.current = uploadTask;
+    uploadTask.catch(() => {
+      // Swallow rejection to avoid unhandled promise rejection warnings.
+    });
   };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
@@ -381,6 +699,28 @@ const CourseDetail = () => {
     setIsSaving(true);
 
     try {
+      const pendingUploads = [
+        coverUploadPromiseRef.current,
+        thumbnailUploadPromiseRef.current,
+      ].filter((promise): promise is Promise<void> => promise !== null);
+
+      if (pendingUploads.length > 0) {
+        try {
+          await Promise.all(pendingUploads);
+        } catch {
+          toast.error("Please resolve the image upload error before saving.");
+          return;
+        }
+      }
+
+      if (
+        coverUploadState.status === "error" ||
+        thumbnailUploadState.status === "error"
+      ) {
+        toast.error("Please resolve the image upload error before saving.");
+        return;
+      }
+
       await updateCourse({
         id: courseId,
         name,
@@ -447,23 +787,27 @@ const CourseDetail = () => {
   const handleCoverImageSelect = (file: File) => {
     const nextUrl = URL.createObjectURL(file);
     setCoverImageFile(file);
+    pendingCoverUrlRef.current = null;
     setCoverImagePreview((previous) => {
       if (previous && previous.startsWith("blob:")) {
         URL.revokeObjectURL(previous);
       }
       return nextUrl;
     });
+    startImageUpload("cover", file);
   };
 
   const handleThumbnailImageSelect = (file: File) => {
     const nextUrl = URL.createObjectURL(file);
     setThumbnailImageFile(file);
+    pendingThumbnailUrlRef.current = null;
     setThumbnailImagePreview((previous) => {
       if (previous && previous.startsWith("blob:")) {
         URL.revokeObjectURL(previous);
       }
       return nextUrl;
     });
+    startImageUpload("thumbnail", file);
   };
 
   if (!courseId) {
@@ -711,6 +1055,11 @@ const CourseDetail = () => {
                 aspectRatioClass="aspect-video"
                 value={coverImagePreview}
                 onSelectFile={handleCoverImageSelect}
+                uploadState={coverUploadState}
+                onRetry={
+                  coverImageFile ? () => startImageUpload("cover", coverImageFile) : undefined
+                }
+                disabled={isSaving}
               />
               <ImageDropzone
                 id="thumbnailImage"
@@ -719,6 +1068,13 @@ const CourseDetail = () => {
                 aspectRatioClass="aspect-[3/4]"
                 value={thumbnailImagePreview}
                 onSelectFile={handleThumbnailImageSelect}
+                uploadState={thumbnailUploadState}
+                onRetry={
+                  thumbnailImageFile
+                    ? () => startImageUpload("thumbnail", thumbnailImageFile)
+                    : undefined
+                }
+                disabled={isSaving}
               />
             </div>
           </CardContent>
@@ -748,9 +1104,11 @@ const CourseDetail = () => {
               variant="cta"
               className={cn(
                 "w-full sm:w-auto font-semibold transition-opacity",
-                isSaving || !hasChanges ? "opacity-60" : "opacity-100",
+                isSaving || !hasChanges || isUploadingImages
+                  ? "opacity-60"
+                  : "opacity-100",
               )}
-              disabled={isSaving || !hasChanges}
+              disabled={isSaving || !hasChanges || isUploadingImages}
             >
               {isSaving ? "Saving…" : "Save changes"}
             </Button>
