@@ -361,7 +361,7 @@ export const RichTextarea = ({
         type="button"
         onClick={() => handleDialogOpen(true)}
         className={cn(
-          "w-full rounded-md border border-input bg-background px-3 py-2 text-left text-sm shadow-sm transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+          "flex w-full flex-col items-start rounded-md border border-input bg-background px-3 py-2 text-left text-sm shadow-sm transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
           textareaClassName,
         )}
         style={{ minHeight }}
