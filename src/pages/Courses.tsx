@@ -12,14 +12,8 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type TableColumn, type TableAction, getPreviewText } from "@/components/DataTable";
+import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
   DialogContent,
@@ -37,7 +31,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 
 import { courseInputSchema } from "../../shared/validation/course";
@@ -162,6 +155,80 @@ const Courses = () => {
     }, {});
   }, [categoryList]);
 
+  const columns = useMemo<TableColumn<CourseDoc>[]>(
+    () => [
+      {
+        header: "Thumbnail",
+        headerClassName: "w-[100px]",
+        render: (course) =>
+          course.thumbnail_image_url ? (
+            <img
+              src={course.thumbnail_image_url}
+              alt={course.name}
+              className="h-16 w-24 rounded object-cover"
+              loading="lazy"
+            />
+          ) : (
+            <div className="flex h-16 w-24 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+              No image
+            </div>
+          ),
+      },
+      {
+        header: "Name",
+        render: (course) => (
+          <span className="font-medium">{course.name}</span>
+        ),
+      },
+      {
+        header: "Category",
+        render: (course) => (
+          <span className="text-muted-foreground">
+            {categoryNameById[course.category_id] ?? "—"}
+          </span>
+        ),
+        cellClassName: "text-muted-foreground",
+      },
+      {
+        header: "Description",
+        render: (course) => (
+          <span className="text-muted-foreground">
+            {getPreviewText(course.short_description)}
+          </span>
+        ),
+        cellClassName: "text-muted-foreground",
+      },
+      {
+        header: "Status",
+        render: (course) => (
+          <Badge
+            variant={course.status === "published" ? "default" : "secondary"}
+          >
+            {course.status}
+          </Badge>
+        ),
+      },
+    ],
+    [categoryNameById]
+  );
+
+  const actions = useMemo<TableAction<CourseDoc>[]>(
+    () => [
+      {
+        icon: Eye,
+        label: "View course",
+        onClick: (course) => navigate(`/courses/${course._id}`),
+      },
+      {
+        icon: Trash2,
+        label: "Delete course",
+        onClick: setCourseToDelete,
+        className: "text-destructive",
+      },
+    ],
+    [navigate]
+  );
+
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
       const data = (error as { data?: { message?: string } }).data;
@@ -177,25 +244,6 @@ const Courses = () => {
     return "Something went wrong. Please try again.";
   };
 
-  const getPreview = (value: string | null | undefined) => {
-    if (!value) {
-      return "—";
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return "—";
-    }
-
-    const firstLine = trimmed.split(/\r?\n/)[0] ?? "";
-    const maxLength = 80;
-    const truncated =
-      firstLine.length > maxLength ? firstLine.slice(0, maxLength) : firstLine;
-    const needsEllipsis =
-      firstLine.length > maxLength || trimmed.length > firstLine.length;
-
-    return `${truncated}${needsEllipsis ? "…" : ""}`;
-  };
 
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
@@ -382,92 +430,15 @@ const Courses = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-[100px]">Thumbnail</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Category</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    Loading courses…
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : courseList.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    No courses yet. Create your first course to get started.
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              courseList.map((course) => (
-                <TableRow key={course._id}>
-                  <TableCell>
-                    {course.thumbnail_image_url ? (
-                      <img
-                        src={course.thumbnail_image_url}
-                        alt={course.name}
-                        className="h-16 w-24 rounded object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-16 w-24 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
-                        No image
-                      </div>
-                    )}
-                  </TableCell>
-                  <TableCell className="font-medium">{course.name}</TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {categoryNameById[course.category_id] ?? "—"}
-                  </TableCell>
-                  <TableCell className="text-muted-foreground">
-                    {getPreview(course.short_description)}
-                  </TableCell>
-                  <TableCell>
-                    <Badge
-                      variant={
-                        course.status === "published" ? "default" : "secondary"
-                      }
-                    >
-                      {course.status}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => navigate(`/courses/${course._id}`)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setCourseToDelete(course)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        data={courseList}
+        isLoading={isLoading}
+        columns={columns}
+        actions={actions}
+        getItemId={(course) => course._id}
+        loadingMessage="Loading courses…"
+        emptyMessage="No courses yet. Create your first course to get started."
+      />
 
       <AlertDialog
         open={courseToDelete !== null}

@@ -13,7 +13,30 @@ import {
   type UserPasswordUpdateInput,
 } from "../shared/validation/user";
 import { createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
+import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUser, requireUserAction } from "./utils/auth";
+
+export const getCurrentUser = query(async (ctx) => {
+  const { identity } = await requireUser(ctx);
+  
+  if (!identity) {
+    return null;
+  }
+
+  const userId = await getAuthUserId(ctx);
+  
+  if (!userId) {
+    return null;
+  }
+
+  const user = await ctx.db.get(userId as Id<"users">);
+  
+  if (!user || user.deletedAt) {
+    return null;
+  }
+
+  return user;
+});
 
 export const listUsers = query(async (ctx) => {
   await requireUser(ctx, { requireGod: true });
@@ -58,6 +81,31 @@ export const getUserById = internalQuery({
   },
   handler: async (ctx, { id }) => {
     const user = await ctx.db.get(id);
+    return user;
+  },
+});
+
+// Internal query to get current user
+export const getCurrentUserInternal = internalQuery({
+  handler: async (ctx) => {
+    const identity = await ctx.auth.getUserIdentity();
+    
+    if (!identity) {
+      return null;
+    }
+
+    const userId = await getAuthUserId(ctx);
+    
+    if (!userId) {
+      return null;
+    }
+
+    const user = await ctx.db.get(userId as Id<"users">);
+    
+    if (!user || user.deletedAt) {
+      return null;
+    }
+
     return user;
   },
 });
@@ -267,6 +315,42 @@ export const updateUser = mutation({
       email: validated.email,
       phone: validated.phone && validated.phone.trim() ? validated.phone.trim() : undefined,
       isGod: validated.isAdmin ?? false,
+    });
+  },
+});
+
+// Action to change current user's password
+export const changeMyPassword = action({
+  args: {
+    newPassword: v.string(),
+  },
+  handler: async (ctx, { newPassword }) => {
+    // Check auth
+    await requireUserAction(ctx);
+    
+    // Get current user
+    const currentUser = await ctx.runQuery(internal.user.getCurrentUserInternal);
+    
+    if (!currentUser || currentUser.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+
+    if (!currentUser.email) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "User email not found.",
+      });
+    }
+
+    const validated = validateUserPasswordUpdateInput({ password: newPassword });
+
+    // Update password in auth system
+    await ctx.runAction(internal.auth.setUserPassword, {
+      email: currentUser.email,
+      password: validated.password,
     });
   },
 });

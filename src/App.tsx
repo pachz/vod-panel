@@ -1,7 +1,5 @@
-import { useCallback, useMemo, useState } from "react";
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useConvexAuth } from "convex/react";
-import { useAuthActions } from "@convex-dev/auth/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import LoginPage from "./LoginPage";
@@ -23,7 +21,7 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
-import { Button } from "@/components/ui/button";
+import { UserProfile } from "@/components/UserProfile";
 
 type LocationState = {
   from?: {
@@ -107,27 +105,6 @@ const DashboardProviders = () => (
 );
 
 const DashboardLayout = () => {
-  const { signOut } = useAuthActions();
-  const [isSigningOut, setIsSigningOut] = useState(false);
-
-  const handleSignOut = useCallback(async () => {
-    if (isSigningOut) {
-      return;
-    }
-
-    setIsSigningOut(true);
-    try {
-      await signOut();
-    } finally {
-      setIsSigningOut(false);
-    }
-  }, [isSigningOut, signOut]);
-
-  const signOutLabel = useMemo(
-    () => (isSigningOut ? "Signing out…" : "Sign out"),
-    [isSigningOut],
-  );
-
   return (
     <div className="relative min-h-screen w-full bg-background">
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
@@ -138,14 +115,7 @@ const DashboardLayout = () => {
             <SidebarTrigger />
             <div className="flex-1" />
             <ThemeToggle />
-            <Button
-              variant="outline"
-              onClick={handleSignOut}
-              disabled={isSigningOut}
-              className="border-border/60"
-            >
-              {signOutLabel}
-            </Button>
+            <UserProfile />
           </header>
           <div className="flex-1 overflow-y-auto p-6 md:p-10">
             <Outlet />

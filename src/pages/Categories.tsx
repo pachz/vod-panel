@@ -5,14 +5,7 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type TableColumn, type TableAction, getPreviewText } from "@/components/DataTable";
 import {
   Dialog,
   DialogContent,
@@ -141,6 +134,52 @@ const Categories = () => {
   const isLoading = categories === undefined;
   const categoryName = categoryToDelete?.name ?? "this category";
 
+  const columns = useMemo<TableColumn<CategoryDoc>[]>(
+    () => [
+      {
+        header: "Name",
+        render: (category) => (
+          <span className="font-medium">{category.name}</span>
+        ),
+        cellClassName: "font-medium",
+      },
+      {
+        header: "Description",
+        render: (category) => (
+          <span className="text-muted-foreground">
+            {getPreviewText(category.description)}
+          </span>
+        ),
+        cellClassName: "text-muted-foreground",
+      },
+      {
+        header: "Courses",
+        render: (category) => `${category.course_count} courses`,
+      },
+    ],
+    []
+  );
+
+  const actions = useMemo<TableAction<CategoryDoc>[]>(
+    () => [
+      {
+        icon: Pencil,
+        label: "Edit category",
+        onClick: (category) => {
+          setEditingCategory(category);
+          setIsDialogOpen(true);
+        },
+      },
+      {
+        icon: Trash2,
+        label: "Delete category",
+        onClick: setCategoryToDelete,
+        className: "text-destructive",
+      },
+    ],
+    []
+  );
+
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
       const data = (error as { data?: { message?: string } }).data;
@@ -220,25 +259,6 @@ const Categories = () => {
     }
   };
 
-  const getPreview = (value: string | null | undefined) => {
-    if (!value) {
-      return "—";
-    }
-
-    const trimmed = value.trim();
-    if (!trimmed) {
-      return "—";
-    }
-
-    const firstLine = trimmed.split(/\r?\n/)[0] ?? "";
-    const maxLength = 80;
-    const truncated =
-      firstLine.length > maxLength ? firstLine.slice(0, maxLength) : firstLine;
-    const needsEllipsis =
-      firstLine.length > maxLength || trimmed.length > firstLine.length;
-
-    return `${truncated}${needsEllipsis ? "…" : ""}`;
-  };
 
   return (
     <div className="space-y-6">
@@ -342,66 +362,15 @@ const Categories = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Description</TableHead>
-              <TableHead>Courses</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    Loading categories…
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : categoryList.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={4}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    No categories yet. Create your first category to get started.
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              categoryList.map((category) => (
-                <TableRow key={category._id}>
-                  <TableCell className="font-medium">{category.name}</TableCell>
-                  <TableCell className="text-muted-foreground">{getPreview(category.description)}</TableCell>
-                  <TableCell>{category.course_count} courses</TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingCategory(category);
-                          setIsDialogOpen(true);
-                        }}
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setCategoryToDelete(category)}
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
-                </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        data={categoryList}
+        isLoading={isLoading}
+        columns={columns}
+        actions={actions}
+        getItemId={(category) => category._id}
+        loadingMessage="Loading categories…"
+        emptyMessage="No categories yet. Create your first category to get started."
+      />
 
       <AlertDialog
         open={categoryToDelete !== null}
