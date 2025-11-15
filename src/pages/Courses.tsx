@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Eye, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
@@ -13,6 +13,7 @@ import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { DataTable, type TableColumn, type TableAction, getPreviewText } from "@/components/DataTable";
+import { type TableFilter } from "@/components/TableFilters";
 import { Badge } from "@/components/ui/badge";
 import {
   Dialog,
@@ -66,7 +67,14 @@ const initialFormValues: FormValues = {
 
 const Courses = () => {
   const navigate = useNavigate();
-  const courses = useQuery(api.course.listCourses);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const categoryFilter = searchParams.get("category") || undefined;
+  const statusFilter = searchParams.get("status") || undefined;
+  
+  const courses = useQuery(api.course.listCourses, {
+    categoryId: categoryFilter as Id<"categories"> | undefined,
+    status: statusFilter as "draft" | "published" | "archived" | undefined,
+  });
   const categories = useQuery(api.category.listCategories);
   const createCourse = useMutation(api.course.createCourse);
   const deleteCourse = useMutation(api.course.deleteCourse);
@@ -145,6 +153,7 @@ const Courses = () => {
   }, [adjustTextareaHeight, formValues.shortDescriptionAr, isDialogOpen]);
 
   const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = courses === undefined;
 
@@ -227,6 +236,58 @@ const Courses = () => {
       },
     ],
     [navigate]
+  );
+
+  const handleClearAll = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("category");
+    newParams.delete("status");
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const filters = useMemo<TableFilter[]>(
+    () => [
+      {
+        key: "category",
+        label: "Category",
+        placeholder: "All categories",
+        options: categoryList.map((category) => ({
+          value: category._id,
+          label: category.name,
+        })),
+        value: categoryFilter,
+        onChange: (value) => {
+          const newParams = new URLSearchParams(searchParams);
+          if (value) {
+            newParams.set("category", value);
+          } else {
+            newParams.delete("category");
+          }
+          setSearchParams(newParams, { replace: true });
+        },
+      },
+      {
+        key: "status",
+        label: "Status",
+        placeholder: "All statuses",
+        options: [
+          { value: "published", label: "Published" },
+          { value: "draft", label: "Draft" },
+          { value: "archived", label: "Archived" },
+        ],
+        value: statusFilter,
+        onChange: (value) => {
+          const newParams = new URLSearchParams(searchParams);
+          if (value) {
+            newParams.set("status", value);
+          } else {
+            newParams.delete("status");
+          }
+          setSearchParams(newParams, { replace: true });
+        },
+      },
+    ],
+    [categoryList, categoryFilter, statusFilter, searchParams, setSearchParams]
   );
 
   const getErrorMessage = (error: unknown) => {
@@ -437,7 +498,13 @@ const Courses = () => {
         actions={actions}
         getItemId={(course) => course._id}
         loadingMessage="Loading courses…"
-        emptyMessage="No courses yet. Create your first course to get started."
+        emptyMessage={
+          categoryFilter || statusFilter
+            ? "No courses found with the selected filters."
+            : "No courses yet. Create your first course to get started."
+        }
+        filters={filters}
+        onClearAllFilters={handleClearAll}
       />
 
       <AlertDialog

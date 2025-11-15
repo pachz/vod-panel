@@ -55,5 +55,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("name", ["name", "deletedAt"])
-    .index("slug", ["slug"]),
+    .index("slug", ["slug"])
+    .index("deletedAt_category_status", ["deletedAt", "category_id", "status"])
+    .index("deletedAt_status", ["deletedAt", "status"]),
 });

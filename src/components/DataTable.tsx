@@ -9,6 +9,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { TableFilters, type TableFilter } from "@/components/TableFilters";
 
 export interface TableColumn<T> {
   header: string;
@@ -33,6 +34,8 @@ interface DataTableProps<T> {
   getItemId: (item: T) => string;
   loadingMessage?: string;
   emptyMessage?: string;
+  filters?: TableFilter[];
+  onClearAllFilters?: () => void;
 }
 
 const getPreview = (value: string | null | undefined) => {
@@ -65,12 +68,20 @@ export function DataTable<T>({
   getItemId,
   loadingMessage = "Loading…",
   emptyMessage = "No items yet.",
+  filters,
+  onClearAllFilters,
 }: DataTableProps<T>) {
   const columnCount = columns.length + (actions && actions.length > 0 ? 1 : 0);
 
   return (
-    <div className="rounded-lg border bg-card">
-      <Table>
+    <div className="space-y-4">
+      {filters && filters.length > 0 && (
+        <div className="rounded-lg border bg-card px-4 py-3">
+          <TableFilters filters={filters} onClearAll={onClearAllFilters} />
+        </div>
+      )}
+      <div className="rounded-lg border bg-card">
+        <Table>
         <TableHeader>
           <TableRow>
             {columns.map((column, index) => (
@@ -140,6 +151,7 @@ export function DataTable<T>({
           )}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }

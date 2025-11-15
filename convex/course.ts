@@ -39,14 +39,58 @@ const validateCourseUpdateInput = (input: CourseUpdateInput) => {
   return result.data;
 };
 
-export const listCourses = query(async (ctx) => {
-  await requireUser(ctx);
+export const listCourses = query({
+  args: {
+    categoryId: v.optional(v.id("categories")),
+    status: v.optional(v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    )),
+  },
+  handler: async (ctx, { categoryId, status }) => {
+    await requireUser(ctx);
 
-  const courses = await ctx.db.query("courses").collect();
+    // Use single composite index for all cases
+    // Index: ["deletedAt", "category_id", "status"]
+    let courses;
 
-  return courses
-    .filter((course) => course.deletedAt === undefined)
-    .sort((a, b) => b.createdAt - a.createdAt);
+    if (categoryId && status) {
+      // Case 3: Both filters - use all 3 fields
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_category_status", (q) =>
+          q.eq("deletedAt", undefined).eq("category_id", categoryId).eq("status", status)
+        )
+        .collect();
+    } else if (categoryId) {
+      // Case 2: Category only - use first 2 fields
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_category_status", (q) =>
+          q.eq("deletedAt", undefined).eq("category_id", categoryId)
+        )
+        .collect();
+    } else if (status) {
+      // Status only - use deletedAt_status index
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_status", (q) =>
+          q.eq("deletedAt", undefined).eq("status", status)
+        )
+        .collect();
+    } else {
+      // Case 1: No filters - use only deletedAt
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_category_status", (q) =>
+          q.eq("deletedAt", undefined)
+        )
+        .collect();
+    }
+
+    return courses.sort((a, b) => b.createdAt - a.createdAt);
+  },
 });
 
 export const createCourse = mutation({
