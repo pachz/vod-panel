@@ -386,6 +386,7 @@ const Courses = () => {
         <Table>
           <TableHeader>
             <TableRow>
+              <TableHead className="w-[100px]">Thumbnail</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Category</TableHead>
               <TableHead>Description</TableHead>
@@ -396,7 +397,7 @@ const Courses = () => {
           <TableBody>
             {isLoading ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
                     Loading courses…
                   </div>
@@ -404,7 +405,7 @@ const Courses = () => {
               </TableRow>
             ) : courseList.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={5}>
+                <TableCell colSpan={6}>
                   <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
                     No courses yet. Create your first course to get started.
                   </div>
@@ -413,6 +414,20 @@ const Courses = () => {
             ) : (
               courseList.map((course) => (
                 <TableRow key={course._id}>
+                  <TableCell>
+                    {course.thumbnail_image_url ? (
+                      <img
+                        src={course.thumbnail_image_url}
+                        alt={course.name}
+                        className="h-16 w-24 rounded object-cover"
+                        loading="lazy"
+                      />
+                    ) : (
+                      <div className="flex h-16 w-24 items-center justify-center rounded bg-muted text-xs text-muted-foreground">
+                        No image
+                      </div>
+                    )}
+                  </TableCell>
                   <TableCell className="font-medium">{course.name}</TableCell>
                   <TableCell className="text-muted-foreground">
                     {categoryNameById[course.category_id] ?? "—"}

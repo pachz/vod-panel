@@ -7,19 +7,7 @@ import {
   type CategoryInput,
 } from "../shared/validation/category";
 import { generateUniqueSlug, slugify } from "./utils/slug";
-
-const requireUser = async (ctx: QueryCtx | MutationCtx) => {
-  const identity = await ctx.auth.getUserIdentity();
-
-  if (!identity) {
-    throw new ConvexError({
-      code: "UNAUTHENTICATED",
-      message: "You must be signed in to continue.",
-    });
-  }
-
-  return identity;
-};
+import { requireUser } from "./utils/auth";
 
 export const listCategories = query(async (ctx) => {
   await requireUser(ctx);

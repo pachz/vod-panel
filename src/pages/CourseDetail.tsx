@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Image as ImageIcon, Trash2 } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -298,6 +298,8 @@ const CourseDetail = () => {
   const deleteCourse = useMutation(api.course.deleteCourse);
   const generateImageUploadUrl = useMutation(api.course.generateImageUploadUrl);
   const updateCourseImages = useMutation(api.course.updateCourseImages);
+  const generateThumbnail = useAction(api.image.generateThumbnail);
+  const convertToJpeg = useAction(api.image.convertToJpeg);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
@@ -305,23 +307,14 @@ const CourseDetail = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [coverImageFile, setCoverImageFile] = useState<File | null>(null);
-  const [thumbnailImageFile, setThumbnailImageFile] = useState<File | null>(null);
   const [coverImagePreview, setCoverImagePreview] = useState<string | null>(null);
-  const [thumbnailImagePreview, setThumbnailImagePreview] = useState<string | null>(null);
   const [coverUploadState, setCoverUploadState] = useState<ImageUploadState>({
     status: "idle",
     progress: 0,
   });
-  const [thumbnailUploadState, setThumbnailUploadState] = useState<ImageUploadState>({
-    status: "idle",
-    progress: 0,
-  });
   const coverUploadPromiseRef = useRef<Promise<void> | null>(null);
-  const thumbnailUploadPromiseRef = useRef<Promise<void> | null>(null);
   const coverUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const thumbnailUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCoverUrlRef = useRef<string | null>(null);
-  const pendingThumbnailUrlRef = useRef<string | null>(null);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = course === undefined || categories === undefined;
@@ -392,39 +385,10 @@ const CourseDetail = () => {
       }
     }
 
-    if (!thumbnailImageFile) {
-      const nextThumbnailUrl = course.thumbnail_image_url ?? null;
-
-      if (
-        pendingThumbnailUrlRef.current !== null &&
-        pendingThumbnailUrlRef.current !== nextThumbnailUrl
-      ) {
-        // Wait until the server reflects the new thumbnail image URL to avoid reverting the preview.
-      } else {
-        setThumbnailImagePreview((previous) => {
-          if (previous === nextThumbnailUrl) {
-            return previous;
-          }
-          if (previous && previous.startsWith("blob:")) {
-            URL.revokeObjectURL(previous);
-          }
-          return nextThumbnailUrl;
-        });
-
-        if (
-          pendingThumbnailUrlRef.current !== null &&
-          pendingThumbnailUrlRef.current === nextThumbnailUrl
-        ) {
-          pendingThumbnailUrlRef.current = null;
-        }
-      }
-    }
   }, [
     course,
     coverImageFile,
     coverImagePreview,
-    thumbnailImageFile,
-    thumbnailImagePreview,
   ]);
 
   useEffect(() => {
@@ -435,21 +399,11 @@ const CourseDetail = () => {
     };
   }, [coverImagePreview]);
 
-  useEffect(() => {
-    return () => {
-      if (thumbnailImagePreview && thumbnailImagePreview.startsWith("blob:")) {
-        URL.revokeObjectURL(thumbnailImagePreview);
-      }
-    };
-  }, [thumbnailImagePreview]);
 
   useEffect(() => {
     return () => {
       if (coverUploadResetTimeoutRef.current) {
         clearTimeout(coverUploadResetTimeoutRef.current);
-      }
-      if (thumbnailUploadResetTimeoutRef.current) {
-        clearTimeout(thumbnailUploadResetTimeoutRef.current);
       }
     };
   }, []);
@@ -463,10 +417,10 @@ const CourseDetail = () => {
   }, [formValues, initialValues]);
 
   const hasChanges =
-    hasFormChanges || coverImageFile !== null || thumbnailImageFile !== null;
+    hasFormChanges || coverImageFile !== null;
 
   const isUploadingImages =
-    coverUploadState.status === "uploading" || thumbnailUploadState.status === "uploading";
+    coverUploadState.status === "uploading";
 
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -544,24 +498,17 @@ const CourseDetail = () => {
       }
     });
 
-  const startImageUpload = (kind: "cover" | "thumbnail", file: File) => {
+  const startImageUpload = (file: File) => {
     if (!courseId) {
       toast.error("Invalid course ID.");
       return;
     }
 
-    const setUploadState =
-      kind === "cover" ? setCoverUploadState : setThumbnailUploadState;
-    const uploadPromiseRef =
-      kind === "cover" ? coverUploadPromiseRef : thumbnailUploadPromiseRef;
-    const resetTimeoutRef =
-      kind === "cover" ? coverUploadResetTimeoutRef : thumbnailUploadResetTimeoutRef;
+    const setUploadState = setCoverUploadState;
+    const uploadPromiseRef = coverUploadPromiseRef;
+    const resetTimeoutRef = coverUploadResetTimeoutRef;
 
-    if (kind === "cover") {
-      pendingCoverUrlRef.current = null;
-    } else {
-      pendingThumbnailUrlRef.current = null;
-    }
+    pendingCoverUrlRef.current = null;
 
     if (resetTimeoutRef.current) {
       clearTimeout(resetTimeoutRef.current);
@@ -575,47 +522,77 @@ const CourseDetail = () => {
 
     const uploadTask = (async () => {
       try {
-        const uploadUrl = await generateImageUploadUrl();
-        const { storageId } = await uploadFileWithProgress(uploadUrl, file, (progress) => {
-          setUploadState({
-            status: "uploading",
-            progress,
-          });
+        // Upload banner image
+        const bannerUploadUrl = await generateImageUploadUrl();
+        const { storageId: bannerStorageId } = await uploadFileWithProgress(
+          bannerUploadUrl,
+          file,
+          (progress) => {
+            // Update progress - 60% for upload, 10% for JPEG conversion, 20% for thumbnail, 10% for update
+            setUploadState({
+              status: "uploading",
+              progress: progress * 0.6,
+            });
+          }
+        );
+
+        const originalBannerStorageId = bannerStorageId as Id<"_storage">;
+
+        // Convert banner image to JPEG 85% quality (no resize)
+        // If this fails, abort the entire upload - don't replace the previous image
+        setUploadState({
+          status: "uploading",
+          progress: 0.65, // 65% done, converting to JPEG
+        });
+        
+        const convertedBannerStorageId = await convertToJpeg({
+          storageId: originalBannerStorageId,
+          quality: 85,
+        });
+        
+        setUploadState({
+          status: "uploading",
+          progress: 0.75, // 75% done, conversion complete
         });
 
-        const storageIdentifier = storageId as Id<"_storage">;
+        // Generate thumbnail from the converted JPEG
+        // If this fails, we can continue without thumbnail, but banner conversion must succeed
+        let thumbnailStorageId: Id<"_storage"> | undefined;
+        try {
+          thumbnailStorageId = await generateThumbnail({
+            storageId: convertedBannerStorageId,
+          });
+          
+          setUploadState({
+            status: "uploading",
+            progress: 0.95, // 95% done, thumbnail generated
+          });
+        } catch (thumbnailError) {
+          console.warn("Failed to generate thumbnail:", thumbnailError);
+          // Continue without thumbnail if generation fails, but banner is already converted
+        }
 
+        // Update course images with both banner and thumbnail
+        // Only update if banner conversion succeeded
         const result = await updateCourseImages({
           id: courseId,
-          bannerStorageId: kind === "cover" ? storageIdentifier : undefined,
-          thumbnailStorageId: kind === "thumbnail" ? storageIdentifier : undefined,
+          bannerStorageId: convertedBannerStorageId,
+          thumbnailStorageId,
         });
 
         if (!result) {
           throw new Error("Failed to update the course with the uploaded image.");
         }
 
-        if (kind === "cover") {
-          const nextBannerUrl = result.bannerImageUrl ?? null;
-          pendingCoverUrlRef.current = nextBannerUrl;
-          setCoverImagePreview((previous) => {
-            if (previous && previous.startsWith("blob:")) {
-              URL.revokeObjectURL(previous);
-            }
-            return nextBannerUrl;
-          });
-          setCoverImageFile(null);
-        } else {
-          const nextThumbnailUrl = result.thumbnailImageUrl ?? null;
-          pendingThumbnailUrlRef.current = nextThumbnailUrl;
-          setThumbnailImagePreview((previous) => {
-            if (previous && previous.startsWith("blob:")) {
-              URL.revokeObjectURL(previous);
-            }
-            return nextThumbnailUrl;
-          });
-          setThumbnailImageFile(null);
-        }
+        const nextBannerUrl = result.bannerImageUrl ?? null;
+        pendingCoverUrlRef.current = nextBannerUrl;
+        setCoverImagePreview((previous) => {
+          if (previous && previous.startsWith("blob:")) {
+            URL.revokeObjectURL(previous);
+          }
+          return nextBannerUrl;
+        });
+        setCoverImageFile(null);
 
         setUploadState({
           status: "success",
@@ -637,11 +614,7 @@ const CourseDetail = () => {
           progress: 0,
           errorMessage: message,
         });
-        if (kind === "cover") {
-          pendingCoverUrlRef.current = null;
-        } else {
-          pendingThumbnailUrlRef.current = null;
-        }
+        pendingCoverUrlRef.current = null;
         toast.error(message);
         throw error;
       } finally {
@@ -701,7 +674,6 @@ const CourseDetail = () => {
     try {
       const pendingUploads = [
         coverUploadPromiseRef.current,
-        thumbnailUploadPromiseRef.current,
       ].filter((promise): promise is Promise<void> => promise !== null);
 
       if (pendingUploads.length > 0) {
@@ -713,10 +685,7 @@ const CourseDetail = () => {
         }
       }
 
-      if (
-        coverUploadState.status === "error" ||
-        thumbnailUploadState.status === "error"
-      ) {
+      if (coverUploadState.status === "error") {
         toast.error("Please resolve the image upload error before saving.");
         return;
       }
@@ -754,7 +723,6 @@ const CourseDetail = () => {
       setInitialValues(savedValues);
       setFormValues(savedValues);
       setCoverImageFile(null);
-      setThumbnailImageFile(null);
     } catch (error) {
       console.error(error);
       toast.error(getErrorMessage(error));
@@ -794,21 +762,9 @@ const CourseDetail = () => {
       }
       return nextUrl;
     });
-    startImageUpload("cover", file);
+    startImageUpload(file);
   };
 
-  const handleThumbnailImageSelect = (file: File) => {
-    const nextUrl = URL.createObjectURL(file);
-    setThumbnailImageFile(file);
-    pendingThumbnailUrlRef.current = null;
-    setThumbnailImagePreview((previous) => {
-      if (previous && previous.startsWith("blob:")) {
-        URL.revokeObjectURL(previous);
-      }
-      return nextUrl;
-    });
-    startImageUpload("thumbnail", file);
-  };
 
   if (!courseId) {
     return (
@@ -1049,7 +1005,7 @@ const CourseDetail = () => {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-[2fr_1fr]">
+            <div className="max-w-2xl">
               <ImageDropzone
                 id="coverImage"
                 label="Cover image"
@@ -1059,22 +1015,7 @@ const CourseDetail = () => {
                 onSelectFile={handleCoverImageSelect}
                 uploadState={coverUploadState}
                 onRetry={
-                  coverImageFile ? () => startImageUpload("cover", coverImageFile) : undefined
-                }
-                disabled={isSaving}
-              />
-              <ImageDropzone
-                id="thumbnailImage"
-                label="Thumbnail image"
-                helperText="3:4 ratio. Click to browse or drop an image. The center will be cropped automatically."
-                aspectRatioClass="aspect-[3/4]"
-                value={thumbnailImagePreview}
-                onSelectFile={handleThumbnailImageSelect}
-                uploadState={thumbnailUploadState}
-                onRetry={
-                  thumbnailImageFile
-                    ? () => startImageUpload("thumbnail", thumbnailImageFile)
-                    : undefined
+                  coverImageFile ? () => startImageUpload(coverImageFile) : undefined
                 }
                 disabled={isSaving}
               />
