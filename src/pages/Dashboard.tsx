@@ -1,4 +1,5 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { FolderTree, BookOpen, GraduationCap, TrendingUp } from "lucide-react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
@@ -96,7 +97,12 @@ const Dashboard = () => {
       <div className="grid gap-8 md:grid-cols-2">
         <Card className="card-elevated">
           <CardHeader className="pb-4">
-            <CardTitle className="text-2xl">Recent Activity</CardTitle>
+            <CardTitle className="text-2xl flex items-center gap-2">
+              Recent Activity
+              <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
+                Alpha
+              </Badge>
+            </CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
