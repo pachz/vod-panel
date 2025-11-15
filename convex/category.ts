@@ -1,6 +1,9 @@
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
+import { components } from "./_generated/api";
+import { DataModel } from "./_generated/dataModel";
+import { TableAggregate } from "@convex-dev/aggregate";
 
 import {
   categoryInputSchema,
@@ -8,6 +11,21 @@ import {
 } from "../shared/validation/category";
 import { generateUniqueSlug, slugify } from "./utils/slug";
 import { requireUser } from "./utils/auth";
+import { logActivity } from "./utils/activityLog";
+
+// Initialize the aggregate for counting categories by status
+const categoryAggregate = new TableAggregate<
+  {
+    Key: string; // "active" or "deleted"
+    DataModel: DataModel;
+    TableName: "categories";
+  }
+>(components.aggregateCategories, {
+  sortKey: (doc) => {
+    // Use "active" for non-deleted categories, "deleted" for deleted ones
+    return doc.deletedAt === undefined ? "active" : "deleted";
+  },
+});
 
 export const listCategories = query(async (ctx) => {
   await requireUser(ctx);
@@ -62,6 +80,20 @@ export const createCategory = mutation({
       slug,
       course_count: 0,
       createdAt: now,
+    });
+
+    // Update aggregate - get the document and insert it
+    const category = await ctx.db.get(id);
+    if (category) {
+      await categoryAggregate.insert(ctx, category);
+    }
+
+    await logActivity({
+      ctx,
+      entityType: "category",
+      action: "created",
+      entityId: id,
+      entityName: validated.name,
     });
 
     return id;
@@ -124,6 +156,14 @@ export const updateCategory = mutation({
       description_ar: validated.descriptionAr,
       slug,
     });
+
+    await logActivity({
+      ctx,
+      entityType: "category",
+      action: "updated",
+      entityId: id,
+      entityName: validated.name,
+    });
   },
 });
 
@@ -167,6 +207,59 @@ export const deleteCategory = mutation({
     await ctx.db.patch(id, {
       deletedAt: Date.now(),
     });
+
+    // Get the updated document
+    const updatedCategory = await ctx.db.get(id);
+    if (updatedCategory) {
+      // Delete using old document state (category has deletedAt undefined)
+      // Insert using new document state (updatedCategory has deletedAt set)
+      await categoryAggregate.delete(ctx, category);
+      await categoryAggregate.insert(ctx, updatedCategory);
+    }
+
+    await logActivity({
+      ctx,
+      entityType: "category",
+      action: "deleted",
+      entityId: id,
+      entityName: category.name,
+    });
   },
+});
+
+// Query to get category counts by status
+export const getCategoryCountByStatus = query(async (ctx) => {
+  await requireUser(ctx);
+
+  const activeCount = await categoryAggregate.count(ctx, {
+    bounds: { lower: { key: "active", inclusive: true }, upper: { key: "active", inclusive: true } },
+  });
+
+  const deletedCount = await categoryAggregate.count(ctx, {
+    bounds: { lower: { key: "deleted", inclusive: true }, upper: { key: "deleted", inclusive: true } },
+  });
+
+  return {
+    active: activeCount,
+    deleted: deletedCount,
+    total: activeCount + deletedCount,
+  };
+});
+
+// Migration function to initialize aggregate with existing categories
+// Run this once after setting up the aggregate to populate it with existing data
+export const initializeCategoryAggregate = mutation(async (ctx) => {
+  await requireUser(ctx);
+
+  const categories = await ctx.db.query("categories").collect();
+  let initialized = 0;
+
+  for (const category of categories) {
+    // Key is automatically determined from document via sortKey
+    await categoryAggregate.insert(ctx, category);
+    initialized++;
+  }
+
+  return { initialized, total: categories.length };
 });
 

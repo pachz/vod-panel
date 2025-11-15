@@ -1,5 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { FolderTree, BookOpen, GraduationCap, TrendingUp } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 
 const stats = [
   {
@@ -32,7 +34,35 @@ const stats = [
   },
 ];
 
+const formatTimeAgo = (timestamp: number): string => {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const seconds = Math.floor(diff / 1000);
+  const minutes = Math.floor(seconds / 60);
+  const hours = Math.floor(minutes / 60);
+  const days = Math.floor(hours / 24);
+
+  if (days > 0) {
+    return `${days} ${days === 1 ? "day" : "days"} ago`;
+  }
+  if (hours > 0) {
+    return `${hours} ${hours === 1 ? "hour" : "hours"} ago`;
+  }
+  if (minutes > 0) {
+    return `${minutes} ${minutes === 1 ? "minute" : "minutes"} ago`;
+  }
+  return "Just now";
+};
+
+const formatActivityAction = (entityType: string, action: string): string => {
+  const entityName = entityType.charAt(0).toUpperCase() + entityType.slice(1);
+  const actionName = action.charAt(0).toUpperCase() + action.slice(1);
+  return `${entityName} ${actionName}`;
+};
+
 const Dashboard = () => {
+  const activityLogs = useQuery(api.activityLog.getActivityLogs, { limit: 10 });
+
   return (
     <div className="relative z-10 space-y-12 py-4">
       <div className="text-center max-w-3xl mx-auto space-y-4">
@@ -70,20 +100,37 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {[
-                { action: "New course added", course: "Advanced React Patterns", time: "2 hours ago" },
-                { action: "Lesson updated", course: "JavaScript Fundamentals", time: "5 hours ago" },
-                { action: "Category created", course: "Data Science", time: "1 day ago" },
-              ].map((activity, i) => (
-                <div key={i} className="flex items-start gap-4 pb-6 border-b border-border/50 last:border-0 last:pb-0">
-                  <div className="h-3 w-3 rounded-full bg-gradient-to-br from-primary to-primary-glow mt-1 shadow-md shadow-primary/50" />
-                  <div className="flex-1 space-y-1">
-                    <p className="text-sm font-semibold">{activity.action}</p>
-                    <p className="text-sm text-muted-foreground">{activity.course}</p>
-                    <p className="text-xs text-muted-foreground/80">{activity.time}</p>
+              {activityLogs === undefined ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : activityLogs.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No activity yet</div>
+              ) : (
+                activityLogs.map((log) => (
+                  <div
+                    key={log._id}
+                    className="flex items-start gap-4 pb-6 border-b border-border/50 last:border-0 last:pb-0"
+                  >
+                    <div className="h-3 w-3 rounded-full bg-gradient-to-br from-primary to-primary-glow mt-1 shadow-md shadow-primary/50" />
+                    <div className="flex-1 space-y-1">
+                      <p className="text-sm font-semibold">
+                        {formatActivityAction(log.entityType, log.action)}
+                      </p>
+                      <p className="text-sm text-muted-foreground">{log.entityName}</p>
+                      <div className="flex items-center gap-2">
+                        <p className="text-xs text-muted-foreground/80">
+                          {formatTimeAgo(log.timestamp)}
+                        </p>
+                        {log.userName && (
+                          <>
+                            <span className="text-xs text-muted-foreground/60">•</span>
+                            <p className="text-xs text-muted-foreground/80">by {log.userName}</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
                   </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

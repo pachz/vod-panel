@@ -10,6 +10,7 @@ import {
 } from "../shared/validation/course";
 import { generateUniqueSlug, slugify } from "./utils/slug";
 import { requireUser } from "./utils/auth";
+import { logActivity } from "./utils/activityLog";
 
 const validateCourseInput = (input: CourseInput) => {
   const result = courseInputSchema.safeParse(input);
@@ -167,6 +168,14 @@ export const createCourse = mutation({
 
     await ctx.db.patch(categoryId, {
       course_count: category.course_count + 1,
+    });
+
+    await logActivity({
+      ctx,
+      entityType: "course",
+      action: "created",
+      entityId: courseId,
+      entityName: validated.name,
     });
 
     return courseId;
@@ -331,6 +340,14 @@ export const updateCourse = mutation({
       instructor: validated.instructor,
       slug,
     });
+
+    await logActivity({
+      ctx,
+      entityType: "course",
+      action: "updated",
+      entityId: id,
+      entityName: validated.name,
+    });
   },
 });
 
@@ -447,6 +464,14 @@ export const deleteCourse = mutation({
         course_count: Math.max(category.course_count - 1, 0),
       });
     }
+
+    await logActivity({
+      ctx,
+      entityType: "course",
+      action: "deleted",
+      entityId: id,
+      entityName: course.name,
+    });
   },
 });
 

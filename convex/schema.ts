@@ -83,4 +83,24 @@ export default defineSchema({
   })
     .index("course_id", ["course_id", "deletedAt"])
     .index("deletedAt_course_status", ["deletedAt", "course_id", "status"]),
+
+  activityLogs: defineTable({
+    entityType: v.union(
+      v.literal("category"),
+      v.literal("course"),
+      v.literal("lesson"),
+      v.literal("user"),
+      v.literal("video"),
+    ),
+    action: v.union(
+      v.literal("created"),
+      v.literal("updated"),
+      v.literal("deleted"),
+    ),
+    entityId: v.string(),
+    entityName: v.string(),
+    userId: v.optional(v.id("users")),
+    userName: v.optional(v.string()),
+    timestamp: v.number(),
+  }).index("timestamp", ["timestamp"]),
 });

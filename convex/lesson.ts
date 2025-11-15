@@ -10,6 +10,7 @@ import {
   type LessonUpdateInput,
 } from "../shared/validation/lesson";
 import { requireUser } from "./utils/auth";
+import { logActivity } from "./utils/activityLog";
 
 const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">) => {
   const lessons = await ctx.db
@@ -158,6 +159,14 @@ export const createLesson = mutation({
 
     // Recalculate course lesson count to ensure accuracy
     await recalculateLessonCount(ctx, courseId);
+
+    await logActivity({
+      ctx,
+      entityType: "lesson",
+      action: "created",
+      entityId: lessonId,
+      entityName: validated.title,
+    });
 
     return lessonId;
   },
@@ -309,6 +318,14 @@ export const updateLesson = mutation({
       body: validated.type === "article" ? validated.body : undefined,
       body_ar: validated.type === "article" ? validated.bodyAr : undefined,
     });
+
+    await logActivity({
+      ctx,
+      entityType: "lesson",
+      action: "updated",
+      entityId: id,
+      entityName: validated.title,
+    });
   },
 });
 
@@ -409,6 +426,14 @@ export const deleteLesson = mutation({
       // Recalculate lesson count to ensure accuracy
       await recalculateLessonCount(ctx, lesson.course_id);
     }
+
+    await logActivity({
+      ctx,
+      entityType: "lesson",
+      action: "deleted",
+      entityId: id,
+      entityName: lesson.title,
+    });
   },
 });
 

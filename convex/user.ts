@@ -15,6 +15,7 @@ import {
 import { createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUser, requireUserAction } from "./utils/auth";
+import { logActivity } from "./utils/activityLog";
 
 export const getCurrentUser = query(async (ctx) => {
   const { identity } = await requireUser(ctx);
@@ -208,6 +209,14 @@ export const createUserRecord = internalMutation({
       emailVerificationTime: Date.now(), // Auto-verify for admin-created users
     });
 
+    await logActivity({
+      ctx,
+      entityType: "user",
+      action: "created",
+      entityId: userId,
+      entityName: args.name || args.email,
+    });
+
     return userId;
   },
 });
@@ -316,6 +325,14 @@ export const updateUser = mutation({
       phone: validated.phone && validated.phone.trim() ? validated.phone.trim() : undefined,
       isGod: validated.isAdmin ?? false,
     });
+
+    await logActivity({
+      ctx,
+      entityType: "user",
+      action: "updated",
+      entityId: id,
+      entityName: validated.name || validated.email,
+    });
   },
 });
 
@@ -413,6 +430,14 @@ export const deleteUser = mutation({
     // Soft delete
     await ctx.db.patch(id, {
       deletedAt: Date.now(),
+    });
+
+    await logActivity({
+      ctx,
+      entityType: "user",
+      action: "deleted",
+      entityId: id,
+      entityName: user.name || user.email || "User",
     });
   },
 });
