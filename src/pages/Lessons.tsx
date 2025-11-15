@@ -1,14 +1,13 @@
-import { useState } from "react";
-import { Plus, Pencil, Trash2, Video, FileText } from "lucide-react";
+import { useState, useMemo, useCallback } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Trash2, Video, FileText, Eye } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+
+import { api } from "../../convex/_generated/api";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
+import { DataTable, type TableColumn, type TableAction } from "@/components/DataTable";
+import { type TableFilter } from "@/components/TableFilters";
 import {
   Dialog,
   DialogContent,
@@ -18,7 +17,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -28,65 +26,273 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
+import { RichTextarea } from "@/components/RichTextarea";
+import { lessonInputSchema } from "../../shared/validation/lesson";
 
-interface Lesson {
-  id: string;
-  title: string;
-  description: string;
-  course: string;
-  duration: string;
-  type: "video" | "article";
-  order: number;
-}
+type LessonDoc = Doc<"lessons">;
+type CourseDoc = Doc<"courses">;
 
 const Lessons = () => {
-  const [lessons, setLessons] = useState<Lesson[]>([
-    { id: "1", title: "Introduction to React", description: "Learn the basics", course: "React Masterclass", duration: "15 min", type: "video", order: 1 },
-    { id: "2", title: "Components & Props", description: "Understanding components", course: "React Masterclass", duration: "20 min", type: "video", order: 2 },
-    { id: "3", title: "Design Principles Overview", description: "Core principles", course: "UI Design Principles", duration: "10 min", type: "article", order: 1 },
-  ]);
+  const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
+  const courseFilter = searchParams.get("course") || undefined;
+  const statusFilter = searchParams.get("status") || undefined;
+
+  const lessons = useQuery(api.lesson.listLessons, {
+    courseId: courseFilter as Id<"courses"> | undefined,
+    status: statusFilter as "draft" | "published" | "archived" | undefined,
+  });
+  const courses = useQuery(api.course.listCourses, {});
+  const createLesson = useMutation(api.lesson.createLesson);
+  const deleteLesson = useMutation(api.lesson.deleteLesson);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [isCreating, setIsCreating] = useState(false);
+  const [isDeleting, setIsDeleting] = useState<string | null>(null);
 
-  const handleSubmit = (e: React.FormEvent<HTMLFormElement>) => {
+  const [formValues, setFormValues] = useState({
+    title: "",
+    titleAr: "",
+    shortReview: "",
+    shortReviewAr: "",
+    courseId: "",
+    duration: "",
+    type: "video" as "video" | "article",
+  });
+
+  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
+  const isLoading = lessons === undefined || courses === undefined;
+
+  const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
-    const formData = new FormData(e.currentTarget);
-    const title = formData.get("title") as string;
-    const description = formData.get("description") as string;
-    const course = formData.get("course") as string;
-    const duration = formData.get("duration") as string;
-    const type = formData.get("type") as "video" | "article";
-    const order = parseInt(formData.get("order") as string);
 
-    if (editingLesson) {
-      setLessons(lessons.map(lesson => 
-        lesson.id === editingLesson.id 
-          ? { ...lesson, title, description, course, duration, type, order }
-          : lesson
-      ));
-      toast.success("Lesson updated successfully");
-    } else {
-      setLessons([...lessons, {
-        id: Date.now().toString(),
-        title,
-        description,
-        course,
-        duration,
-        type,
-        order
-      }]);
-      toast.success("Lesson created successfully");
+    const validation = lessonInputSchema.safeParse({
+      title: formValues.title,
+      titleAr: formValues.titleAr,
+      shortReview: formValues.shortReview,
+      shortReviewAr: formValues.shortReviewAr,
+      courseId: formValues.courseId,
+      duration: formValues.duration,
+      type: formValues.type,
+    });
+
+    if (!validation.success) {
+      const issue = validation.error.errors[0];
+      toast.error(issue?.message ?? "Please check the form and try again.");
+      return;
     }
 
-    setIsDialogOpen(false);
-    setEditingLesson(null);
+    const {
+      title,
+      titleAr,
+      shortReview,
+      shortReviewAr,
+      courseId,
+      duration,
+      type,
+    } = validation.data;
+
+    setIsCreating(true);
+
+    try {
+      await createLesson({
+        title,
+        titleAr,
+        shortReview,
+        shortReviewAr,
+        courseId: courseId as Id<"courses">,
+        duration,
+        type,
+      });
+
+      toast.success("Lesson created successfully");
+      setIsDialogOpen(false);
+      setFormValues({
+        title: "",
+        titleAr: "",
+        shortReview: "",
+        shortReviewAr: "",
+        courseId: "",
+        duration: "",
+        type: "video",
+      });
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: { message?: string } }).data?.message
+          : error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setIsCreating(false);
+    }
   };
 
-  const handleDelete = (id: string) => {
-    setLessons(lessons.filter(lesson => lesson.id !== id));
-    toast.success("Lesson deleted successfully");
+  const handleDelete = useCallback(async (id: Id<"lessons">) => {
+    if (!confirm("Are you sure you want to delete this lesson?")) {
+      return;
+    }
+
+    setIsDeleting(id);
+
+    try {
+      await deleteLesson({ id });
+      toast.success("Lesson deleted successfully");
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: { message?: string } }).data?.message
+          : error instanceof Error
+            ? error.message
+            : "Something went wrong. Please try again.";
+      toast.error(errorMessage);
+    } finally {
+      setIsDeleting(null);
+    }
+  }, [deleteLesson]);
+
+  const getCourseName = (courseId: Id<"courses">) => {
+    const course = courseList.find((c) => c._id === courseId);
+    return course?.name ?? "Unknown";
   };
+
+  const formatDuration = (minutes: number | undefined) => {
+    if (!minutes) return "—";
+    return `${minutes} min`;
+  };
+
+  const courseFilterOptions = useMemo(() => {
+    return courseList.map((course) => ({
+      value: course._id,
+      label: course.name,
+    }));
+  }, [courseList]);
+
+  const statusFilterOptions = useMemo(() => [
+    { value: "draft", label: "Draft" },
+    { value: "published", label: "Published" },
+    { value: "archived", label: "Archived" },
+  ], []);
+
+  const filters: TableFilter[] = useMemo(() => [
+    {
+      key: "course",
+      label: "Course",
+      placeholder: "All courses",
+      options: courseFilterOptions,
+        value: courseFilter,
+        onChange: (value) => {
+          const newParams = new URLSearchParams(searchParams);
+          if (value) {
+            newParams.set("course", value);
+          } else {
+            newParams.delete("course");
+          }
+          setSearchParams(newParams, { replace: true });
+        },
+    },
+    {
+      key: "status",
+      label: "Status",
+      placeholder: "All statuses",
+      options: statusFilterOptions,
+        value: statusFilter,
+        onChange: (value) => {
+          const newParams = new URLSearchParams(searchParams);
+          if (value) {
+            newParams.set("status", value);
+          } else {
+            newParams.delete("status");
+          }
+          setSearchParams(newParams, { replace: true });
+        },
+    },
+  ], [courseFilterOptions, courseFilter, statusFilter, searchParams, setSearchParams]);
+
+  const handleClearAllFilters = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    newParams.delete("course");
+    newParams.delete("status");
+    setSearchParams(newParams, { replace: true });
+  }, [searchParams, setSearchParams]);
+
+  const columns = useMemo<TableColumn<LessonDoc>[]>(
+    () => [
+      {
+        header: "Title",
+        render: (lesson) => (
+          <span className="font-medium">{lesson.title}</span>
+        ),
+      },
+      {
+        header: "Course",
+        render: (lesson) => {
+          const course = courseList.find((c) => c._id === lesson.course_id);
+          return (
+            <span className="text-muted-foreground">
+              {course?.name ?? "Unknown"}
+            </span>
+          );
+        },
+        cellClassName: "text-muted-foreground",
+      },
+      {
+        header: "Duration",
+        render: (lesson) => formatDuration(lesson.duration),
+      },
+      {
+        header: "Type",
+        render: (lesson) => (
+          <Badge variant="secondary" className="gap-1">
+            {lesson.type === "video" ? (
+              <Video className="h-3 w-3" />
+            ) : (
+              <FileText className="h-3 w-3" />
+            )}
+            {lesson.type}
+          </Badge>
+        ),
+      },
+      {
+        header: "Status",
+        render: (lesson) => (
+          <Badge
+            variant={
+              lesson.status === "published"
+                ? "default"
+                : lesson.status === "archived"
+                  ? "secondary"
+                  : "outline"
+            }
+          >
+            {lesson.status}
+          </Badge>
+        ),
+      },
+    ],
+    [courseList]
+  );
+
+  const actions = useMemo<TableAction<LessonDoc>[]>(
+    () => [
+      {
+        icon: Eye,
+        label: "View lesson",
+        onClick: (lesson) => navigate(`/lessons/${lesson._id}`),
+      },
+      {
+        icon: Trash2,
+        label: "Delete lesson",
+        onClick: (lesson) => handleDelete(lesson._id),
+        className: "text-destructive",
+      },
+    ],
+    [navigate, handleDelete]
+  );
 
   return (
     <div className="space-y-6">
@@ -99,65 +305,89 @@ const Lessons = () => {
         </div>
         <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
-            <Button onClick={() => setEditingLesson(null)} variant="cta">
+            <Button
+              onClick={() => {
+                setFormValues({
+                  title: "",
+                  titleAr: "",
+                  shortReview: "",
+                  shortReviewAr: "",
+                  courseId: "",
+                  duration: "",
+                  type: "video",
+                });
+              }}
+              variant="cta"
+            >
               <Plus className="h-4 w-4 mr-2" />
               Add Lesson
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-2xl">
+          <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
-              <DialogTitle>{editingLesson ? "Edit" : "Create"} Lesson</DialogTitle>
+              <DialogTitle>Create Lesson</DialogTitle>
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="title">Title</Label>
+                  <Label htmlFor="title">Title (EN)</Label>
                   <Input
                     id="title"
-                    name="title"
-                    defaultValue={editingLesson?.title}
+                    value={formValues.title}
+                    onChange={(e) =>
+                      setFormValues((prev) => ({ ...prev, title: e.target.value }))
+                    }
                     required
+                    maxLength={128}
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="duration">Duration</Label>
+                  <Label htmlFor="titleAr">Title (AR)</Label>
                   <Input
-                    id="duration"
-                    name="duration"
-                    placeholder="e.g., 15 min"
-                    defaultValue={editingLesson?.duration}
+                    id="titleAr"
+                    value={formValues.titleAr}
+                    onChange={(e) =>
+                      setFormValues((prev) => ({ ...prev, titleAr: e.target.value }))
+                    }
                     required
+                    maxLength={128}
+                    dir="rtl"
+                    className="text-right"
                   />
                 </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="description">Description</Label>
-                <Textarea
-                  id="description"
-                  name="description"
-                  defaultValue={editingLesson?.description}
-                  required
-                />
-              </div>
-              <div className="grid grid-cols-3 gap-4">
+
+              <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="course">Course</Label>
-                  <Select name="course" defaultValue={editingLesson?.course}>
+                  <Label htmlFor="courseId">Course</Label>
+                  <Select
+                    value={formValues.courseId}
+                    onValueChange={(value) =>
+                      setFormValues((prev) => ({ ...prev, courseId: value }))
+                    }
+                  >
                     <SelectTrigger>
                       <SelectValue placeholder="Select course" />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="React Masterclass">React Masterclass</SelectItem>
-                      <SelectItem value="UI Design Principles">UI Design Principles</SelectItem>
-                      <SelectItem value="Python for Beginners">Python for Beginners</SelectItem>
+                      {courseList.map((course) => (
+                        <SelectItem key={course._id} value={course._id}>
+                          {course.name}
+                        </SelectItem>
+                      ))}
                     </SelectContent>
                   </Select>
                 </div>
                 <div className="space-y-2">
                   <Label htmlFor="type">Type</Label>
-                  <Select name="type" defaultValue={editingLesson?.type || "video"}>
+                  <Select
+                    value={formValues.type}
+                    onValueChange={(value: "video" | "article") =>
+                      setFormValues((prev) => ({ ...prev, type: value }))
+                    }
+                  >
                     <SelectTrigger>
-                      <SelectValue placeholder="Select type" />
+                      <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
                       <SelectItem value="video">Video</SelectItem>
@@ -165,76 +395,90 @@ const Lessons = () => {
                     </SelectContent>
                   </Select>
                 </div>
-                <div className="space-y-2">
-                  <Label htmlFor="order">Order</Label>
-                  <Input
-                    id="order"
-                    name="order"
-                    type="number"
-                    defaultValue={editingLesson?.order || 1}
-                    required
-                  />
-                </div>
               </div>
-              <Button type="submit" variant="cta" className="w-full">
-                {editingLesson ? "Update" : "Create"} Lesson
+
+              <div className="space-y-2">
+                <Label htmlFor="duration">Duration (minutes)</Label>
+                <Input
+                  id="duration"
+                  value={formValues.duration}
+                  onChange={(e) => {
+                    const rawValue = e.target.value;
+                    const sanitizedValue = rawValue.replace(/\D/g, "");
+                    setFormValues((prev) => ({
+                      ...prev,
+                      duration: sanitizedValue,
+                    }));
+                  }}
+                  inputMode="numeric"
+                  pattern="^[0-9]*$"
+                  placeholder="e.g., 15"
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <RichTextarea
+                  id="shortReview"
+                  label="Short Review (EN)"
+                  value={formValues.shortReview}
+                  onChange={(nextValue) =>
+                    setFormValues((prev) => ({
+                      ...prev,
+                      shortReview: nextValue,
+                    }))
+                  }
+                  required
+                  maxLength={512}
+                  rows={3}
+                  modalTitle="Edit short review"
+                />
+                <RichTextarea
+                  id="shortReviewAr"
+                  label="Short Review (AR)"
+                  value={formValues.shortReviewAr}
+                  onChange={(nextValue) =>
+                    setFormValues((prev) => ({
+                      ...prev,
+                      shortReviewAr: nextValue,
+                    }))
+                  }
+                  required
+                  maxLength={512}
+                  rows={3}
+                  dir="rtl"
+                  textareaClassName="text-right"
+                  modalTitle="Edit Arabic short review"
+                />
+              </div>
+
+              <Button
+                type="submit"
+                variant="cta"
+                className="w-full"
+                disabled={isCreating}
+              >
+                {isCreating ? "Creating…" : "Create Lesson"}
               </Button>
             </form>
           </DialogContent>
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Order</TableHead>
-              <TableHead>Title</TableHead>
-              <TableHead>Course</TableHead>
-              <TableHead>Duration</TableHead>
-              <TableHead>Type</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {lessons.map((lesson) => (
-              <TableRow key={lesson.id}>
-                <TableCell className="font-medium">#{lesson.order}</TableCell>
-                <TableCell>{lesson.title}</TableCell>
-                <TableCell className="text-muted-foreground">{lesson.course}</TableCell>
-                <TableCell>{lesson.duration}</TableCell>
-                <TableCell>
-                  <Badge variant="secondary" className="gap-1">
-                    {lesson.type === "video" ? <Video className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
-                    {lesson.type}
-                  </Badge>
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="flex justify-end gap-2">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => {
-                        setEditingLesson(lesson);
-                        setIsDialogOpen(true);
-                      }}
-                    >
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => handleDelete(lesson.id)}
-                    >
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
-      </div>
+      <DataTable
+        data={lessonList}
+        isLoading={isLoading}
+        columns={columns}
+        actions={actions}
+        getItemId={(lesson) => lesson._id}
+        loadingMessage="Loading lessons…"
+        emptyMessage={
+          courseFilter || statusFilter
+            ? "No lessons found with the selected filters."
+            : "No lessons yet. Create your first lesson to get started."
+        }
+        filters={filters}
+        onClearAllFilters={handleClearAllFilters}
+      />
     </div>
   );
 };

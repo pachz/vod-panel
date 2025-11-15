@@ -420,6 +420,21 @@ export const deleteCourse = mutation({
       });
     }
 
+    // Check if course has any lessons
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("course_id", (q) =>
+        q.eq("course_id", id).eq("deletedAt", undefined)
+      )
+      .collect();
+
+    if (lessons.length > 0) {
+      throw new ConvexError({
+        code: "COURSE_HAS_LESSONS",
+        message: "Cannot delete course that has lessons. Please delete or move all lessons first.",
+      });
+    }
+
     const now = Date.now();
     await ctx.db.patch(id, {
       deletedAt: now,

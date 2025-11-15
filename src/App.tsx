@@ -8,6 +8,7 @@ import Categories from "@/pages/Categories";
 import Courses from "@/pages/Courses";
 import CourseDetail from "@/pages/CourseDetail";
 import Lessons from "@/pages/Lessons";
+import LessonDetail from "@/pages/LessonDetail";
 import NotFound from "@/pages/NotFound";
 import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
@@ -138,6 +139,7 @@ const App = () => (
         <Route path="/courses" element={<Courses />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
         <Route path="/lessons" element={<Lessons />} />
+        <Route path="/lessons/:id" element={<LessonDetail />} />
         <Route path="/video-panel" element={<VideoPanel />} />
         <Route path="/users" element={<Users />} />
         <Route path="*" element={<NotFound />} />

@@ -58,4 +58,29 @@ export default defineSchema({
     .index("slug", ["slug"])
     .index("deletedAt_category_status", ["deletedAt", "category_id", "status"])
     .index("deletedAt_status", ["deletedAt", "status"]),
+
+  lessons: defineTable({
+    title: v.string(),
+    title_ar: v.string(),
+    short_review: v.string(),
+    short_review_ar: v.string(),
+    description: v.optional(v.string()),
+    description_ar: v.optional(v.string()),
+    learning_objectives: v.optional(v.string()),
+    learning_objectives_ar: v.optional(v.string()),
+    course_id: v.id("courses"),
+    duration: v.optional(v.number()),
+    type: v.union(v.literal("video"), v.literal("article")),
+    status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    video_url: v.optional(v.string()),
+    body: v.optional(v.string()),
+    body_ar: v.optional(v.string()),
+    cover_image_url: v.optional(v.string()),
+    thumbnail_image_url: v.optional(v.string()),
+    priority: v.number(),
+    createdAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("course_id", ["course_id", "deletedAt"])
+    .index("deletedAt_course_status", ["deletedAt", "course_id", "status"]),
 });

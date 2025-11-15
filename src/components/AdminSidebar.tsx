@@ -12,15 +12,24 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
+import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
+import type { LucideIcon } from "lucide-react";
 
-const menuItems = [
+type MenuItem = {
+  title: string;
+  url: string;
+  icon: LucideIcon;
+  alpha?: boolean;
+};
+
+const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
-  { title: "Video Panel", url: "/video-panel", icon: PlayCircle },
-  { title: "Users", url: "/users", icon: Users },
+  { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
+  { title: "Users", url: "/users", icon: Users, alpha: true },
 ];
 
 export function AdminSidebar() {
@@ -79,14 +88,21 @@ export function AdminSidebar() {
                           )}
                         />
                         {!collapsed && (
-                          <span
-                            className={cn(
-                              "text-sm font-medium tracking-wide transition-colors duration-200",
-                              isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/75",
+                          <>
+                            <span
+                              className={cn(
+                                "text-sm font-medium tracking-wide transition-colors duration-200",
+                                isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/75",
+                              )}
+                            >
+                              {item.title}
+                            </span>
+                            {item.alpha && (
+                              <Badge variant="destructive" className="ml-auto text-xs px-1.5 py-0 h-5">
+                                Alpha
+                              </Badge>
                             )}
-                          >
-                            {item.title}
-                          </span>
+                          </>
                         )}
                       </Link>
                     </SidebarMenuButton>

@@ -1,0 +1,414 @@
+import { mutation, query } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { ConvexError, v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
+
+import {
+  lessonInputSchema,
+  lessonUpdateSchema,
+  type LessonInput,
+  type LessonUpdateInput,
+} from "../shared/validation/lesson";
+import { requireUser } from "./utils/auth";
+
+const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">) => {
+  const lessons = await ctx.db
+    .query("lessons")
+    .withIndex("course_id", (q) =>
+      q.eq("course_id", courseId).eq("deletedAt", undefined)
+    )
+    .collect();
+  
+  const count = lessons.length;
+  await ctx.db.patch(courseId, { lesson_count: count });
+  return count;
+};
+
+const validateLessonInput = (input: LessonInput) => {
+  const result = lessonInputSchema.safeParse(input);
+
+  if (!result.success) {
+    const issue = result.error.errors[0];
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: issue?.message ?? "Invalid lesson input.",
+    });
+  }
+
+  return result.data;
+};
+
+const validateLessonUpdateInput = (input: LessonUpdateInput) => {
+  const result = lessonUpdateSchema.safeParse(input);
+
+  if (!result.success) {
+    const issue = result.error.errors[0];
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: issue?.message ?? "Invalid lesson input.",
+    });
+  }
+
+  return result.data;
+};
+
+export const listLessons = query({
+  args: {
+    courseId: v.optional(v.id("courses")),
+    status: v.optional(v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    )),
+  },
+  handler: async (ctx, { courseId, status }) => {
+    await requireUser(ctx);
+
+    let lessons;
+
+    if (courseId && status) {
+      lessons = await ctx.db
+        .query("lessons")
+        .withIndex("deletedAt_course_status", (q) =>
+          q.eq("deletedAt", undefined).eq("course_id", courseId).eq("status", status)
+        )
+        .collect();
+    } else if (courseId) {
+      lessons = await ctx.db
+        .query("lessons")
+        .withIndex("course_id", (q) =>
+          q.eq("course_id", courseId).eq("deletedAt", undefined)
+        )
+        .collect();
+    } else {
+      lessons = await ctx.db
+        .query("lessons")
+        .filter((q) => q.eq(q.field("deletedAt"), undefined))
+        .collect();
+    }
+
+    return lessons.sort((a, b) => a.priority - b.priority);
+  },
+});
+
+export const createLesson = mutation({
+  args: {
+    title: v.string(),
+    titleAr: v.string(),
+    shortReview: v.string(),
+    shortReviewAr: v.string(),
+    courseId: v.id("courses"),
+    duration: v.optional(v.number()),
+    type: v.union(v.literal("video"), v.literal("article")),
+  },
+  handler: async (
+    ctx,
+    { title, titleAr, shortReview, shortReviewAr, courseId, duration, type },
+  ) => {
+    await requireUser(ctx);
+
+    const validated = validateLessonInput({
+      title,
+      titleAr,
+      shortReview,
+      shortReviewAr,
+      courseId,
+      duration,
+      type,
+    });
+
+    const course = await ctx.db.get(courseId);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_COURSE",
+        message: "Selected course does not exist.",
+      });
+    }
+
+    // Get the highest priority for this course to add new lesson at the end
+    const existingLessons = await ctx.db
+      .query("lessons")
+      .withIndex("course_id", (q) =>
+        q.eq("course_id", courseId).eq("deletedAt", undefined)
+      )
+      .collect();
+    
+    const maxPriority = existingLessons.length > 0
+      ? Math.max(...existingLessons.map(l => l.priority))
+      : -1;
+
+    const now = Date.now();
+
+    const lessonId = await ctx.db.insert("lessons", {
+      title: validated.title,
+      title_ar: validated.titleAr,
+      short_review: validated.shortReview,
+      short_review_ar: validated.shortReviewAr,
+      course_id: courseId,
+      duration: validated.duration,
+      type: validated.type,
+      status: "draft",
+      priority: maxPriority + 1,
+      createdAt: now,
+      video_url: undefined,
+      body: undefined,
+      body_ar: undefined,
+    });
+
+    // Recalculate course lesson count to ensure accuracy
+    await recalculateLessonCount(ctx, courseId);
+
+    return lessonId;
+  },
+});
+
+export const getLesson = query({
+  args: {
+    id: v.id("lessons"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const lesson = await ctx.db.get(id);
+
+    if (!lesson || lesson.deletedAt) {
+      return null;
+    }
+
+    return lesson;
+  },
+});
+
+export const updateLesson = mutation({
+  args: {
+    id: v.id("lessons"),
+    title: v.string(),
+    titleAr: v.string(),
+    shortReview: v.string(),
+    shortReviewAr: v.string(),
+    courseId: v.id("courses"),
+    duration: v.optional(v.number()),
+    type: v.union(v.literal("video"), v.literal("article")),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    ),
+    videoUrl: v.optional(v.string()),
+    description: v.optional(v.string()),
+    descriptionAr: v.optional(v.string()),
+    learningObjectives: v.optional(v.string()),
+    learningObjectivesAr: v.optional(v.string()),
+    body: v.optional(v.string()),
+    bodyAr: v.optional(v.string()),
+  },
+  handler: async (
+    ctx,
+    {
+      id,
+      title,
+      titleAr,
+      shortReview,
+      shortReviewAr,
+      courseId,
+      duration,
+      type,
+      status,
+      videoUrl,
+      description,
+      descriptionAr,
+      learningObjectives,
+      learningObjectivesAr,
+      body,
+      bodyAr,
+    },
+  ) => {
+    await requireUser(ctx);
+
+    const lesson = await ctx.db.get(id);
+
+    if (!lesson || lesson.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Lesson not found.",
+      });
+    }
+
+    const validated = validateLessonUpdateInput({
+      title,
+      titleAr,
+      shortReview,
+      shortReviewAr,
+      courseId,
+      duration,
+      type,
+      status,
+      videoUrl,
+      description,
+      descriptionAr,
+      learningObjectives,
+      learningObjectivesAr,
+      body,
+      bodyAr,
+    });
+
+    const targetCourse = await ctx.db.get(courseId);
+
+    if (!targetCourse || targetCourse.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_COURSE",
+        message: "Selected course does not exist.",
+      });
+    }
+
+    // If course changed, recalculate lesson counts for both courses
+    if (lesson.course_id !== courseId) {
+      const currentCourse = await ctx.db.get(lesson.course_id);
+
+      if (currentCourse && currentCourse.deletedAt === undefined) {
+        await recalculateLessonCount(ctx, lesson.course_id);
+      }
+
+      await recalculateLessonCount(ctx, courseId);
+    }
+
+    // Validate type-specific fields
+    if (validated.type === "video" && !validated.videoUrl) {
+      if (validated.status === "published") {
+        throw new ConvexError({
+          code: "LESSON_INCOMPLETE",
+          message: "Published video lessons must include a video URL.",
+        });
+      }
+    }
+
+    if (validated.type === "article" && (!validated.body || !validated.bodyAr)) {
+      if (validated.status === "published") {
+        throw new ConvexError({
+          code: "LESSON_INCOMPLETE",
+          message: "Published article lessons must include English and Arabic body content.",
+        });
+      }
+    }
+
+    await ctx.db.patch(id, {
+      title: validated.title,
+      title_ar: validated.titleAr,
+      short_review: validated.shortReview,
+      short_review_ar: validated.shortReviewAr,
+      description: validated.description,
+      description_ar: validated.descriptionAr,
+      learning_objectives: validated.learningObjectives,
+      learning_objectives_ar: validated.learningObjectivesAr,
+      course_id: courseId,
+      duration: validated.duration,
+      type: validated.type,
+      status: validated.status,
+      video_url: validated.type === "video" ? validated.videoUrl : undefined,
+      body: validated.type === "article" ? validated.body : undefined,
+      body_ar: validated.type === "article" ? validated.bodyAr : undefined,
+    });
+  },
+});
+
+export const generateImageUploadUrl = mutation({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const updateLessonImages = mutation({
+  args: {
+    id: v.id("lessons"),
+    coverStorageId: v.optional(v.id("_storage")),
+    thumbnailStorageId: v.optional(v.id("_storage")),
+  },
+  handler: async (ctx, { id, coverStorageId, thumbnailStorageId }) => {
+    await requireUser(ctx);
+
+    const lesson = await ctx.db.get(id);
+
+    if (!lesson || lesson.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Lesson not found.",
+      });
+    }
+
+    const patch: Partial<typeof lesson> = {};
+    let coverImageUrl = lesson.cover_image_url;
+    let thumbnailImageUrl = lesson.thumbnail_image_url;
+
+    if (coverStorageId) {
+      const url = await ctx.storage.getUrl(coverStorageId);
+
+      if (!url) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate cover image URL.",
+        });
+      }
+
+      patch.cover_image_url = url;
+      coverImageUrl = url;
+    }
+
+    if (thumbnailStorageId) {
+      const url = await ctx.storage.getUrl(thumbnailStorageId);
+
+      if (!url) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate thumbnail image URL.",
+        });
+      }
+
+      patch.thumbnail_image_url = url;
+      thumbnailImageUrl = url;
+    }
+
+    if (Object.keys(patch).length > 0) {
+      await ctx.db.patch(id, patch);
+    }
+
+    return {
+      coverImageUrl,
+      thumbnailImageUrl,
+    };
+  },
+});
+
+export const deleteLesson = mutation({
+  args: {
+    id: v.id("lessons"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const lesson = await ctx.db.get(id);
+
+    if (!lesson || lesson.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Lesson not found.",
+      });
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      deletedAt: now,
+    });
+
+    const course = await ctx.db.get(lesson.course_id);
+
+    if (course && course.deletedAt === undefined) {
+      // Recalculate lesson count to ensure accuracy
+      await recalculateLessonCount(ctx, lesson.course_id);
+    }
+  },
+});
+

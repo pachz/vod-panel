@@ -13,6 +13,7 @@ import type * as category from "../category.js";
 import type * as course from "../course.js";
 import type * as http from "../http.js";
 import type * as image from "../image.js";
+import type * as lesson from "../lesson.js";
 import type * as seed from "../seed.js";
 import type * as user from "../user.js";
 import type * as utils_auth from "../utils/auth.js";
@@ -31,6 +32,7 @@ declare const fullApi: ApiFromModules<{
   course: typeof course;
   http: typeof http;
   image: typeof image;
+  lesson: typeof lesson;
   seed: typeof seed;
   user: typeof user;
   "utils/auth": typeof utils_auth;
