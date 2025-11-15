@@ -1,8 +1,25 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Image as ImageIcon, Trash2 } from "lucide-react";
+import { ArrowLeft, Image as ImageIcon, Trash2, GripVertical, Video, FileText, Eye } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -30,6 +47,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
@@ -38,6 +56,7 @@ import { courseUpdateSchema } from "../../shared/validation/course";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
+type LessonDoc = Doc<"lessons">;
 
 type FormValues = {
   name: string;
@@ -283,6 +302,90 @@ const ImageDropzone = ({
   );
 };
 
+type SortableLessonItemProps = {
+  lesson: LessonDoc;
+  index: number;
+  onView: (id: Id<"lessons">) => void;
+};
+
+const SortableLessonItem = ({ lesson, index, onView }: SortableLessonItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: lesson._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  const formatDuration = (minutes: number | undefined) => {
+    if (!minutes) return "—";
+    return `${minutes} min`;
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 rounded-md border bg-card px-3 py-2 transition-shadow hover:bg-accent/50",
+        isDragging && "shadow-md opacity-50"
+      )}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <span className="text-xs font-medium text-muted-foreground w-6 shrink-0">
+        #{index + 1}
+      </span>
+      <span className="text-sm font-medium truncate flex-1 min-w-0">
+        {lesson.title}
+      </span>
+      <Badge variant="secondary" className="gap-1 shrink-0 text-xs h-5">
+        {lesson.type === "video" ? (
+          <Video className="h-3 w-3" />
+        ) : (
+          <FileText className="h-3 w-3" />
+        )}
+        {lesson.type}
+      </Badge>
+      <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">
+        {formatDuration(lesson.duration)}
+      </span>
+      <Badge
+        variant={
+          lesson.status === "published"
+            ? "default"
+            : lesson.status === "archived"
+              ? "secondary"
+              : "outline"
+        }
+        className="shrink-0 text-xs h-5"
+      >
+        {lesson.status}
+      </Badge>
+      <Button
+        variant="ghost"
+        size="icon"
+        onClick={() => onView(lesson._id)}
+        className="shrink-0 h-7 w-7"
+      >
+        <Eye className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
+};
+
 const CourseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -293,6 +396,10 @@ const CourseDetail = () => {
     courseId ? { id: courseId } : undefined,
   );
   const categories = useQuery(api.category.listCategories);
+  const lessons = useQuery(
+    api.lesson.listLessons,
+    courseId ? { courseId } : undefined,
+  );
 
   const updateCourse = useMutation(api.course.updateCourse);
   const deleteCourse = useMutation(api.course.deleteCourse);
@@ -300,6 +407,7 @@ const CourseDetail = () => {
   const updateCourseImages = useMutation(api.course.updateCourseImages);
   const generateThumbnail = useAction(api.image.generateThumbnail);
   const convertToJpeg = useAction(api.image.convertToJpeg);
+  const reorderLessons = useMutation(api.lesson.reorderLessons);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
@@ -317,7 +425,54 @@ const CourseDetail = () => {
   const pendingCoverUrlRef = useRef<string | null>(null);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
+  const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
   const isLoading = course === undefined || categories === undefined;
+
+  const sensors = useSensors(
+    useSensor(PointerSensor),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || !courseId) {
+      return;
+    }
+
+    if (active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = lessonList.findIndex((lesson) => lesson._id === active.id);
+    const newIndex = lessonList.findIndex((lesson) => lesson._id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newOrder = arrayMove(lessonList, oldIndex, newIndex);
+    const lessonIds = newOrder.map((lesson) => lesson._id);
+
+    try {
+      await reorderLessons({
+        courseId,
+        lessonIds,
+      });
+      toast.success("Lessons reordered successfully");
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: { message?: string } }).data?.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to reorder lessons. Please try again.";
+      toast.error(errorMessage);
+    }
+  };
 
   useEffect(() => {
     if (!courseId || !course) {
@@ -823,7 +978,21 @@ const CourseDetail = () => {
         </Badge>
       </div>
 
-      <form onSubmit={handleSubmit} className="space-y-6">
+      <Tabs defaultValue="details" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="lessons" className="gap-2">
+            Lessons
+            {lessonList.length > 0 && (
+              <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium">
+                {lessonList.length}
+              </span>
+            )}
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="details" className="space-y-6">
+          <form onSubmit={handleSubmit} className="space-y-6">
         <Card>
           <CardContent className="grid gap-6 p-6">
             <div className="grid gap-4 md:grid-cols-2">
@@ -1058,6 +1227,67 @@ const CourseDetail = () => {
           </div>
         </div>
       </form>
+        </TabsContent>
+
+        <TabsContent value="lessons" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Lessons</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Drag and drop to reorder lessons
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              onClick={() => navigate(`/lessons?course=${courseId}`)}
+            >
+              Manage Lessons
+            </Button>
+          </div>
+
+          {lessons === undefined ? (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-muted-foreground">Loading lessons…</p>
+            </div>
+          ) : lessonList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg">
+              <p className="text-sm text-muted-foreground mb-4">
+                No lessons yet. Create lessons from the Lessons page.
+              </p>
+              <Button
+                variant="outline"
+                onClick={() => navigate(`/lessons?course=${courseId}`)}
+              >
+                Go to Lessons
+              </Button>
+            </div>
+          ) : (
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <SortableContext
+                  items={lessonList.map((lesson) => lesson._id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                <div className="space-y-1.5">
+                  {lessonList.map((lesson, index) => (
+                    <SortableLessonItem
+                      key={lesson._id}
+                      lesson={lesson}
+                      index={index}
+                      onView={(id) => navigate(`/lessons/${id}`)}
+                    />
+                  ))}
+                </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>

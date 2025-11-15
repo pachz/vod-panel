@@ -412,3 +412,51 @@ export const deleteLesson = mutation({
   },
 });
 
+export const reorderLessons = mutation({
+  args: {
+    courseId: v.id("courses"),
+    lessonIds: v.array(v.id("lessons")),
+  },
+  handler: async (ctx, { courseId, lessonIds }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(courseId);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Course not found.",
+      });
+    }
+
+    // Verify all lessons belong to this course and exist
+    const lessons = await Promise.all(
+      lessonIds.map((id) => ctx.db.get(id))
+    );
+
+    for (let i = 0; i < lessons.length; i++) {
+      const lesson = lessons[i];
+      if (!lesson || lesson.deletedAt) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: `Lesson at index ${i} not found.`,
+        });
+      }
+      if (lesson.course_id !== courseId) {
+        throw new ConvexError({
+          code: "INVALID_INPUT",
+          message: `Lesson at index ${i} does not belong to this course.`,
+        });
+      }
+    }
+
+    // Update priorities based on the new order
+    // Priority starts at 0 and increments by 1
+    for (let i = 0; i < lessonIds.length; i++) {
+      await ctx.db.patch(lessonIds[i], {
+        priority: i,
+      });
+    }
+  },
+});
+

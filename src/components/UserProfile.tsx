@@ -53,8 +53,15 @@ export function UserProfile() {
     if (!currentUser?.email) {
       return null;
     }
-    const emailHash = MD5(currentUser.email.toLowerCase().trim()).toString();
-    return `https://www.gravatar.com/avatar/${emailHash}?s=128&d=mp`;
+    // Normalize email: lowercase and trim whitespace
+    const normalizedEmail = currentUser.email.toLowerCase().trim();
+    // Generate MD5 hash (crypto-js MD5 already returns lowercase hex)
+    const emailHash = MD5(normalizedEmail).toString();
+    // Construct Gravatar URL with parameters:
+    // s=128: size in pixels
+    // d=mp: default image type (mystery person)
+    // r=pg: rating filter (g, pg, r, x) - pg is safe for most contexts
+    return `https://www.gravatar.com/avatar/${emailHash}?s=128&d=mp&r=pg`;
   }, [currentUser?.email]);
 
   const userInitial = useMemo(() => {
