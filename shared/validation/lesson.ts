@@ -70,6 +70,7 @@ export const lessonInputSchema = z.object({
 export const lessonUpdateSchema = lessonInputSchema.extend({
   status: z.enum(["draft", "published", "archived"]),
   videoUrl: optionalUrl,
+  duration: optionalDuration,
   description: optionalTrimmedString(
     4096,
     "Description must be 4096 characters or less.",
@@ -94,7 +95,29 @@ export const lessonUpdateSchema = lessonInputSchema.extend({
     100000,
     "Arabic body must be 100000 characters or less.",
   ),
-});
+}).refine(
+  (data) => {
+    if (data.status === "published") {
+      return data.duration !== undefined && data.duration !== null;
+    }
+    return true;
+  },
+  {
+    message: "Duration is required for published lessons.",
+    path: ["duration"],
+  }
+).refine(
+  (data) => {
+    if (data.status === "published") {
+      return data.videoUrl !== undefined && data.videoUrl !== null && data.videoUrl.trim().length > 0;
+    }
+    return true;
+  },
+  {
+    message: "Video URL is required for published lessons.",
+    path: ["videoUrl"],
+  }
+);
 
 export type LessonInput = z.infer<typeof lessonInputSchema>;
 export type LessonUpdateInput = z.infer<typeof lessonUpdateSchema>;
