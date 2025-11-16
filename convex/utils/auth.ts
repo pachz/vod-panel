@@ -85,7 +85,7 @@ export const requireUser = async <T extends boolean = false>(
  */
 export const requireUserAction = async (
   ctx: ActionCtx
-): Promise<{ identity: any }> => {
+): Promise<{ identity: any, userId: string }> => {
   const identity = await ctx.auth.getUserIdentity();
 
   if (!identity) {
@@ -95,6 +95,15 @@ export const requireUserAction = async (
     });
   }
 
-  return { identity };
+  const userId = await getAuthUserId(ctx);
+
+  if (!userId) {
+    throw new ConvexError({
+      code: "UNAUTHENTICATED",
+      message: "User ID not found. Please sign out and sign in again.",
+    });
+  }
+
+  return { identity, userId };
 };
 

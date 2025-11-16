@@ -103,4 +103,44 @@ export default defineSchema({
     userName: v.optional(v.string()),
     timestamp: v.number(),
   }).index("timestamp", ["timestamp"]),
+
+  checkoutSessions: defineTable({
+    sessionId: v.string(), // Stripe checkout session ID
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("complete"),
+      v.literal("expired"),
+    ),
+    customerId: v.optional(v.string()), // Stripe customer ID
+    subscriptionId: v.optional(v.string()), // Stripe subscription ID
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
+  })
+    .index("sessionId", ["sessionId"])
+    .index("userId", ["userId"])
+    .index("status", ["status"]),
+
+  subscriptions: defineTable({
+    subscriptionId: v.string(), // Stripe subscription ID
+    userId: v.id("users"),
+    customerId: v.string(), // Stripe customer ID
+    status: v.union(
+      v.literal("active"),
+      v.literal("canceled"),
+      v.literal("past_due"),
+      v.literal("unpaid"),
+      v.literal("incomplete"),
+      v.literal("trialing"),
+    ),
+    currentPeriodStart: v.number(),
+    currentPeriodEnd: v.number(),
+    cancelAtPeriodEnd: v.boolean(),
+    canceledAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("subscriptionId", ["subscriptionId"])
+    .index("userId", ["userId"])
+    .index("status", ["status"]),
 });
