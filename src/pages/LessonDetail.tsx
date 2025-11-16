@@ -33,6 +33,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { RichTextarea } from "@/components/RichTextarea";
 import { CourseCombobox } from "@/components/CourseCombobox";
+import { VideoUrlInput } from "@/components/VideoUrlInput";
 import { lessonUpdateSchema } from "../../shared/validation/lesson";
 
 type LessonDoc = Doc<"lessons">;
@@ -491,22 +492,18 @@ const LessonDetail = () => {
 
             <Separator />
 
-            <div className="space-y-2">
-              <Label htmlFor="videoUrl">Video URL</Label>
-              <Input
-                id="videoUrl"
-                value={formValues.videoUrl}
-                onChange={(event) =>
-                  setFormValues((prev) => ({
-                    ...prev,
-                    videoUrl: event.target.value,
-                  }))
-                }
-                placeholder="https://"
-                type="url"
-                maxLength={2048}
-              />
-            </div>
+            <VideoUrlInput
+              id="videoUrl"
+              value={formValues.videoUrl}
+              onChange={(value) =>
+                setFormValues((prev) => ({
+                  ...prev,
+                  videoUrl: value,
+                }))
+              }
+              placeholder="https://vimeo.com/..."
+              maxLength={2048}
+            />
           </CardContent>
         </Card>
 

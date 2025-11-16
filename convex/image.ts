@@ -407,3 +407,87 @@ export const fetchVimeoThumbnail = action({
   },
 });
 
+/**
+ * Action to validate a video URL and fetch oEmbed data for preview
+ * This runs in Node.js environment to make HTTP requests
+ * Public action for client use
+ */
+export const validateVideoUrl = action({
+  args: {
+    videoUrl: v.string(),
+  },
+  handler: async (ctx, { videoUrl }) => {
+    // Verify user is authenticated
+    await requireUserAction(ctx);
+
+    try {
+      // Check if URL is from Vimeo
+      const isVimeoUrl = videoUrl.includes("vimeo.com") || videoUrl.includes("player.vimeo.com");
+      
+      if (!isVimeoUrl) {
+        throw new ConvexError({
+          code: "INVALID_URL",
+          message: "Only Vimeo URLs are supported. Please provide a valid Vimeo URL.",
+        });
+      }
+
+      // Normalize Vimeo URL - convert player.vimeo.com to vimeo.com format for oEmbed
+      let normalizedUrl = videoUrl;
+      if (videoUrl.includes("player.vimeo.com")) {
+        // Extract video ID from player.vimeo.com/video/ID
+        const videoIdMatch = videoUrl.match(/player\.vimeo\.com\/video\/(\d+)/);
+        if (videoIdMatch) {
+          normalizedUrl = `https://vimeo.com/${videoIdMatch[1]}`;
+        }
+      } else if (videoUrl.includes("vimeo.com")) {
+        // Ensure it's in the right format - extract video ID if needed
+        const videoIdMatch = videoUrl.match(/vimeo\.com\/(\d+)/);
+        if (videoIdMatch) {
+          normalizedUrl = `https://vimeo.com/${videoIdMatch[1]}`;
+        } else {
+          // Try to use as-is
+          normalizedUrl = videoUrl;
+        }
+      }
+
+      // Call Vimeo oEmbed API
+      const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(normalizedUrl)}`;
+      const response = await fetch(oembedUrl);
+      
+      if (!response.ok) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: `Failed to fetch video information from Vimeo: ${response.statusText}`,
+        });
+      }
+
+      const data = await response.json();
+      
+      if (!data.html) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: "No embed HTML found in Vimeo oEmbed response",
+        });
+      }
+
+      return {
+        success: true,
+        html: data.html,
+        title: data.title || "",
+        thumbnailUrl: data.thumbnail_url || "",
+        width: data.width || 640,
+        height: data.height || 360,
+      };
+    } catch (error) {
+      console.error("Error validating video URL:", error);
+      if (error instanceof ConvexError) {
+        throw error;
+      }
+      throw new ConvexError({
+        code: "VIDEO_VALIDATION_ERROR",
+        message: error instanceof Error ? error.message : "Failed to validate video URL.",
+      });
+    }
+  },
+});
+
