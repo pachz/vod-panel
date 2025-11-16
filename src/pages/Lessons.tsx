@@ -69,13 +69,25 @@ const Lessons = () => {
   const [formValues, setFormValues] = useState({
     title: "",
     titleAr: "",
-    courseId: "",
+    courseId: courseFilter || "",
     duration: "",
   });
 
   const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
   const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
   const isLoading = lessons === undefined || courses === undefined;
+
+  // Sync courseId with courseFilter when filter changes
+  useEffect(() => {
+    if (courseFilter) {
+      setFormValues((prev) => {
+        if (prev.courseId !== courseFilter) {
+          return { ...prev, courseId: courseFilter };
+        }
+        return prev;
+      });
+    }
+  }, [courseFilter]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -123,7 +135,7 @@ const Lessons = () => {
       setFormValues({
         title: "",
         titleAr: "",
-        courseId: "",
+        courseId: courseFilter || "",
         duration: "",
       });
       navigate(`/lessons/${lessonId}`);
@@ -330,7 +342,7 @@ const Lessons = () => {
                 setFormValues({
                   title: "",
                   titleAr: "",
-                  courseId: "",
+                  courseId: courseFilter || "",
                   duration: "",
                 });
               }}
@@ -374,17 +386,19 @@ const Lessons = () => {
                 </div>
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="courseId">Course</Label>
-                <CourseCombobox
-                  courses={courseList}
-                  value={formValues.courseId}
-                  onValueChange={(value) =>
-                    setFormValues((prev) => ({ ...prev, courseId: value }))
-                  }
-                  placeholder="Select course"
-                />
-              </div>
+              {!courseFilter && (
+                <div className="space-y-2">
+                  <Label htmlFor="courseId">Course</Label>
+                  <CourseCombobox
+                    courses={courseList}
+                    value={formValues.courseId}
+                    onValueChange={(value) =>
+                      setFormValues((prev) => ({ ...prev, courseId: value }))
+                    }
+                    placeholder="Select course"
+                  />
+                </div>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="duration">Duration (minutes)</Label>
