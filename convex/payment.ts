@@ -47,8 +47,8 @@ export const createCheckoutSession = action({
             quantity: 1,
           },
         ],
-        success_url: `${process.env.SITE_URL || "http://localhost:5173"}/payments?success=true`,
-        cancel_url: `${process.env.SITE_URL || "http://localhost:5173"}/payments?canceled=true`,
+        success_url: `${process.env.PANEL_URL || "http://localhost:5173"}/payments?success=true`,
+        cancel_url: `${process.env.PANEL_URL || "http://localhost:5173"}/payments?canceled=true`,
       });
 
       if (!session.url) {
