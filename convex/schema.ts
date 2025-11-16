@@ -15,7 +15,10 @@ export default defineSchema({
     isAnonymous: v.optional(v.boolean()),
     isGod: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
-  }).index("email", ["email", "deletedAt"]),
+    stripeCustomerId: v.optional(v.string()), // Stripe customer ID
+  })
+    .index("email", ["email", "deletedAt"])
+    .index("stripeCustomerId", ["stripeCustomerId"]),
 
   videos: defineTable({
     url: v.string(),
@@ -143,4 +146,16 @@ export default defineSchema({
     .index("subscriptionId", ["subscriptionId"])
     .index("userId", ["userId"])
     .index("status", ["status"]),
+
+  paymentSettings: defineTable({
+    selectedProductId: v.string(), // Stripe product ID
+    selectedPriceId: v.string(), // Stripe price ID
+    productName: v.string(),
+    priceAmount: v.number(), // Amount in cents
+    priceCurrency: v.string(),
+    priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+  })
+    .index("selectedProductId", ["selectedProductId"]),
 });
