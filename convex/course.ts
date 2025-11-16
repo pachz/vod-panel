@@ -48,12 +48,36 @@ export const listCourses = query({
       v.literal("published"),
       v.literal("archived"),
     )),
+    search: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, status }) => {
+  handler: async (ctx, { categoryId, status, search }) => {
     await requireUser(ctx);
 
-    // Use single composite index for all cases
-    // Index: ["deletedAt", "category_id", "status"]
+    // If search is provided, use full-text search index on name field
+    if (search && search.trim().length > 0) {
+      const searchTerm = search.trim();
+      
+      const courses = await ctx.db
+        .query("courses")
+        .withSearchIndex("search_name", (q) => {
+          let query = q.search("name", searchTerm).eq("deletedAt", undefined);
+          if (categoryId) {
+            query = query.eq("category_id", categoryId);
+          }
+          if (status) {
+            query = query.eq("status", status);
+          }
+          return query;
+        })
+        .collect();
+
+      // Return results sorted by creation time (newest first)
+      // Note: Search results are already in relevance order, but we're sorting by createdAt
+      // to maintain consistency with non-search queries
+      return courses.sort((a, b) => b.createdAt - a.createdAt);
+    }
+
+    // No search - use regular index queries
     let courses;
 
     if (categoryId && status) {

@@ -61,10 +61,34 @@ export const listLessons = query({
       v.literal("published"),
       v.literal("archived"),
     )),
+    search: v.optional(v.string()),
   },
-  handler: async (ctx, { courseId, status }) => {
+  handler: async (ctx, { courseId, status, search }) => {
     await requireUser(ctx);
 
+    // If search is provided, use full-text search index on title field
+    if (search && search.trim().length > 0) {
+      const searchTerm = search.trim();
+      
+      const lessons = await ctx.db
+        .query("lessons")
+        .withSearchIndex("search_title", (q) => {
+          let query = q.search("title", searchTerm).eq("deletedAt", undefined);
+          if (courseId) {
+            query = query.eq("course_id", courseId);
+          }
+          if (status) {
+            query = query.eq("status", status);
+          }
+          return query;
+        })
+        .collect();
+
+      // Return results sorted by priority (maintaining lesson order)
+      return lessons.sort((a, b) => a.priority - b.priority);
+    }
+
+    // No search - use regular index queries
     let lessons;
 
     if (courseId && status) {

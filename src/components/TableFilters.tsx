@@ -1,4 +1,4 @@
-import { X } from "lucide-react";
+import { X, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -8,6 +8,7 @@ import {
 } from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Input } from "@/components/ui/input";
 import { cn } from "@/lib/utils";
 
 export interface FilterOption {
@@ -28,12 +29,23 @@ interface TableFiltersProps {
   filters: TableFilter[];
   className?: string;
   onClearAll?: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 }
 
-export function TableFilters({ filters, className, onClearAll }: TableFiltersProps) {
+export function TableFilters({ 
+  filters, 
+  className, 
+  onClearAll,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder = "Search...",
+}: TableFiltersProps) {
   const activeFilters = filters.filter((f) => f.value);
+  const hasSearch = searchValue !== undefined && onSearchChange !== undefined;
 
-  if (filters.length === 0) {
+  if (filters.length === 0 && !hasSearch) {
     return null;
   }
 
@@ -62,6 +74,21 @@ export function TableFilters({ filters, className, onClearAll }: TableFiltersPro
           </SelectContent>
         </Select>
       ))}
+      {hasSearch && (
+        <>
+          <div className="flex-1" />
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              type="text"
+              placeholder={searchPlaceholder}
+              value={searchValue}
+              onChange={(e) => onSearchChange(e.target.value)}
+              className="h-9 w-[240px] pl-9"
+            />
+          </div>
+        </>
+      )}
       {activeFilters.length > 0 && (
         <>
           <div className="h-4 w-px bg-border" />

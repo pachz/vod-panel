@@ -60,7 +60,11 @@ export default defineSchema({
     .index("name", ["name", "deletedAt"])
     .index("slug", ["slug"])
     .index("deletedAt_category_status", ["deletedAt", "category_id", "status"])
-    .index("deletedAt_status", ["deletedAt", "status"]),
+    .index("deletedAt_status", ["deletedAt", "status"])
+    .searchIndex("search_name", {
+      searchField: "name",
+      filterFields: ["deletedAt", "category_id", "status"],
+    }),
 
   lessons: defineTable({
     title: v.string(),
@@ -85,7 +89,11 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("course_id", ["course_id", "deletedAt"])
-    .index("deletedAt_course_status", ["deletedAt", "course_id", "status"]),
+    .index("deletedAt_course_status", ["deletedAt", "course_id", "status"])
+    .searchIndex("search_title", {
+      searchField: "title",
+      filterFields: ["deletedAt", "course_id", "status"],
+    }),
 
   activityLogs: defineTable({
     entityType: v.union(

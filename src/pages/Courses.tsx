@@ -70,10 +70,12 @@ const Courses = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get("category") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
+  const searchFilter = searchParams.get("search") || undefined;
   
   const courses = useQuery(api.course.listCourses, {
     categoryId: categoryFilter as Id<"categories"> | undefined,
     status: statusFilter as "draft" | "published" | "archived" | undefined,
+    search: searchFilter,
   });
   const categories = useQuery(api.category.listCategories);
   const createCourse = useMutation(api.course.createCourse);
@@ -84,9 +86,11 @@ const Courses = () => {
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [courseToDelete, setCourseToDelete] = useState<CourseDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [searchInput, setSearchInput] = useState(searchFilter || "");
 
   const shortDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
   const shortDescriptionArRef = useRef<HTMLTextAreaElement | null>(null);
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const adjustTextareaHeight = useCallback((element: HTMLTextAreaElement | null) => {
     if (!element) {
@@ -151,6 +155,37 @@ const Courses = () => {
 
     adjustTextareaHeight(shortDescriptionArRef.current);
   }, [adjustTextareaHeight, formValues.shortDescriptionAr, isDialogOpen]);
+
+  // Sync search input with URL param when it changes externally
+  useEffect(() => {
+    setSearchInput(searchFilter || "");
+  }, [searchFilter]);
+
+  // Debounce search input updates
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchParams((prev) => {
+        const newParams = new URLSearchParams(prev);
+        const value = searchInput.trim();
+        if (value) {
+          newParams.set("search", value);
+        } else {
+          newParams.delete("search");
+        }
+        return newParams;
+      }, { replace: true });
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchInput, setSearchParams]);
 
   const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
 
@@ -242,6 +277,7 @@ const Courses = () => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete("category");
     newParams.delete("status");
+    newParams.delete("search");
     setSearchParams(newParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -499,12 +535,15 @@ const Courses = () => {
         getItemId={(course) => course._id}
         loadingMessage="Loading courses…"
         emptyMessage={
-          categoryFilter || statusFilter
+          categoryFilter || statusFilter || searchFilter
             ? "No courses found with the selected filters."
             : "No courses yet. Create your first course to get started."
         }
         filters={filters}
         onClearAllFilters={handleClearAll}
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        searchPlaceholder="Search courses by name..."
       />
 
       <AlertDialog

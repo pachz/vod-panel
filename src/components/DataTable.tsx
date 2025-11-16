@@ -36,6 +36,9 @@ interface DataTableProps<T> {
   emptyMessage?: string;
   filters?: TableFilter[];
   onClearAllFilters?: () => void;
+  searchValue?: string;
+  onSearchChange?: (value: string) => void;
+  searchPlaceholder?: string;
 }
 
 const getPreview = (value: string | null | undefined) => {
@@ -70,14 +73,25 @@ export function DataTable<T>({
   emptyMessage = "No items yet.",
   filters,
   onClearAllFilters,
+  searchValue,
+  onSearchChange,
+  searchPlaceholder,
 }: DataTableProps<T>) {
   const columnCount = columns.length + (actions && actions.length > 0 ? 1 : 0);
+  const hasFilters = filters && filters.length > 0;
+  const hasSearch = searchValue !== undefined && onSearchChange !== undefined;
 
   return (
     <div className="space-y-4">
-      {filters && filters.length > 0 && (
+      {(hasFilters || hasSearch) && (
         <div className="rounded-lg border bg-card px-4 py-3">
-          <TableFilters filters={filters} onClearAll={onClearAllFilters} />
+          <TableFilters 
+            filters={filters || []} 
+            onClearAll={onClearAllFilters}
+            searchValue={searchValue}
+            onSearchChange={onSearchChange}
+            searchPlaceholder={searchPlaceholder}
+          />
         </div>
       )}
       <div className="rounded-lg border bg-card">

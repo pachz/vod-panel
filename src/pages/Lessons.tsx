@@ -1,4 +1,4 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Trash2, Eye } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
@@ -37,10 +37,12 @@ const Lessons = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const courseFilter = searchParams.get("course") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
+  const searchFilter = searchParams.get("search") || undefined;
 
   const lessons = useQuery(api.lesson.listLessons, {
     courseId: courseFilter as Id<"courses"> | undefined,
     status: statusFilter as "draft" | "published" | "archived" | undefined,
+    search: searchFilter,
   });
   const courses = useQuery(api.course.listCourses, {});
   const createLesson = useMutation(api.lesson.createLesson);
@@ -49,6 +51,8 @@ const Lessons = () => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [searchInput, setSearchInput] = useState(searchFilter || "");
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   const [formValues, setFormValues] = useState({
     title: "",
@@ -206,10 +210,42 @@ const Lessons = () => {
     },
   ], [courseFilterOptions, courseFilter, statusFilter, searchParams, setSearchParams]);
 
+  // Sync search input with URL param when it changes externally
+  useEffect(() => {
+    setSearchInput(searchFilter || "");
+  }, [searchFilter]);
+
+  // Debounce search input updates
+  useEffect(() => {
+    if (searchTimeoutRef.current) {
+      clearTimeout(searchTimeoutRef.current);
+    }
+
+    searchTimeoutRef.current = setTimeout(() => {
+      setSearchParams((prev) => {
+        const newParams = new URLSearchParams(prev);
+        const value = searchInput.trim();
+        if (value) {
+          newParams.set("search", value);
+        } else {
+          newParams.delete("search");
+        }
+        return newParams;
+      }, { replace: true });
+    }, 300);
+
+    return () => {
+      if (searchTimeoutRef.current) {
+        clearTimeout(searchTimeoutRef.current);
+      }
+    };
+  }, [searchInput, setSearchParams]);
+
   const handleClearAllFilters = useCallback(() => {
     const newParams = new URLSearchParams(searchParams);
     newParams.delete("course");
     newParams.delete("status");
+    newParams.delete("search");
     setSearchParams(newParams, { replace: true });
   }, [searchParams, setSearchParams]);
 
@@ -400,12 +436,15 @@ const Lessons = () => {
         getItemId={(lesson) => lesson._id}
         loadingMessage="Loading lessons…"
         emptyMessage={
-          courseFilter || statusFilter
+          courseFilter || statusFilter || searchFilter
             ? "No lessons found with the selected filters."
             : "No lessons yet. Create your first lesson to get started."
         }
         filters={filters}
         onClearAllFilters={handleClearAllFilters}
+        searchValue={searchInput}
+        onSearchChange={setSearchInput}
+        searchPlaceholder="Search lessons by title..."
       />
     </div>
   );
