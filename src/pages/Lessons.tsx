@@ -277,6 +277,25 @@ const Lessons = () => {
   const columns = useMemo<TableColumn<LessonDoc>[]>(
     () => [
       {
+        header: "Thumbnail",
+        render: (lesson) => (
+          <div className="w-16 h-10 rounded-md overflow-hidden bg-muted flex-shrink-0">
+            {lesson.thumbnail_image_url ? (
+              <img
+                src={lesson.thumbnail_image_url}
+                alt={lesson.title}
+                className="w-full h-full object-cover"
+              />
+            ) : (
+              <div className="w-full h-full flex items-center justify-center text-muted-foreground text-xs">
+                No image
+              </div>
+            )}
+          </div>
+        ),
+        cellClassName: "w-20",
+      },
+      {
         header: "Title",
         render: (lesson) => (
           <span className="font-medium">{lesson.title}</span>

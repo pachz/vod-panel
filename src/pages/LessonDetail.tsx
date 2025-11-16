@@ -312,6 +312,15 @@ const LessonDetail = () => {
           >
             <ArrowLeft className="h-5 w-5" />
           </Button>
+          {lesson.thumbnail_image_url && (
+            <div className="w-20 h-12 rounded-lg overflow-hidden bg-muted flex-shrink-0">
+              <img
+                src={lesson.thumbnail_image_url}
+                alt={lesson.title}
+                className="w-full h-full object-cover"
+              />
+            </div>
+          )}
           <div>
             <h1 className="text-3xl font-bold tracking-tight">Lesson details</h1>
             <p className="text-muted-foreground mt-1">

@@ -1,6 +1,7 @@
 "use node";
 
-import { action } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { v } from "convex/values";
 import { ConvexError } from "convex/values";
 import { Jimp, JimpMime, ResizeStrategy } from "jimp";
@@ -139,6 +140,268 @@ export const convertToJpeg = action({
       throw new ConvexError({
         code: "IMAGE_PROCESSING_ERROR",
         message: error instanceof Error ? error.message : "Failed to convert image to JPEG.",
+      });
+    }
+  },
+});
+
+/**
+ * Internal action to fetch Vimeo thumbnail from oEmbed API and update lesson
+ * This runs in Node.js environment to make HTTP requests
+ * Can be called from mutations via scheduler
+ */
+export const fetchVimeoThumbnailAndUpdateLesson = internalAction({
+  args: {
+    lessonId: v.id("lessons"),
+    videoUrl: v.string(),
+  },
+  handler: async (ctx, { lessonId, videoUrl }) => {
+    try {
+      // Normalize Vimeo URL - convert player.vimeo.com to vimeo.com format for oEmbed
+      let normalizedUrl = videoUrl;
+      if (videoUrl.includes("player.vimeo.com")) {
+        // Extract video ID from player.vimeo.com/video/ID
+        const videoIdMatch = videoUrl.match(/player\.vimeo\.com\/video\/(\d+)/);
+        if (videoIdMatch) {
+          normalizedUrl = `https://vimeo.com/${videoIdMatch[1]}`;
+        }
+      } else if (videoUrl.includes("vimeo.com")) {
+        // Ensure it's in the right format
+        normalizedUrl = videoUrl;
+      } else {
+        throw new ConvexError({
+          code: "INVALID_URL",
+          message: "URL must be from vimeo.com or player.vimeo.com",
+        });
+      }
+
+      // Call Vimeo oEmbed API
+      const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(normalizedUrl)}`;
+      const response = await fetch(oembedUrl);
+      
+      if (!response.ok) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: `Failed to fetch thumbnail from Vimeo: ${response.statusText}`,
+        });
+      }
+
+      const data = await response.json();
+      
+      if (!data.thumbnail_url) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: "No thumbnail_url found in Vimeo oEmbed response",
+        });
+      }
+
+      // If the thumbnail width and height are provided, resize the thumbnail to max
+      let target_thumbnail_url = data.thumbnail_url;
+      if(data.thumbnail_width && data.thumbnail_height) {
+        target_thumbnail_url = data.thumbnail_url.replace(`${data.thumbnail_width}x${data.thumbnail_height}`, ``);
+      }
+
+      // Download the thumbnail image
+      const thumbnailResponse = await fetch(target_thumbnail_url);
+      
+      if (!thumbnailResponse.ok) {
+        throw new ConvexError({
+          code: "IMAGE_DOWNLOAD_ERROR",
+          message: `Failed to download thumbnail: ${thumbnailResponse.statusText}`,
+        });
+      }
+
+      // Get the image as a blob
+      const thumbnailBlob = await thumbnailResponse.blob();
+
+      // Read the arrayBuffer first so we can use it for both storage and resizing
+      const arrayBuffer = await thumbnailBlob.arrayBuffer();
+      const buffer = Buffer.from(arrayBuffer);
+
+      // Store the full-size image in Convex storage as cover_image_url
+      // Create a new blob from the arrayBuffer for storage
+      const coverBlob = new Blob([arrayBuffer], { type: thumbnailBlob.type });
+      const coverStorageId = await ctx.storage.store(coverBlob);
+
+      // Get the URL for the stored cover image
+      const coverImageUrl = await ctx.storage.getUrl(coverStorageId);
+
+      if (!coverImageUrl) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate URL for stored cover image",
+        });
+      }
+
+      // Resize the image for thumbnail using the buffer we already read
+
+      // Load and resize the image using jimp
+      const image = await Jimp.read(buffer);
+      
+      // Calculate new dimensions while maintaining aspect ratio
+      const maxWidth = 400;
+      const maxHeight = 300;
+      const imageWidth = image.width;
+      const imageHeight = image.height;
+      
+      let newWidth = imageWidth;
+      let newHeight = imageHeight;
+      
+      // Only resize if image is larger than max dimensions
+      if (imageWidth > maxWidth || imageHeight > maxHeight) {
+        const aspectRatio = imageWidth / imageHeight;
+        
+        if (imageWidth > imageHeight) {
+          // Landscape: fit to width
+          newWidth = Math.min(imageWidth, maxWidth);
+          newHeight = Math.round(newWidth / aspectRatio);
+          if (newHeight > maxHeight) {
+            newHeight = maxHeight;
+            newWidth = Math.round(newHeight * aspectRatio);
+          }
+        } else {
+          // Portrait or square: fit to height
+          newHeight = Math.min(imageHeight, maxHeight);
+          newWidth = Math.round(newHeight * aspectRatio);
+          if (newWidth > maxWidth) {
+            newWidth = maxWidth;
+            newHeight = Math.round(newWidth / aspectRatio);
+          }
+        }
+      }
+      
+      // Resize the image
+      image.resize({
+        w: newWidth,
+        h: newHeight,
+        mode: ResizeStrategy.BILINEAR,
+      });
+
+      // Get the resized image as a buffer in JPEG format with quality
+      const quality = 85;
+      const resizedBuffer = await image.getBuffer(JimpMime.jpeg, { quality });
+
+      // Upload the resized image to storage
+      // Convert Buffer to Uint8Array for Blob compatibility
+      const uint8Array = new Uint8Array(resizedBuffer);
+      const thumbnailStorageId = await ctx.storage.store(
+        new Blob([uint8Array], { type: "image/jpeg" })
+      );
+
+      // Get the URL for the stored thumbnail image
+      const thumbnailImageUrl = await ctx.storage.getUrl(thumbnailStorageId);
+
+      if (!thumbnailImageUrl) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate URL for stored thumbnail image",
+        });
+      }
+
+      // Update the lesson with both cover and thumbnail URLs
+      await ctx.runMutation(internal.lesson.updateLessonImageUrls, {
+        lessonId,
+        coverImageUrl,
+        thumbnailImageUrl,
+      });
+
+      return { coverImageUrl, thumbnailImageUrl };
+    } catch (error) {
+      console.error("Error fetching Vimeo thumbnail:", error);
+      // Don't throw - just log the error so the mutation doesn't fail
+      // The lesson update will still succeed, just without the thumbnail
+      return null;
+    }
+  },
+});
+
+/**
+ * Action to fetch Vimeo thumbnail from oEmbed API and save to Convex storage
+ * This runs in Node.js environment to make HTTP requests
+ * Public action for client use
+ */
+export const fetchVimeoThumbnail = action({
+  args: {
+    videoUrl: v.string(),
+  },
+  handler: async (ctx, { videoUrl }) => {
+    // Verify user is authenticated
+    await requireUserAction(ctx);
+    
+    try {
+      // Normalize Vimeo URL - convert player.vimeo.com to vimeo.com format for oEmbed
+      let normalizedUrl = videoUrl;
+      if (videoUrl.includes("player.vimeo.com")) {
+        // Extract video ID from player.vimeo.com/video/ID
+        const videoIdMatch = videoUrl.match(/player\.vimeo\.com\/video\/(\d+)/);
+        if (videoIdMatch) {
+          normalizedUrl = `https://vimeo.com/${videoIdMatch[1]}`;
+        }
+      } else if (videoUrl.includes("vimeo.com")) {
+        // Ensure it's in the right format
+        normalizedUrl = videoUrl;
+      } else {
+        throw new ConvexError({
+          code: "INVALID_URL",
+          message: "URL must be from vimeo.com or player.vimeo.com",
+        });
+      }
+
+      // Call Vimeo oEmbed API
+      const oembedUrl = `https://vimeo.com/api/oembed.json?url=${encodeURIComponent(normalizedUrl)}`;
+      const response = await fetch(oembedUrl);
+      
+      if (!response.ok) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: `Failed to fetch thumbnail from Vimeo: ${response.statusText}`,
+        });
+      }
+
+      const data = await response.json();
+      
+      if (!data.thumbnail_url) {
+        throw new ConvexError({
+          code: "VIMEO_API_ERROR",
+          message: "No thumbnail_url found in Vimeo oEmbed response",
+        });
+      }
+
+      // Download the thumbnail image
+      const thumbnailResponse = await fetch(data.thumbnail_url);
+      
+      if (!thumbnailResponse.ok) {
+        throw new ConvexError({
+          code: "IMAGE_DOWNLOAD_ERROR",
+          message: `Failed to download thumbnail: ${thumbnailResponse.statusText}`,
+        });
+      }
+
+      // Get the image as a blob
+      const thumbnailBlob = await thumbnailResponse.blob();
+
+      // Store the thumbnail in Convex storage
+      const storageId = await ctx.storage.store(thumbnailBlob);
+
+      // Get the URL for the stored image
+      const imageUrl = await ctx.storage.getUrl(storageId);
+
+      if (!imageUrl) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate URL for stored thumbnail",
+        });
+      }
+
+      return imageUrl;
+    } catch (error) {
+      console.error("Error fetching Vimeo thumbnail:", error);
+      if (error instanceof ConvexError) {
+        throw error;
+      }
+      throw new ConvexError({
+        code: "THUMBNAIL_FETCH_ERROR",
+        message: error instanceof Error ? error.message : "Failed to fetch Vimeo thumbnail.",
       });
     }
   },

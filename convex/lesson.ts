@@ -1,5 +1,6 @@
-import { mutation, query } from "./_generated/server";
+import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 
@@ -325,6 +326,13 @@ export const updateLesson = mutation({
       }
     }
 
+    // Check if video URL changed and is from Vimeo
+    const videoUrlChanged = lesson.video_url !== validated.videoUrl;
+    const isVimeoUrl = validated.videoUrl && (
+      validated.videoUrl.includes("vimeo.com") || 
+      validated.videoUrl.includes("player.vimeo.com")
+    );
+
     await ctx.db.patch(id, {
       title: validated.title,
       title_ar: validated.titleAr,
@@ -342,6 +350,14 @@ export const updateLesson = mutation({
       body: validated.type === "article" ? validated.body : undefined,
       body_ar: validated.type === "article" ? validated.bodyAr : undefined,
     });
+
+    // Schedule thumbnail fetch if video URL changed and is from Vimeo
+    if (videoUrlChanged && isVimeoUrl && validated.videoUrl) {
+      await ctx.scheduler.runAfter(0, internal.image.fetchVimeoThumbnailAndUpdateLesson, {
+        lessonId: id,
+        videoUrl: validated.videoUrl,
+      });
+    }
 
     await logActivity({
       ctx,
@@ -506,6 +522,31 @@ export const reorderLessons = mutation({
         priority: i,
       });
     }
+  },
+});
+
+/**
+ * Internal mutation to update lesson cover and thumbnail image URLs
+ * Called by the scheduled action after fetching Vimeo thumbnail
+ */
+export const updateLessonImageUrls = internalMutation({
+  args: {
+    lessonId: v.id("lessons"),
+    coverImageUrl: v.string(),
+    thumbnailImageUrl: v.string(),
+  },
+  handler: async (ctx, { lessonId, coverImageUrl, thumbnailImageUrl }) => {
+    const lesson = await ctx.db.get(lessonId);
+
+    if (!lesson || lesson.deletedAt) {
+      // Lesson doesn't exist or was deleted, skip update
+      return;
+    }
+
+    await ctx.db.patch(lessonId, {
+      cover_image_url: coverImageUrl,
+      thumbnail_image_url: thumbnailImageUrl,
+    });
   },
 });
 
