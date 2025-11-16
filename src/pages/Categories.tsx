@@ -302,7 +302,6 @@ const Categories = () => {
                   name="name"
                   value={formValues.name}
                   onChange={(event) => setFormValues((prev) => ({ ...prev, name: event.target.value }))}
-                  required
                   maxLength={24}
                 />
               </div>
@@ -313,7 +312,6 @@ const Categories = () => {
                   name="nameAr"
                   value={formValues.nameAr}
                   onChange={(event) => setFormValues((prev) => ({ ...prev, nameAr: event.target.value }))}
-                  required
                   maxLength={24}
                   dir="rtl"
                   className="text-right"
@@ -330,7 +328,6 @@ const Categories = () => {
                   }
                   onInput={(event) => adjustTextareaHeight(event.currentTarget)}
                   ref={descriptionRef}
-                  required
                   maxLength={1024}
                   rows={3}
                   className="min-h-[6.75rem] resize-none"
@@ -347,7 +344,6 @@ const Categories = () => {
                   }
                   onInput={(event) => adjustTextareaHeight(event.currentTarget)}
                   ref={descriptionArRef}
-                  required
                   maxLength={1024}
                   dir="rtl"
                   rows={3}

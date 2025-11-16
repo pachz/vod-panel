@@ -428,7 +428,6 @@ const Courses = () => {
                         name: event.target.value,
                       }))
                     }
-                    required
                     maxLength={64}
                   />
                 </div>
@@ -444,7 +443,6 @@ const Courses = () => {
                         nameAr: event.target.value,
                       }))
                     }
-                    required
                     maxLength={64}
                     dir="rtl"
                     className="text-right"
@@ -487,7 +485,6 @@ const Courses = () => {
                   }
                   onInput={(event) => adjustTextareaHeight(event.currentTarget)}
                   ref={shortDescriptionRef}
-                  required
                   maxLength={512}
                   rows={3}
                   className="min-h-[6.75rem] resize-none"
@@ -507,7 +504,6 @@ const Courses = () => {
                   }
                   onInput={(event) => adjustTextareaHeight(event.currentTarget)}
                   ref={shortDescriptionArRef}
-                  required
                   maxLength={512}
                   dir="rtl"
                   rows={3}

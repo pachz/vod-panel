@@ -29,6 +29,16 @@ import { toast } from "sonner";
 import { RichTextarea } from "@/components/RichTextarea";
 import { CourseCombobox } from "@/components/CourseCombobox";
 import { lessonInputSchema } from "../../shared/validation/lesson";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 type LessonDoc = Doc<"lessons">;
 type CourseDoc = Doc<"courses">;
@@ -51,7 +61,8 @@ const Lessons = () => {
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
-  const [isDeleting, setIsDeleting] = useState<string | null>(null);
+  const [lessonToDelete, setLessonToDelete] = useState<LessonDoc | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
   const [searchInput, setSearchInput] = useState(searchFilter || "");
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -97,7 +108,7 @@ const Lessons = () => {
     setIsCreating(true);
 
     try {
-      await createLesson({
+      const lessonId = await createLesson({
         title,
         titleAr,
         shortReview,
@@ -115,6 +126,7 @@ const Lessons = () => {
         courseId: "",
         duration: "",
       });
+      navigate(`/lessons/${lessonId}`);
     } catch (error) {
       console.error(error);
       const errorMessage =
@@ -129,29 +141,20 @@ const Lessons = () => {
     }
   };
 
-  const handleDelete = useCallback(async (id: Id<"lessons">) => {
-    if (!confirm("Are you sure you want to delete this lesson?")) {
-      return;
+  const getErrorMessage = (error: unknown) => {
+    if (error && typeof error === "object" && "data" in error) {
+      const data = (error as { data?: { message?: string } }).data;
+      if (data?.message) {
+        return data.message;
+      }
     }
 
-    setIsDeleting(id);
-
-    try {
-      await deleteLesson({ id });
-      toast.success("Lesson deleted successfully");
-    } catch (error) {
-      console.error(error);
-      const errorMessage =
-        error && typeof error === "object" && "data" in error
-          ? (error as { data?: { message?: string } }).data?.message
-          : error instanceof Error
-            ? error.message
-            : "Something went wrong. Please try again.";
-      toast.error(errorMessage);
-    } finally {
-      setIsDeleting(null);
+    if (error instanceof Error && error.message) {
+      return error.message;
     }
-  }, [deleteLesson]);
+
+    return "Something went wrong. Please try again.";
+  };
 
   const getCourseName = (courseId: Id<"courses">) => {
     const course = courseList.find((c) => c._id === courseId);
@@ -304,11 +307,11 @@ const Lessons = () => {
       {
         icon: Trash2,
         label: "Delete lesson",
-        onClick: (lesson) => handleDelete(lesson._id),
+        onClick: setLessonToDelete,
         className: "text-destructive",
       },
     ],
-    [navigate, handleDelete]
+    [navigate]
   );
 
   return (
@@ -438,6 +441,54 @@ const Lessons = () => {
         onSearchChange={setSearchInput}
         searchPlaceholder="Search lessons by title..."
       />
+
+      <AlertDialog
+        open={lessonToDelete !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLessonToDelete(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove{" "}
+              <span className="font-medium text-foreground">
+                {lessonToDelete?.title ?? "this lesson"}
+              </span>{" "}
+              for everyone. You can&apos;t undo this action.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={isDeleting}
+              onClick={async () => {
+                if (!lessonToDelete) {
+                  return;
+                }
+                setIsDeleting(true);
+
+                try {
+                  await deleteLesson({ id: lessonToDelete._id });
+                  toast.success("Lesson deleted successfully");
+                  setLessonToDelete(null);
+                } catch (error) {
+                  console.error(error);
+                  toast.error(getErrorMessage(error));
+                } finally {
+                  setIsDeleting(false);
+                }
+              }}
+            >
+              {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 };

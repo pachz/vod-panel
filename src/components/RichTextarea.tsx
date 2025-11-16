@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import {
   Dialog,
   DialogContent,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
   DialogTrigger,
@@ -354,6 +355,15 @@ export const RichTextarea = ({
                 <p className="text-sm text-muted-foreground">{description}</p>
               ) : null}
             </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="cta"
+                onClick={() => handleDialogOpen(false)}
+              >
+                Done
+              </Button>
+            </DialogFooter>
           </DialogContent>
         </Dialog>
       </div>
