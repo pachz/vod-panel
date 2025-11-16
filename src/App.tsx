@@ -12,6 +12,7 @@ import LessonDetail from "@/pages/LessonDetail";
 import NotFound from "@/pages/NotFound";
 import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
+import Payments from "@/pages/Payments";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -142,6 +143,7 @@ const App = () => (
         <Route path="/lessons/:id" element={<LessonDetail />} />
         <Route path="/video-panel" element={<VideoPanel />} />
         <Route path="/users" element={<Users />} />
+        <Route path="/payments" element={<Payments />} />
         <Route path="*" element={<NotFound />} />
       </Route>
     </Route>

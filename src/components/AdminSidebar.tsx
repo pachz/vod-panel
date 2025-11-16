@@ -1,4 +1,4 @@
-import { LayoutDashboard, FolderTree, BookOpen, GraduationCap, PlayCircle, Users } from "lucide-react";
+import { LayoutDashboard, FolderTree, BookOpen, GraduationCap, PlayCircle, Users, CreditCard } from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -30,6 +30,7 @@ const menuItems: MenuItem[] = [
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
   { title: "Users", url: "/users", icon: Users, alpha: true },
+  { title: "Payments", url: "/payments", icon: CreditCard, alpha: true },
 ];
 
 export function AdminSidebar() {
