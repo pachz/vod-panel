@@ -423,6 +423,7 @@ const CourseDetail = () => {
   const coverUploadPromiseRef = useRef<Promise<void> | null>(null);
   const coverUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCoverUrlRef = useRef<string | null>(null);
+  const previousCourseIdRef = useRef<Id<"courses"> | undefined>(undefined);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
@@ -479,6 +480,18 @@ const CourseDetail = () => {
       return;
     }
 
+    const isCourseIdChanged = previousCourseIdRef.current !== courseId;
+    const isInitialLoad = initialValues === null;
+    
+    // Only update form values if:
+    // 1. This is the initial load (initialValues is null)
+    // 2. The course ID changed (user navigated to a different course)
+    // Don't update if course data changed but courseId is the same (e.g., after image upload)
+    if (!isInitialLoad && !isCourseIdChanged) {
+      previousCourseIdRef.current = courseId;
+      return;
+    }
+
     const nextValues: FormValues = {
       name: course.name,
       nameAr: course.name_ar,
@@ -505,7 +518,8 @@ const CourseDetail = () => {
     });
 
     setInitialValues(nextValues);
-  }, [course, courseId]);
+    previousCourseIdRef.current = courseId;
+  }, [course, courseId, initialValues]);
 
   useEffect(() => {
     if (!course) {
