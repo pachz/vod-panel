@@ -42,37 +42,27 @@ type CourseDoc = Doc<"courses">;
 type FormValues = {
   title: string;
   titleAr: string;
-  shortReview: string;
-  shortReviewAr: string;
   description: string;
   descriptionAr: string;
   learningObjectives: string;
   learningObjectivesAr: string;
   courseId: string;
   duration: string;
-  type: LessonDoc["type"];
   status: LessonDoc["status"];
   videoUrl: string;
-  body: string;
-  bodyAr: string;
 };
 
 const initialFormValues: FormValues = {
   title: "",
   titleAr: "",
-  shortReview: "",
-  shortReviewAr: "",
   description: "",
   descriptionAr: "",
   learningObjectives: "",
   learningObjectivesAr: "",
   courseId: "",
   duration: "",
-  type: "video",
   status: "draft",
   videoUrl: "",
-  body: "",
-  bodyAr: "",
 };
 
 type ImageUploadState = {
@@ -302,7 +292,7 @@ const LessonDetail = () => {
     api.lesson.getLesson,
     lessonId ? { id: lessonId } : undefined,
   );
-  const courses = useQuery(api.course.listCourses);
+  const courses = useQuery(api.course.listCourses, {});
 
   const updateLesson = useMutation(api.lesson.updateLesson);
   const deleteLesson = useMutation(api.lesson.deleteLesson);
@@ -337,8 +327,6 @@ const LessonDetail = () => {
     const nextValues: FormValues = {
       title: lesson.title,
       titleAr: lesson.title_ar,
-      shortReview: lesson.short_review,
-      shortReviewAr: lesson.short_review_ar,
       description: lesson.description ?? "",
       descriptionAr: lesson.description_ar ?? "",
       learningObjectives: lesson.learning_objectives ?? "",
@@ -348,11 +336,8 @@ const LessonDetail = () => {
         lesson.duration !== undefined && lesson.duration !== null
           ? String(lesson.duration)
           : "",
-      type: lesson.type,
       status: lesson.status,
       videoUrl: lesson.video_url ?? "",
-      body: lesson.body ?? "",
-      bodyAr: lesson.body_ar ?? "",
     };
 
     setFormValues((previous) => {
@@ -654,19 +639,19 @@ const LessonDetail = () => {
     const validation = lessonUpdateSchema.safeParse({
       title: formValues.title,
       titleAr: formValues.titleAr,
-      shortReview: formValues.shortReview,
-      shortReviewAr: formValues.shortReviewAr,
+      shortReview: "",
+      shortReviewAr: "",
       description: formValues.description,
       descriptionAr: formValues.descriptionAr,
       learningObjectives: formValues.learningObjectives,
       learningObjectivesAr: formValues.learningObjectivesAr,
       courseId: formValues.courseId,
       duration: formValues.duration,
-      type: formValues.type,
+      type: "video",
       status: formValues.status,
-      videoUrl: formValues.type === "video" ? formValues.videoUrl : undefined,
-      body: formValues.type === "article" ? formValues.body : undefined,
-      bodyAr: formValues.type === "article" ? formValues.bodyAr : undefined,
+      videoUrl: formValues.videoUrl,
+      body: undefined,
+      bodyAr: undefined,
     });
 
     if (!validation.success) {
@@ -678,19 +663,14 @@ const LessonDetail = () => {
     const {
       title,
       titleAr,
-      shortReview,
-      shortReviewAr,
       description,
       descriptionAr,
       learningObjectives,
       learningObjectivesAr,
       courseId,
       duration,
-      type,
       status,
       videoUrl,
-      body,
-      bodyAr,
     } = validation.data;
 
     setIsSaving(true);
@@ -718,27 +698,25 @@ const LessonDetail = () => {
         id: lessonId,
         title,
         titleAr,
-        shortReview,
-        shortReviewAr,
+        shortReview: "",
+        shortReviewAr: "",
         description,
         descriptionAr,
         learningObjectives,
         learningObjectivesAr,
         courseId: courseId as Id<"courses">,
         duration,
-        type,
+        type: "video",
         status,
         videoUrl,
-        body,
-        bodyAr,
+        body: undefined,
+        bodyAr: undefined,
       });
 
       toast.success("Lesson updated successfully");
       const savedValues: FormValues = {
         title,
         titleAr,
-        shortReview,
-        shortReviewAr,
         description: description ?? "",
         descriptionAr: descriptionAr ?? "",
         learningObjectives: learningObjectives ?? "",
@@ -748,11 +726,8 @@ const LessonDetail = () => {
           duration !== undefined && duration !== null
             ? String(duration)
             : "",
-        type,
         status,
         videoUrl: videoUrl ?? "",
-        body: body ?? "",
-        bodyAr: bodyAr ?? "",
       };
       setInitialValues(savedValues);
       setFormValues(savedValues);
@@ -916,80 +891,31 @@ const LessonDetail = () => {
               </div>
             </div>
 
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="type">Type</Label>
-                <Select
-                  value={formValues.type}
-                  onValueChange={(value: LessonDoc["type"]) =>
-                    setFormValues((prev) => ({ ...prev, type: value }))
-                  }
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="video">Video</SelectItem>
-                    <SelectItem value="article">Article</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  value={formValues.duration}
-                  onChange={(event) => {
-                    const rawValue = event.target.value;
-                    const sanitizedValue = rawValue.replace(/\D/g, "");
-                    setFormValues((prev) => ({
-                      ...prev,
-                      duration: sanitizedValue,
-                    }));
-                  }}
-                  inputMode="numeric"
-                  pattern="^[0-9]*$"
-                  placeholder="e.g., 15"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label htmlFor="duration">Duration (minutes)</Label>
+              <Input
+                id="duration"
+                value={formValues.duration}
+                onChange={(event) => {
+                  const rawValue = event.target.value;
+                  const sanitizedValue = rawValue.replace(/\D/g, "");
+                  const maxValue = 99999;
+                  const clampedValue = sanitizedValue === "" 
+                    ? "" 
+                    : Math.min(Number(sanitizedValue), maxValue).toString();
+                  setFormValues((prev) => ({
+                    ...prev,
+                    duration: clampedValue,
+                  }));
+                }}
+                inputMode="numeric"
+                pattern="^[0-9]*$"
+                placeholder="e.g., 15"
+                max={99999}
+              />
             </div>
 
             <Separator />
-
-            <div className="grid gap-6 md:grid-cols-2">
-              <RichTextarea
-                id="shortReview"
-                label="Short Review (EN)"
-                value={formValues.shortReview}
-                onChange={(nextValue) =>
-                  setFormValues((prev) => ({
-                    ...prev,
-                    shortReview: nextValue,
-                  }))
-                }
-                required
-                maxLength={512}
-                rows={3}
-                modalTitle="Edit short review"
-              />
-              <RichTextarea
-                id="shortReviewAr"
-                label="Short Review (AR)"
-                value={formValues.shortReviewAr}
-                onChange={(nextValue) =>
-                  setFormValues((prev) => ({
-                    ...prev,
-                    shortReviewAr: nextValue,
-                  }))
-                }
-                required
-                maxLength={512}
-                rows={3}
-                dir="rtl"
-                textareaClassName="text-right"
-                modalTitle="Edit Arabic short review"
-              />
-            </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               <RichTextarea
@@ -1075,57 +1001,22 @@ const LessonDetail = () => {
               />
             </div>
 
-            {formValues.type === "video" ? (
-              <div className="space-y-2">
-                <Label htmlFor="videoUrl">Video URL</Label>
-                <Input
-                  id="videoUrl"
-                  value={formValues.videoUrl}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      videoUrl: event.target.value,
-                    }))
-                  }
-                  placeholder="https://"
-                  type="url"
-                  maxLength={2048}
-                />
-              </div>
-            ) : (
-              <div className="grid gap-6 md:grid-cols-2">
-                <RichTextarea
-                  id="body"
-                  label="Fully Formatted Body (EN)"
-                  value={formValues.body}
-                  onChange={(nextValue) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      body: nextValue,
-                    }))
-                  }
-                  maxLength={100000}
-                  rows={10}
-                  modalTitle="Edit body"
-                />
-                <RichTextarea
-                  id="bodyAr"
-                  label="Fully Formatted Body (AR)"
-                  value={formValues.bodyAr}
-                  onChange={(nextValue) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      bodyAr: nextValue,
-                    }))
-                  }
-                  maxLength={100000}
-                  rows={10}
-                  dir="rtl"
-                  textareaClassName="text-right"
-                  modalTitle="Edit Arabic body"
-                />
-              </div>
-            )}
+            <div className="space-y-2">
+              <Label htmlFor="videoUrl">Video URL</Label>
+              <Input
+                id="videoUrl"
+                value={formValues.videoUrl}
+                onChange={(event) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    videoUrl: event.target.value,
+                  }))
+                }
+                placeholder="https://"
+                type="url"
+                maxLength={2048}
+              />
+            </div>
           </CardContent>
         </Card>
 

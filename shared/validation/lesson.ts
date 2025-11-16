@@ -30,7 +30,7 @@ const optionalDuration = z.preprocess((value) => {
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : value;
-}, z.number().int().min(0, "Duration must be 0 or greater.").max(100000, "Duration seems too large.").optional());
+}, z.number().int().min(0, "Duration must be 0 or greater.").max(99999, "Duration must be 99,999 minutes or less.").optional());
 
 export const lessonInputSchema = z.object({
   title: z
@@ -48,19 +48,15 @@ export const lessonInputSchema = z.object({
     .min(1, "Arabic title is required.")
     .max(128, "Arabic title must be 128 characters or less."),
   shortReview: z
-    .string({
-      required_error: "Short review is required.",
-    })
+    .string()
     .trim()
-    .min(1, "Short review is required.")
-    .max(512, "Short review must be 512 characters or less."),
+    .max(512, "Short review must be 512 characters or less.")
+    .default(""),
   shortReviewAr: z
-    .string({
-      required_error: "Arabic short review is required.",
-    })
+    .string()
     .trim()
-    .min(1, "Arabic short review is required.")
-    .max(512, "Arabic short review must be 512 characters or less."),
+    .max(512, "Arabic short review must be 512 characters or less.")
+    .default(""),
   courseId: z
     .string({
       required_error: "Course is required.",
@@ -68,7 +64,7 @@ export const lessonInputSchema = z.object({
     .trim()
     .min(1, "Course is required."),
   duration: optionalDuration,
-  type: z.enum(["video", "article"]),
+  type: z.enum(["video", "article"]).default("video"),
 });
 
 export const lessonUpdateSchema = lessonInputSchema.extend({

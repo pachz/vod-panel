@@ -1162,14 +1162,19 @@ const CourseDetail = () => {
                   onChange={(event) => {
                     const rawValue = event.target.value;
                     const sanitizedValue = rawValue.replace(/\D/g, "");
+                    const maxValue = 99999;
+                    const clampedValue = sanitizedValue === "" 
+                      ? "" 
+                      : Math.min(Number(sanitizedValue), maxValue).toString();
                     setFormValues((prev) => ({
                       ...prev,
-                      durationMinutes: sanitizedValue,
+                      durationMinutes: clampedValue,
                     }));
                   }}
                   inputMode="numeric"
                   pattern="^[0-9]*$"
                   placeholder="e.g., 120"
+                  max={99999}
                 />
               </div>
             </div>

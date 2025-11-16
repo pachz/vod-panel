@@ -1,6 +1,6 @@
 import { useState, useMemo, useCallback } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Video, FileText, Eye } from "lucide-react";
+import { Plus, Trash2, Eye } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -53,11 +53,8 @@ const Lessons = () => {
   const [formValues, setFormValues] = useState({
     title: "",
     titleAr: "",
-    shortReview: "",
-    shortReviewAr: "",
     courseId: "",
     duration: "",
-    type: "video" as "video" | "article",
   });
 
   const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
@@ -70,11 +67,11 @@ const Lessons = () => {
     const validation = lessonInputSchema.safeParse({
       title: formValues.title,
       titleAr: formValues.titleAr,
-      shortReview: formValues.shortReview,
-      shortReviewAr: formValues.shortReviewAr,
+      shortReview: "",
+      shortReviewAr: "",
       courseId: formValues.courseId,
       duration: formValues.duration,
-      type: formValues.type,
+      type: "video",
     });
 
     if (!validation.success) {
@@ -90,7 +87,6 @@ const Lessons = () => {
       shortReviewAr,
       courseId,
       duration,
-      type,
     } = validation.data;
 
     setIsCreating(true);
@@ -103,7 +99,7 @@ const Lessons = () => {
         shortReviewAr,
         courseId: courseId as Id<"courses">,
         duration,
-        type,
+        type: "video",
       });
 
       toast.success("Lesson created successfully");
@@ -111,11 +107,8 @@ const Lessons = () => {
       setFormValues({
         title: "",
         titleAr: "",
-        shortReview: "",
-        shortReviewAr: "",
         courseId: "",
         duration: "",
-        type: "video",
       });
     } catch (error) {
       console.error(error);
@@ -245,19 +238,6 @@ const Lessons = () => {
         render: (lesson) => formatDuration(lesson.duration),
       },
       {
-        header: "Type",
-        render: (lesson) => (
-          <Badge variant="secondary" className="gap-1">
-            {lesson.type === "video" ? (
-              <Video className="h-3 w-3" />
-            ) : (
-              <FileText className="h-3 w-3" />
-            )}
-            {lesson.type}
-          </Badge>
-        ),
-      },
-      {
         header: "Status",
         render: (lesson) => (
           <Badge
@@ -310,11 +290,8 @@ const Lessons = () => {
                 setFormValues({
                   title: "",
                   titleAr: "",
-                  shortReview: "",
-                  shortReviewAr: "",
                   courseId: "",
                   duration: "",
-                  type: "video",
                 });
               }}
               variant="cta"
@@ -357,44 +334,25 @@ const Lessons = () => {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="courseId">Course</Label>
-                  <Select
-                    value={formValues.courseId}
-                    onValueChange={(value) =>
-                      setFormValues((prev) => ({ ...prev, courseId: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Select course" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {courseList.map((course) => (
-                        <SelectItem key={course._id} value={course._id}>
-                          {course.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="type">Type</Label>
-                  <Select
-                    value={formValues.type}
-                    onValueChange={(value: "video" | "article") =>
-                      setFormValues((prev) => ({ ...prev, type: value }))
-                    }
-                  >
-                    <SelectTrigger>
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="video">Video</SelectItem>
-                      <SelectItem value="article">Article</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
+              <div className="space-y-2">
+                <Label htmlFor="courseId">Course</Label>
+                <Select
+                  value={formValues.courseId}
+                  onValueChange={(value) =>
+                    setFormValues((prev) => ({ ...prev, courseId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select course" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {courseList.map((course) => (
+                      <SelectItem key={course._id} value={course._id}>
+                        {course.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
               </div>
 
               <div className="space-y-2">
@@ -405,49 +363,19 @@ const Lessons = () => {
                   onChange={(e) => {
                     const rawValue = e.target.value;
                     const sanitizedValue = rawValue.replace(/\D/g, "");
+                    const maxValue = 99999;
+                    const clampedValue = sanitizedValue === "" 
+                      ? "" 
+                      : Math.min(Number(sanitizedValue), maxValue).toString();
                     setFormValues((prev) => ({
                       ...prev,
-                      duration: sanitizedValue,
+                      duration: clampedValue,
                     }));
                   }}
                   inputMode="numeric"
                   pattern="^[0-9]*$"
                   placeholder="e.g., 15"
-                />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <RichTextarea
-                  id="shortReview"
-                  label="Short Review (EN)"
-                  value={formValues.shortReview}
-                  onChange={(nextValue) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortReview: nextValue,
-                    }))
-                  }
-                  required
-                  maxLength={512}
-                  rows={3}
-                  modalTitle="Edit short review"
-                />
-                <RichTextarea
-                  id="shortReviewAr"
-                  label="Short Review (AR)"
-                  value={formValues.shortReviewAr}
-                  onChange={(nextValue) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortReviewAr: nextValue,
-                    }))
-                  }
-                  required
-                  maxLength={512}
-                  rows={3}
-                  dir="rtl"
-                  textareaClassName="text-right"
-                  modalTitle="Edit Arabic short review"
+                  max={99999}
                 />
               </div>
 

@@ -30,7 +30,7 @@ const optionalDuration = z.preprocess((value) => {
   }
   const parsed = Number(trimmed);
   return Number.isFinite(parsed) ? parsed : value;
-}, z.number().int().min(0, "Duration must be 0 or greater.").max(100000, "Duration seems too large.").optional());
+}, z.number().int().min(0, "Duration must be 0 or greater.").max(99999, "Duration must be 99,999 minutes or less.").optional());
 
 export const courseInputSchema = z.object({
   name: z
