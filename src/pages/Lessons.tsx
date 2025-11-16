@@ -103,7 +103,16 @@ const Lessons = () => {
     });
 
     if (!validation.success) {
-      const issue = validation.error.errors[0];
+      // Prioritize required field errors over optional field errors
+      const requiredFieldPaths = ["title", "titleAr", "courseId"];
+      const errors = validation.error.errors;
+      
+      // Find first error for a required field, or fall back to first error
+      const requiredFieldError = errors.find(err => 
+        err.path && requiredFieldPaths.includes(String(err.path[0]))
+      );
+      
+      const issue = requiredFieldError ?? errors[0];
       toast.error(issue?.message ?? "Please check the form and try again.");
       return;
     }
@@ -366,7 +375,6 @@ const Lessons = () => {
                     onChange={(e) =>
                       setFormValues((prev) => ({ ...prev, title: e.target.value }))
                     }
-                    required
                     maxLength={128}
                   />
                 </div>
@@ -378,7 +386,6 @@ const Lessons = () => {
                     onChange={(e) =>
                       setFormValues((prev) => ({ ...prev, titleAr: e.target.value }))
                     }
-                    required
                     maxLength={128}
                     dir="rtl"
                     className="text-right"
