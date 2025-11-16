@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Pencil, Trash2 } from "lucide-react";
+import { Plus, Eye, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -163,7 +163,7 @@ const Categories = () => {
   const actions = useMemo<TableAction<CategoryDoc>[]>(
     () => [
       {
-        icon: Pencil,
+        icon: Eye,
         label: "Edit category",
         onClick: (category) => {
           setEditingCategory(category);
