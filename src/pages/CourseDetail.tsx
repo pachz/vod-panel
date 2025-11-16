@@ -1070,7 +1070,7 @@ const CourseDetail = () => {
             <div className="grid gap-6 md:grid-cols-2">
               <RichTextarea
                 id="shortDescription"
-                label="Short description"
+                label="Short description (EN)"
                 value={formValues.shortDescription}
                 onChange={(nextValue) =>
                   setFormValues((prev) => ({
@@ -1085,7 +1085,7 @@ const CourseDetail = () => {
               />
               <RichTextarea
                 id="shortDescriptionAr"
-                label="Arabic short description"
+                label="Short description (AR)"
                 value={formValues.shortDescriptionAr}
                 onChange={(nextValue) =>
                   setFormValues((prev) => ({
@@ -1098,14 +1098,14 @@ const CourseDetail = () => {
                 rows={3}
                 dir="rtl"
                 textareaClassName="text-right"
-                modalTitle="Edit Arabic short description"
+                modalTitle="Edit short description"
               />
             </div>
 
             <div className="grid gap-6 md:grid-cols-2">
               <RichTextarea
                 id="description"
-                label="Full description"
+                label="Full description (EN)"
                 value={formValues.description}
                 onChange={(nextValue) =>
                   setFormValues((prev) => ({
@@ -1119,7 +1119,7 @@ const CourseDetail = () => {
               />
               <RichTextarea
                 id="descriptionAr"
-                label="Arabic full description"
+                label="Full description (AR)"
                 value={formValues.descriptionAr}
                 onChange={(nextValue) =>
                   setFormValues((prev) => ({
@@ -1131,7 +1131,7 @@ const CourseDetail = () => {
                 rows={5}
                 dir="rtl"
                 textareaClassName="text-right"
-                modalTitle="Edit Arabic full description"
+                modalTitle="Edit full description"
               />
             </div>
 
