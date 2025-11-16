@@ -296,7 +296,7 @@ const Categories = () => {
             </DialogHeader>
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">Title (EN)</Label>
                 <Input
                   id="name"
                   name="name"
@@ -306,7 +306,7 @@ const Categories = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="nameAr">Arabic Name</Label>
+                <Label htmlFor="nameAr">Title (AR)</Label>
                 <Input
                   id="nameAr"
                   name="nameAr"

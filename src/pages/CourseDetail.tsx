@@ -997,7 +997,7 @@ const CourseDetail = () => {
           <CardContent className="grid gap-6 p-6">
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
+                <Label htmlFor="name">Title (EN)</Label>
                 <Input
                   id="name"
                   value={formValues.name}
@@ -1009,7 +1009,7 @@ const CourseDetail = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="nameAr">Arabic name</Label>
+                <Label htmlFor="nameAr">Title (AR)</Label>
                 <Input
                   id="nameAr"
                   value={formValues.nameAr}
