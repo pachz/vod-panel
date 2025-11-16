@@ -62,7 +62,7 @@ const formatActivityAction = (entityType: string, action: string): string => {
 };
 
 const Dashboard = () => {
-  const activityLogs = useQuery(api.activityLog.getActivityLogs, { limit: 10 });
+  const activityLogs = useQuery(api.activityLog.getActivityLogs, { limit: 5 });
 
   return (
     <div className="relative z-10 space-y-12 py-4">
