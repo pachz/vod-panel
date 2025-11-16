@@ -34,6 +34,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { RichTextarea } from "@/components/RichTextarea";
+import { CourseCombobox } from "@/components/CourseCombobox";
 import { lessonUpdateSchema } from "../../shared/validation/lesson";
 
 type LessonDoc = Doc<"lessons">;
@@ -853,23 +854,14 @@ const LessonDetail = () => {
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="courseId">Course</Label>
-                <Select
+                <CourseCombobox
+                  courses={courseList}
                   value={formValues.courseId}
                   onValueChange={(value) =>
                     setFormValues((prev) => ({ ...prev, courseId: value }))
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courseList.map((course) => (
-                      <SelectItem key={course._id} value={course._id}>
-                        {course.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select course"
+                />
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>

@@ -27,6 +27,7 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { RichTextarea } from "@/components/RichTextarea";
+import { CourseCombobox } from "@/components/CourseCombobox";
 import { lessonInputSchema } from "../../shared/validation/lesson";
 
 type LessonDoc = Doc<"lessons">;
@@ -372,23 +373,14 @@ const Lessons = () => {
 
               <div className="space-y-2">
                 <Label htmlFor="courseId">Course</Label>
-                <Select
+                <CourseCombobox
+                  courses={courseList}
                   value={formValues.courseId}
                   onValueChange={(value) =>
                     setFormValues((prev) => ({ ...prev, courseId: value }))
                   }
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Select course" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {courseList.map((course) => (
-                      <SelectItem key={course._id} value={course._id}>
-                        {course.name}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                  placeholder="Select course"
+                />
               </div>
 
               <div className="space-y-2">
