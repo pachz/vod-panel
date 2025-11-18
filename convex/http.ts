@@ -57,7 +57,7 @@ http.route({
 const landingSecret = process.env.LANDING_SECRET;
 
 http.route({
-  path: "/landing/courses",
+  path: "/landing/carousel",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
     if (!landingSecret) {
