@@ -65,6 +65,14 @@ const initialFormValues: FormValues = {
   categoryId: "",
 };
 
+const formatDuration = (minutes: number | undefined) => {
+  if (minutes === undefined || minutes === null) {
+    return "—";
+  }
+
+  return `${minutes} min`;
+};
+
 const Courses = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -238,6 +246,15 @@ const Courses = () => {
         render: (course) => (
           <span className="text-muted-foreground">
             {getPreviewText(course.short_description)}
+          </span>
+        ),
+        cellClassName: "text-muted-foreground",
+      },
+      {
+        header: "Duration",
+        render: (course) => (
+          <span className="text-muted-foreground">
+            {formatDuration(course.duration)}
           </span>
         ),
         cellClassName: "text-muted-foreground",

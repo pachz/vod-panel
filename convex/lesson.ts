@@ -20,10 +20,19 @@ const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">)
       q.eq("course_id", courseId).eq("deletedAt", undefined)
     )
     .collect();
-  
+
   const count = lessons.length;
-  await ctx.db.patch(courseId, { lesson_count: count });
-  return count;
+  const totalDuration = lessons.reduce((sum, lesson) => sum + (lesson.duration ?? 0), 0);
+
+  await ctx.db.patch(courseId, {
+    lesson_count: count,
+    duration: totalDuration > 0 ? totalDuration : undefined,
+  });
+
+  return {
+    count,
+    totalDuration,
+  };
 };
 
 const validateLessonInput = (input: LessonInput) => {
@@ -297,15 +306,8 @@ export const updateLesson = mutation({
     }
 
     // If course changed, recalculate lesson counts for both courses
-    if (lesson.course_id !== courseId) {
-      const currentCourse = await ctx.db.get(lesson.course_id);
-
-      if (currentCourse && currentCourse.deletedAt === undefined) {
-        await recalculateLessonCount(ctx, lesson.course_id);
-      }
-
-      await recalculateLessonCount(ctx, courseId);
-    }
+    const courseChanged = lesson.course_id !== courseId;
+    const durationChanged = (lesson.duration ?? null) !== (validated.duration ?? null);
 
     // Validate type-specific fields
     if (validated.type === "video" && !validated.videoUrl) {
@@ -350,6 +352,18 @@ export const updateLesson = mutation({
       body: validated.type === "article" ? validated.body : undefined,
       body_ar: validated.type === "article" ? validated.bodyAr : undefined,
     });
+
+    if (courseChanged) {
+      const currentCourse = await ctx.db.get(lesson.course_id);
+
+      if (currentCourse && currentCourse.deletedAt === undefined) {
+        await recalculateLessonCount(ctx, lesson.course_id);
+      }
+
+      await recalculateLessonCount(ctx, courseId);
+    } else if (durationChanged) {
+      await recalculateLessonCount(ctx, courseId);
+    }
 
     // Schedule thumbnail fetch if video URL changed and is from Vimeo
     if (videoUrlChanged && isVimeoUrl && validated.videoUrl) {

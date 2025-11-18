@@ -239,7 +239,6 @@ export const updateCourse = mutation({
       v.literal("archived"),
     ),
     trialVideoUrl: v.optional(v.string()),
-    durationMinutes: v.optional(v.number()),
     instructor: v.optional(v.string()),
   },
   handler: async (
@@ -255,7 +254,6 @@ export const updateCourse = mutation({
       categoryId,
       status,
       trialVideoUrl,
-      durationMinutes,
       instructor,
     },
   ) => {
@@ -280,7 +278,6 @@ export const updateCourse = mutation({
       categoryId,
       status,
       trialVideoUrl,
-      durationMinutes,
       instructor,
     });
 
@@ -320,7 +317,7 @@ export const updateCourse = mutation({
         validated.description !== undefined &&
         validated.descriptionAr !== undefined;
       const hasDuration =
-        validated.durationMinutes !== undefined && validated.durationMinutes > 0;
+        course.duration !== undefined && course.duration > 0;
       const hasCoverImages =
         typeof course.banner_image_url === "string" &&
         course.banner_image_url.trim().length > 0 &&
@@ -360,7 +357,6 @@ export const updateCourse = mutation({
       category_id: categoryId,
       status: validated.status,
       trial_video_url: validated.trialVideoUrl,
-      duration: validated.durationMinutes,
       instructor: validated.instructor,
       slug,
     });

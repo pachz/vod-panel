@@ -17,21 +17,6 @@ const optionalUrl = z.preprocess((value) => {
   return trimmed.length === 0 ? undefined : trimmed;
 }, z.string().url("Please enter a valid URL.").max(2048, "URL must be 2048 characters or less.").optional());
 
-const optionalDuration = z.preprocess((value) => {
-  if (typeof value === "number") {
-    return value;
-  }
-  if (typeof value !== "string") {
-    return value;
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : value;
-}, z.number().int().min(0, "Duration must be 0 or greater.").max(99999, "Duration must be 99,999 minutes or less.").optional());
-
 export const courseInputSchema = z.object({
   name: z
     .string({
@@ -80,7 +65,6 @@ export const courseUpdateSchema = courseInputSchema.extend({
   ),
   status: z.enum(["draft", "published", "archived"]),
   trialVideoUrl: optionalUrl,
-  durationMinutes: optionalDuration,
   instructor: optionalTrimmedString(
     128,
     "Instructor name must be 128 characters or less.",

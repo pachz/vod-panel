@@ -58,6 +58,14 @@ type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
 type LessonDoc = Doc<"lessons">;
 
+const formatDuration = (minutes: number | undefined) => {
+  if (minutes === undefined || minutes === null) {
+    return "—";
+  }
+
+  return `${minutes} min`;
+};
+
 type FormValues = {
   name: string;
   nameAr: string;
@@ -68,7 +76,6 @@ type FormValues = {
   categoryId: string;
   status: CourseDoc["status"];
   trialVideoUrl: string;
-  durationMinutes: string;
 };
 
 const initialFormValues: FormValues = {
@@ -81,7 +88,6 @@ const initialFormValues: FormValues = {
   categoryId: "",
   status: "draft",
   trialVideoUrl: "",
-  durationMinutes: "",
 };
 
 const statusLabels: Record<CourseDoc["status"], string> = {
@@ -324,11 +330,6 @@ const SortableLessonItem = ({ lesson, index, onView }: SortableLessonItemProps) 
     opacity: isDragging ? 0.5 : 1,
   };
 
-  const formatDuration = (minutes: number | undefined) => {
-    if (!minutes) return "—";
-    return `${minutes} min`;
-  };
-
   return (
     <div
       ref={setNodeRef}
@@ -502,10 +503,6 @@ const CourseDetail = () => {
       categoryId: course.category_id,
       status: course.status,
       trialVideoUrl: course.trial_video_url ?? "",
-      durationMinutes:
-        course.duration !== undefined && course.duration !== null
-          ? String(course.duration)
-          : "",
     };
 
     setFormValues((previous) => {
@@ -815,7 +812,6 @@ const CourseDetail = () => {
       categoryId: formValues.categoryId,
       status: formValues.status,
       trialVideoUrl: formValues.trialVideoUrl,
-      durationMinutes: formValues.durationMinutes,
     });
 
     if (!validation.success) {
@@ -843,7 +839,6 @@ const CourseDetail = () => {
       categoryId,
       status,
       trialVideoUrl,
-      durationMinutes,
       instructor,
     } = validation.data;
 
@@ -879,7 +874,6 @@ const CourseDetail = () => {
         categoryId: categoryId as Id<"categories">,
         status,
         trialVideoUrl,
-        durationMinutes,
       });
 
       toast.success("Course updated successfully");
@@ -893,10 +887,6 @@ const CourseDetail = () => {
         categoryId,
         status,
         trialVideoUrl: trialVideoUrl ?? "",
-        durationMinutes:
-          durationMinutes !== undefined && durationMinutes !== null
-            ? String(durationMinutes)
-            : "",
       };
       setInitialValues(savedValues);
       setFormValues(savedValues);
@@ -1178,27 +1168,15 @@ const CourseDetail = () => {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="durationMinutes">Duration (minutes)</Label>
-                <Input
-                  id="durationMinutes"
-                  value={formValues.durationMinutes}
-                  onChange={(event) => {
-                    const rawValue = event.target.value;
-                    const sanitizedValue = rawValue.replace(/\D/g, "");
-                    const maxValue = 99999;
-                    const clampedValue = sanitizedValue === "" 
-                      ? "" 
-                      : Math.min(Number(sanitizedValue), maxValue).toString();
-                    setFormValues((prev) => ({
-                      ...prev,
-                      durationMinutes: clampedValue,
-                    }));
-                  }}
-                  inputMode="numeric"
-                  pattern="^[0-9]*$"
-                  placeholder="e.g., 120"
-                  max={99999}
-                />
+                <Label>Duration (minutes)</Label>
+                <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
+                  {course.duration !== undefined && course.duration !== null
+                    ? formatDuration(course.duration)
+                    : "Calculated automatically from lessons"}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Lesson durations control this value automatically.
+                </p>
               </div>
             </div>
 
