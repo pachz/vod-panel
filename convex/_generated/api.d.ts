@@ -14,6 +14,7 @@ import type * as category from "../category.js";
 import type * as course from "../course.js";
 import type * as http from "../http.js";
 import type * as image from "../image.js";
+import type * as landing from "../landing.js";
 import type * as lesson from "../lesson.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
@@ -37,6 +38,7 @@ declare const fullApi: ApiFromModules<{
   course: typeof course;
   http: typeof http;
   image: typeof image;
+  landing: typeof landing;
   lesson: typeof lesson;
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;

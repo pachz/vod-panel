@@ -54,4 +54,73 @@ http.route({
   }),
 });
 
+const landingSecret = process.env.LANDING_SECRET;
+
+http.route({
+  path: "/landing/courses",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get("limit");
+    const parsedLimit =
+      limitParam === null ? NaN : Number.parseInt(limitParam, 10);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 5), 10)
+      : 10;
+
+    try {
+      const courses = await ctx.runQuery(
+        internal.landing.listLandingCourses,
+        {
+          limit,
+        },
+      );
+
+      return new Response(JSON.stringify({ courses }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing courses endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load courses",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
 export default http;
