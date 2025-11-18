@@ -123,4 +123,79 @@ http.route({
   }),
 });
 
+http.route({
+  pathPrefix: "/landing/course/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      // return new Response(JSON.stringify({ error: "Unauthorized" }), {
+      //   status: 401,
+      //   headers: { "Content-Type": "application/json" },
+      // });
+    }
+
+    const url = new URL(request.url);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const slug = segments.length >= 3 ? segments[segments.length - 1] : null;
+
+    if (!slug) {
+      return new Response(JSON.stringify({ error: "Missing course slug" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const course = await ctx.runQuery(
+        internal.landing.getLandingCourseBySlug,
+        { slug: decodeURIComponent(slug) },
+      );
+
+      if (!course) {
+        return new Response(JSON.stringify({ error: "Course not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify(course), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing course detail endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load course details",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
 export default http;

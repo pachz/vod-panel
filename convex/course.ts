@@ -316,19 +316,17 @@ export const updateCourse = mutation({
       const hasDescriptions =
         validated.description !== undefined &&
         validated.descriptionAr !== undefined;
-      const hasDuration =
-        course.duration !== undefined && course.duration > 0;
       const hasCoverImages =
         typeof course.banner_image_url === "string" &&
         course.banner_image_url.trim().length > 0 &&
         typeof course.thumbnail_image_url === "string" &&
         course.thumbnail_image_url.trim().length > 0;
 
-      if (!hasDescriptions || !hasDuration || !hasCoverImages) {
+      if (!hasDescriptions || !hasCoverImages) {
         throw new ConvexError({
           code: "COURSE_INCOMPLETE",
           message:
-            "Published courses must include English and Arabic descriptions, a duration, and cover images.",
+            "Published courses must include English and Arabic descriptions and cover images.",
         });
       }
     }
