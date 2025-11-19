@@ -96,6 +96,13 @@ export default defineSchema({
       filterFields: ["deletedAt", "course_id", "status"],
     }),
 
+  lessonProgress: defineTable({
+    user_id: v.id("users"),
+    course_id: v.id("courses"),
+    lesson_id: v.id("lessons"),
+    completedAt: v.number(),
+  }).index("by_user_course_lesson", ["user_id", "course_id", "lesson_id"]),
+
   coaches: defineTable({
     name: v.string(),
     name_ar: v.string(),

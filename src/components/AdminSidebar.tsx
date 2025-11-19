@@ -7,6 +7,7 @@ import {
   Users,
   CreditCard,
   UserRound,
+  PanelsTopLeft,
 } from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 import {
@@ -36,6 +37,7 @@ const menuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
+  { title: "Card View", url: "/courses/card", icon: PanelsTopLeft, alpha: true },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Coach", url: "/coach", icon: UserRound },
   { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },

@@ -17,6 +17,7 @@ import type * as http from "../http.js";
 import type * as image from "../image.js";
 import type * as landing from "../landing.js";
 import type * as lesson from "../lesson.js";
+import type * as lessonProgress from "../lessonProgress.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
 import type * as seed from "../seed.js";
@@ -42,6 +43,7 @@ declare const fullApi: ApiFromModules<{
   image: typeof image;
   landing: typeof landing;
   lesson: typeof lesson;
+  lessonProgress: typeof lessonProgress;
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;
   seed: typeof seed;

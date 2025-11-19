@@ -6,7 +6,9 @@ import LoginPage from "./LoginPage";
 import Dashboard from "@/pages/Dashboard";
 import Categories from "@/pages/Categories";
 import Courses from "@/pages/Courses";
+import CourseCards from "@/pages/CourseCards";
 import CourseDetail from "@/pages/CourseDetail";
+import CoursePreview from "@/pages/CoursePreview";
 import Lessons from "@/pages/Lessons";
 import LessonDetail from "@/pages/LessonDetail";
 import NotFound from "@/pages/NotFound";
@@ -139,6 +141,8 @@ const App = () => (
         <Route path="/" element={<Dashboard />} />
         <Route path="/categories" element={<Categories />} />
         <Route path="/courses" element={<Courses />} />
+        <Route path="/courses/card" element={<CourseCards />} />
+        <Route path="/courses/preview/:id" element={<CoursePreview />} />
         <Route path="/courses/:id" element={<CourseDetail />} />
         <Route path="/lessons" element={<Lessons />} />
         <Route path="/lessons/:id" element={<LessonDetail />} />
