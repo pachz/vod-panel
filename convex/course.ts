@@ -188,6 +188,7 @@ export const createCourse = mutation({
       instructor: undefined,
       banner_image_url: undefined,
       thumbnail_image_url: undefined,
+      updatedAt: now,
     });
 
     await ctx.db.patch(categoryId, {
@@ -360,6 +361,7 @@ export const updateCourse = mutation({
       trial_video_url: validated.trialVideoUrl,
       instructor: validated.instructor,
       slug,
+      updatedAt: Date.now(),
     });
 
     await logActivity({
@@ -432,6 +434,7 @@ export const updateCourseImages = mutation({
     }
 
     if (Object.keys(patch).length > 0) {
+      patch.updatedAt = Date.now();
       await ctx.db.patch(id, patch);
     }
 
@@ -476,6 +479,7 @@ export const deleteCourse = mutation({
     const now = Date.now();
     await ctx.db.patch(id, {
       deletedAt: now,
+      updatedAt: now,
     });
 
     const category = await ctx.db.get(course.category_id);

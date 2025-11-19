@@ -55,6 +55,7 @@ export default defineSchema({
     instructor: v.optional(v.string()),
     lesson_count: v.number(),
     createdAt: v.number(),
+    updatedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
   })
     .index("name", ["name", "deletedAt"])

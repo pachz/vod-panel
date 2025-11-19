@@ -2,7 +2,7 @@ import { mutation, query, internalMutation } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 
 import {
   lessonInputSchema,
@@ -12,6 +12,21 @@ import {
 } from "../shared/validation/lesson";
 import { requireUser } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
+
+const touchCourseUpdatedAt = async (
+  ctx: MutationCtx,
+  courseId: Id<"courses">,
+  course?: Doc<"courses"> | null,
+) => {
+  const targetCourse = course ?? (await ctx.db.get(courseId));
+  if (!targetCourse || targetCourse.deletedAt !== undefined) {
+    return;
+  }
+
+  await ctx.db.patch(courseId, {
+    updatedAt: Date.now(),
+  });
+};
 
 const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">) => {
   const lessons = await ctx.db
@@ -29,6 +44,7 @@ const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">)
   await ctx.db.patch(courseId, {
     lesson_count: count,
     duration: totalDuration > 0 ? totalDuration : undefined,
+    updatedAt: Date.now(),
   });
 
   return {
@@ -366,6 +382,8 @@ export const updateLesson = mutation({
       await recalculateLessonCount(ctx, courseId);
     } else if (durationChanged) {
       await recalculateLessonCount(ctx, courseId);
+    } else {
+      await touchCourseUpdatedAt(ctx, courseId, targetCourse);
     }
 
     // Schedule thumbnail fetch if video URL changed and is from Vimeo
@@ -447,6 +465,7 @@ export const updateLessonImages = mutation({
 
     if (Object.keys(patch).length > 0) {
       await ctx.db.patch(id, patch);
+      await touchCourseUpdatedAt(ctx, lesson.course_id);
     }
 
     return {
@@ -539,6 +558,8 @@ export const reorderLessons = mutation({
         priority: i,
       });
     }
+
+    await touchCourseUpdatedAt(ctx, courseId, course);
   },
 });
 
@@ -564,6 +585,8 @@ export const updateLessonImageUrls = internalMutation({
       cover_image_url: coverImageUrl,
       thumbnail_image_url: thumbnailImageUrl,
     });
+
+    await touchCourseUpdatedAt(ctx, lesson.course_id);
   },
 });
 
