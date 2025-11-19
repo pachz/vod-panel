@@ -52,6 +52,7 @@ import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
 import { RichTextarea } from "@/components/RichTextarea";
+import { VideoUrlInput } from "@/components/VideoUrlInput";
 import { courseUpdateSchema } from "../../shared/validation/course";
 
 type CourseDoc = Doc<"courses">;
@@ -496,8 +497,8 @@ const CourseDetail = () => {
     const nextValues: FormValues = {
       name: course.name,
       nameAr: course.name_ar,
-      shortDescription: course.short_description,
-      shortDescriptionAr: course.short_description_ar,
+      shortDescription: course.short_description ?? "",
+      shortDescriptionAr: course.short_description_ar ?? "",
       description: course.description ?? "",
       descriptionAr: course.description_ar ?? "",
       categoryId: course.category_id,
@@ -1151,22 +1152,18 @@ const CourseDetail = () => {
             <Separator />
 
             <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="trialVideoUrl">Trial video URL</Label>
-                <Input
-                  id="trialVideoUrl"
-                  value={formValues.trialVideoUrl}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      trialVideoUrl: event.target.value,
-                    }))
-                  }
-                  placeholder="https://"
-                  type="url"
-                  maxLength={2048}
-                />
-              </div>
+              <VideoUrlInput
+                id="trialVideoUrl"
+                value={formValues.trialVideoUrl}
+                onChange={(value) =>
+                  setFormValues((prev) => ({
+                    ...prev,
+                    trialVideoUrl: value,
+                  }))
+                }
+                placeholder="https://vimeo.com/..."
+                maxLength={2048}
+              />
               <div className="space-y-2">
                 <Label>Duration (minutes)</Label>
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">

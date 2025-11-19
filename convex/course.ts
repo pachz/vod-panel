@@ -122,8 +122,8 @@ export const createCourse = mutation({
   args: {
     name: v.string(),
     nameAr: v.string(),
-    shortDescription: v.string(),
-    shortDescriptionAr: v.string(),
+    shortDescription: v.optional(v.string()),
+    shortDescriptionAr: v.optional(v.string()),
     categoryId: v.id("categories"),
   },
   handler: async (
@@ -321,12 +321,15 @@ export const updateCourse = mutation({
         course.banner_image_url.trim().length > 0 &&
         typeof course.thumbnail_image_url === "string" &&
         course.thumbnail_image_url.trim().length > 0;
+      const hasTrialVideoUrl =
+        validated.trialVideoUrl !== undefined &&
+        validated.trialVideoUrl.trim().length > 0;
 
-      if (!hasDescriptions || !hasCoverImages) {
+      if (!hasDescriptions || !hasCoverImages || !hasTrialVideoUrl) {
         throw new ConvexError({
           code: "COURSE_INCOMPLETE",
           message:
-            "Published courses must include English and Arabic descriptions and cover images.",
+            "Published courses must include English and Arabic descriptions, cover images, and a trial video URL.",
         });
       }
     }

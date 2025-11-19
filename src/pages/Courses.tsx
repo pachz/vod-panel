@@ -24,7 +24,6 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -52,16 +51,12 @@ type CategoryDoc = Doc<"categories">;
 type FormValues = {
   name: string;
   nameAr: string;
-  shortDescription: string;
-  shortDescriptionAr: string;
   categoryId: string;
 };
 
 const initialFormValues: FormValues = {
   name: "",
   nameAr: "",
-  shortDescription: "",
-  shortDescriptionAr: "",
   categoryId: "",
 };
 
@@ -96,73 +91,11 @@ const Courses = () => {
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchInput, setSearchInput] = useState(searchFilter || "");
 
-  const shortDescriptionRef = useRef<HTMLTextAreaElement | null>(null);
-  const shortDescriptionArRef = useRef<HTMLTextAreaElement | null>(null);
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
-
-  const adjustTextareaHeight = useCallback((element: HTMLTextAreaElement | null) => {
-    if (!element) {
-      return;
-    }
-
-    const minHeight = 3 * 24;
-    element.style.minHeight = `${minHeight}px`;
-    element.style.height = "auto";
-
-    const viewportHeight = typeof window !== "undefined" ? window.innerHeight : undefined;
-    const reservedSpace = 420;
-    const availableSpace = viewportHeight
-      ? Math.max(viewportHeight - reservedSpace, minHeight)
-      : undefined;
-    const maxHeight = availableSpace ? Math.max(minHeight, availableSpace / 2) : undefined;
-
-    const desiredHeight = element.scrollHeight;
-
-    if (maxHeight) {
-      const nextHeight = Math.min(desiredHeight, maxHeight);
-      element.style.height = `${nextHeight}px`;
-      element.style.maxHeight = `${maxHeight}px`;
-      element.style.overflowY = desiredHeight > maxHeight ? "auto" : "hidden";
-    } else {
-      element.style.height = `${desiredHeight}px`;
-      element.style.overflowY = "hidden";
-    }
-  }, []);
 
   const resetForm = useCallback(() => {
     setFormValues(() => ({ ...initialFormValues }));
-    requestAnimationFrame(() => {
-      adjustTextareaHeight(shortDescriptionRef.current);
-      adjustTextareaHeight(shortDescriptionArRef.current);
-    });
-  }, [adjustTextareaHeight]);
-
-  useEffect(() => {
-    if (!isDialogOpen) {
-      return;
-    }
-
-    requestAnimationFrame(() => {
-      adjustTextareaHeight(shortDescriptionRef.current);
-      adjustTextareaHeight(shortDescriptionArRef.current);
-    });
-  }, [adjustTextareaHeight, isDialogOpen]);
-
-  useEffect(() => {
-    if (!isDialogOpen) {
-      return;
-    }
-
-    adjustTextareaHeight(shortDescriptionRef.current);
-  }, [adjustTextareaHeight, formValues.shortDescription, isDialogOpen]);
-
-  useEffect(() => {
-    if (!isDialogOpen) {
-      return;
-    }
-
-    adjustTextareaHeight(shortDescriptionArRef.current);
-  }, [adjustTextareaHeight, formValues.shortDescriptionAr, isDialogOpen]);
+  }, []);
 
   // Sync search input with URL param when it changes externally
   useEffect(() => {
@@ -366,7 +299,7 @@ const Courses = () => {
 
     if (!validation.success) {
       // Prioritize required field errors over optional field errors
-      const requiredFieldPaths = ["name", "nameAr", "shortDescription", "shortDescriptionAr", "categoryId"];
+      const requiredFieldPaths = ["name", "nameAr", "categoryId"];
       const errors = validation.error.errors;
       
       // Find first error for a required field, or fall back to first error
@@ -496,45 +429,6 @@ const Courses = () => {
                     </SelectContent>
                   </Select>
                 </div>
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shortDescription">Short Description</Label>
-                <Textarea
-                  id="shortDescription"
-                  name="shortDescription"
-                  value={formValues.shortDescription}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortDescription: event.target.value,
-                    }))
-                  }
-                  onInput={(event) => adjustTextareaHeight(event.currentTarget)}
-                  ref={shortDescriptionRef}
-                  maxLength={512}
-                  rows={3}
-                  className="min-h-[6.75rem] resize-none"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="shortDescriptionAr">Arabic Short Description</Label>
-                <Textarea
-                  id="shortDescriptionAr"
-                  name="shortDescriptionAr"
-                  value={formValues.shortDescriptionAr}
-                  onChange={(event) =>
-                    setFormValues((prev) => ({
-                      ...prev,
-                      shortDescriptionAr: event.target.value,
-                    }))
-                  }
-                  onInput={(event) => adjustTextareaHeight(event.currentTarget)}
-                  ref={shortDescriptionArRef}
-                  maxLength={512}
-                  dir="rtl"
-                  rows={3}
-                  className="min-h-[6.75rem] resize-none text-right"
-                />
               </div>
               <Button
                 type="submit"

@@ -32,20 +32,14 @@ export const courseInputSchema = z.object({
     .trim()
     .min(1, "Arabic name is required.")
     .max(64, "Arabic name must be 64 characters or less."),
-  shortDescription: z
-    .string({
-      required_error: "Short description is required.",
-    })
-    .trim()
-    .min(1, "Short description is required.")
-    .max(512, "Short description must be 512 characters or less."),
-  shortDescriptionAr: z
-    .string({
-      required_error: "Arabic short description is required.",
-    })
-    .trim()
-    .min(1, "Arabic short description is required.")
-    .max(512, "Arabic short description must be 512 characters or less."),
+  shortDescription: optionalTrimmedString(
+    512,
+    "Short description must be 512 characters or less.",
+  ),
+  shortDescriptionAr: optionalTrimmedString(
+    512,
+    "Arabic short description must be 512 characters or less.",
+  ),
   categoryId: z
     .string({
       required_error: "Category is required.",

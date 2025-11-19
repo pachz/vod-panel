@@ -329,9 +329,20 @@ const LessonDetail = () => {
             </p>
           </div>
         </div>
-        <Badge variant={lesson.status === "published" ? "default" : "secondary"}>
-          {statusLabels[lesson.status]}
-        </Badge>
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:gap-3">
+          {lesson.course_id ? (
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => navigate(`/courses/${lesson.course_id}`)}
+            >
+              Back to Course
+            </Button>
+          ) : null}
+          <Badge variant={lesson.status === "published" ? "default" : "secondary"}>
+            {statusLabels[lesson.status]}
+          </Badge>
+        </div>
       </div>
 
       <form onSubmit={handleSubmit} className="space-y-6">

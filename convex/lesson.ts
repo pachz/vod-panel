@@ -22,7 +22,9 @@ const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">)
     .collect();
 
   const count = lessons.length;
-  const totalDuration = lessons.reduce((sum, lesson) => sum + (lesson.duration ?? 0), 0);
+  // Only include published lessons when calculating total duration
+  const publishedLessons = lessons.filter((lesson) => lesson.status === "published");
+  const totalDuration = publishedLessons.reduce((sum, lesson) => sum + (lesson.duration ?? 0), 0);
 
   await ctx.db.patch(courseId, {
     lesson_count: count,
