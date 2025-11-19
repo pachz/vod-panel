@@ -13,6 +13,7 @@ type LandingCourse = {
   categoryNameAr: string;
   durationMinutes: number;
   coverImageUrl: string;
+  updatedAt: number;
 };
 
 type LandingCourseLesson = {
@@ -47,6 +48,7 @@ export const listLandingCourses = internalQuery({
       categoryNameAr: v.string(),
       durationMinutes: v.number(),
       coverImageUrl: v.string(),
+      updatedAt: v.number(),
     }),
   ),
   handler: async (ctx, args): Promise<Array<LandingCourse>> => {
@@ -98,6 +100,7 @@ export const listLandingCourses = internalQuery({
           course.banner_image_url ??
           course.thumbnail_image_url ??
           "",
+        updatedAt: course.updatedAt ?? course.createdAt,
       };
     });
   },
@@ -133,6 +136,7 @@ export const getLandingCourseBySlug = internalQuery({
           durationMinutes: v.number(),
         }),
       ),
+      updatedAt: v.number(),
     }),
   ),
   handler: async (ctx, args): Promise<LandingCourseDetail | null> => {
@@ -181,6 +185,7 @@ export const getLandingCourseBySlug = internalQuery({
       thumbnailImageUrl: course.thumbnail_image_url ?? "",
       instructor: course.instructor ?? "",
       trialVideoUrl: course.trial_video_url ?? "",
+      updatedAt: course.updatedAt ?? course.createdAt,
       lessons: lessons.map((lesson) => ({
         id: lesson._id,
         titleEn: lesson.title,
