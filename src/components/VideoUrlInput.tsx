@@ -14,6 +14,7 @@ interface VideoUrlInputProps {
   placeholder?: string;
   maxLength?: number;
   className?: string;
+  externalError?: string | null;
 }
 
 interface VideoPreview {
@@ -33,6 +34,7 @@ export function VideoUrlInput({
   placeholder = "https://vimeo.com/...",
   maxLength = 2048,
   className,
+  externalError = null,
 }: VideoUrlInputProps) {
   const validateVideoUrl = useAction(api.image.validateVideoUrl);
   const [preview, setPreview] = useState<VideoPreview | null>(null);
@@ -134,6 +136,8 @@ export function VideoUrlInput({
     };
   }, [value, validateVideoUrl]);
 
+  const displayError = externalError ?? error;
+
   return (
     <div className={cn("space-y-2", className)}>
       <Label htmlFor={id}>Video URL</Label>
@@ -147,7 +151,7 @@ export function VideoUrlInput({
             type="url"
             maxLength={maxLength}
             className={cn(
-              error && "border-destructive focus-visible:ring-destructive",
+              displayError && "border-destructive focus-visible:ring-destructive",
               isValidating && "pr-10"
             )}
           />
@@ -158,14 +162,14 @@ export function VideoUrlInput({
           )}
         </div>
 
-        {error && (
+        {displayError && (
           <Alert variant="destructive">
             <AlertCircle className="h-4 w-4" />
-            <AlertDescription>{error}</AlertDescription>
+            <AlertDescription>{displayError}</AlertDescription>
           </Alert>
         )}
 
-        {preview && !error && (
+        {preview && !displayError && (
           <div className="space-y-2 rounded-md border border-border bg-muted/30 p-3">
             {preview.title && (
               <div className="text-sm font-medium text-foreground">{preview.title}</div>

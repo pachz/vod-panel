@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { ArrowLeft, Trash2 } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -84,6 +84,7 @@ const LessonDetail = () => {
   const courses = useQuery(api.course.listCourses, {});
 
   const updateLesson = useMutation(api.lesson.updateLesson);
+  const validateVideoUrl = useAction(api.image.validateVideoUrl);
   const deleteLesson = useMutation(api.lesson.deleteLesson);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
@@ -91,6 +92,7 @@ const LessonDetail = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
+  const [videoUrlServerError, setVideoUrlServerError] = useState<string | null>(null);
 
   const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
   const isLoading = lesson === undefined || courses === undefined;
@@ -154,6 +156,14 @@ const LessonDetail = () => {
   };
 
 
+  const handleVideoUrlChange = (value: string) => {
+    setVideoUrlServerError(null);
+    setFormValues((prev) => ({
+      ...prev,
+      videoUrl: value,
+    }));
+  };
+
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -199,7 +209,25 @@ const LessonDetail = () => {
       videoUrl,
     } = validation.data;
 
-    setIsSaving(true);
+    const trimmedVideoUrl = videoUrl?.trim();
+    const shouldValidateVideoUrl = Boolean(trimmedVideoUrl);
+
+    if (shouldValidateVideoUrl && trimmedVideoUrl) {
+      setIsSaving(true);
+
+      try {
+        await validateVideoUrl({ videoUrl: trimmedVideoUrl });
+        setVideoUrlServerError(null);
+      } catch (validationError) {
+        const message = getErrorMessage(validationError);
+        setVideoUrlServerError(message);
+        toast.error(message);
+        setIsSaving(false);
+        return;
+      }
+    } else {
+      setIsSaving(true);
+    }
 
     try {
       await updateLesson({
@@ -239,6 +267,7 @@ const LessonDetail = () => {
       };
       setInitialValues(savedValues);
       setFormValues(savedValues);
+      setVideoUrlServerError(null);
     } catch (error) {
       console.error(error);
       toast.error(getErrorMessage(error));
@@ -506,12 +535,8 @@ const LessonDetail = () => {
             <VideoUrlInput
               id="videoUrl"
               value={formValues.videoUrl}
-              onChange={(value) =>
-                setFormValues((prev) => ({
-                  ...prev,
-                  videoUrl: value,
-                }))
-              }
+              onChange={handleVideoUrlChange}
+              externalError={videoUrlServerError}
               placeholder="https://vimeo.com/..."
               maxLength={2048}
             />
