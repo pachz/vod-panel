@@ -143,10 +143,10 @@ http.route({
       request.headers.get("LANDING_SECRET");
 
     if (!headerSecret || headerSecret !== landingSecret) {
-      // return new Response(JSON.stringify({ error: "Unauthorized" }), {
-      //   status: 401,
-      //   headers: { "Content-Type": "application/json" },
-      // });
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
     }
 
     const url = new URL(request.url);
@@ -173,10 +173,12 @@ http.route({
       }
 
       const coach = await ctx.runQuery(internal.landing.getFeaturedCoach, {});
+      const paymentSettings = await ctx.runQuery(internal.paymentInternal.getPaymentSettings, {});
 
       const body = {
         ...course,
         coach: coach ?? null,
+        pricing: paymentSettings ?? null,
       };
 
       return new Response(JSON.stringify(body), {
