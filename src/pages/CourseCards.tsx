@@ -97,7 +97,7 @@ const CourseCards = () => {
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold tracking-tight">Course Card View</h1>
         <p className="text-muted-foreground">
-          Browse all published courses in a marketing-friendly layout.
+          Browse all purchased courses
         </p>
       </div>
 
