@@ -161,10 +161,9 @@ http.route({
     }
 
     try {
-      const course = await ctx.runQuery(
-        internal.landing.getLandingCourseBySlug,
-        { slug: decodeURIComponent(slug) },
-      );
+      const course = await ctx.runQuery(internal.landing.getLandingCourseBySlug, {
+        slug: decodeURIComponent(slug),
+      });
 
       if (!course) {
         return new Response(JSON.stringify({ error: "Course not found" }), {
@@ -173,7 +172,14 @@ http.route({
         });
       }
 
-      return new Response(JSON.stringify(course), {
+      const coach = await ctx.runQuery(internal.landing.getFeaturedCoach, {});
+
+      const body = {
+        ...course,
+        coach: coach ?? null,
+      };
+
+      return new Response(JSON.stringify(body), {
         status: 200,
         headers: {
           "Content-Type": "application/json",

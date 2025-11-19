@@ -96,6 +96,20 @@ export default defineSchema({
       filterFields: ["deletedAt", "course_id", "status"],
     }),
 
+  coaches: defineTable({
+    name: v.string(),
+    name_ar: v.string(),
+    expertise: v.string(),
+    expertise_ar: v.string(),
+    description: v.string(),
+    description_ar: v.string(),
+    rating: v.number(),
+    profile_image_url: v.string(),
+    profile_thumbnail_url: v.optional(v.string()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  }),
+
   activityLogs: defineTable({
     entityType: v.union(
       v.literal("category"),

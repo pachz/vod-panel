@@ -1,4 +1,13 @@
-import { LayoutDashboard, FolderTree, BookOpen, GraduationCap, PlayCircle, Users, CreditCard } from "lucide-react";
+import {
+  LayoutDashboard,
+  FolderTree,
+  BookOpen,
+  GraduationCap,
+  PlayCircle,
+  Users,
+  CreditCard,
+  UserRound,
+} from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 import {
   Sidebar,
@@ -28,6 +37,7 @@ const menuItems: MenuItem[] = [
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
+  { title: "Coach", url: "/coach", icon: UserRound },
   { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
   { title: "Users", url: "/users", icon: Users, alpha: true },
   { title: "Payments", url: "/payments", icon: CreditCard, alpha: true },

@@ -32,6 +32,19 @@ type LandingCourseDetail = LandingCourse & {
   lessons: Array<LandingCourseLesson>;
 };
 
+type LandingCoachProfile = {
+  nameEn: string;
+  nameAr: string;
+  expertiseEn: string;
+  expertiseAr: string;
+  descriptionEn: string;
+  descriptionAr: string;
+  rating: number;
+  profileImageUrl: string;
+  profileThumbnailUrl: string | null;
+  lastUpdatedAt: number;
+};
+
 export const listLandingCourses = internalQuery({
   args: {
     limit: v.number(),
@@ -192,6 +205,44 @@ export const getLandingCourseBySlug = internalQuery({
         titleAr: lesson.title_ar,
         durationMinutes: lesson.duration ?? 0,
       })),
+    };
+  },
+});
+
+export const getFeaturedCoach = internalQuery({
+  args: {},
+  returns: v.union(
+    v.null(),
+    v.object({
+      nameEn: v.string(),
+      nameAr: v.string(),
+      expertiseEn: v.string(),
+      expertiseAr: v.string(),
+      descriptionEn: v.string(),
+      descriptionAr: v.string(),
+      rating: v.number(),
+      profileImageUrl: v.string(),
+      profileThumbnailUrl: v.union(v.null(), v.string()),
+      lastUpdatedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx): Promise<LandingCoachProfile | null> => {
+    const [coach] = await ctx.db.query("coaches").take(1);
+    if (!coach) {
+      return null;
+    }
+
+    return {
+      nameEn: coach.name,
+      nameAr: coach.name_ar,
+      expertiseEn: coach.expertise,
+      expertiseAr: coach.expertise_ar,
+      descriptionEn: coach.description,
+      descriptionAr: coach.description_ar,
+      rating: coach.rating,
+      profileImageUrl: coach.profile_image_url,
+      profileThumbnailUrl: coach.profile_thumbnail_url ?? null,
+      lastUpdatedAt: coach.updatedAt,
     };
   },
 });

@@ -11,6 +11,7 @@
 import type * as activityLog from "../activityLog.js";
 import type * as auth from "../auth.js";
 import type * as category from "../category.js";
+import type * as coach from "../coach.js";
 import type * as course from "../course.js";
 import type * as http from "../http.js";
 import type * as image from "../image.js";
@@ -35,6 +36,7 @@ declare const fullApi: ApiFromModules<{
   activityLog: typeof activityLog;
   auth: typeof auth;
   category: typeof category;
+  coach: typeof coach;
   course: typeof course;
   http: typeof http;
   image: typeof image;
