@@ -96,8 +96,8 @@ export const listLessons = query({
         })
         .collect();
 
-      // Return results sorted by creation date (most recent first)
-      return lessons.sort((a, b) => b.createdAt - a.createdAt);
+      // Return results sorted by priority (ascending order)
+      return lessons.sort((a, b) => a.priority - b.priority);
     }
 
     // No search - use regular index queries
@@ -124,7 +124,8 @@ export const listLessons = query({
         .collect();
     }
 
-    return lessons.sort((a, b) => b.createdAt - a.createdAt);
+    // Return results sorted by priority (ascending order)
+    return lessons.sort((a, b) => a.priority - b.priority);
   },
 });
 
