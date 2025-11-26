@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useNavigate, useParams } from "react-router-dom";
+import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
   ChevronLeft,
@@ -161,6 +161,7 @@ const CoursePreview = () => {
   );
   const setLessonCompletion = useMutation(api.lessonProgress.setLessonCompletion);
 
+  const [searchParams, setSearchParams] = useSearchParams();
   const [activeLessonId, setActiveLessonId] = useState<Id<"lessons"> | null>(null);
   const [isTogglingCompletion, setIsTogglingCompletion] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
@@ -190,16 +191,55 @@ const CoursePreview = () => {
     return [...lessons].sort((a, b) => a.priority - b.priority);
   }, [lessons]);
 
+  const searchLessonId = searchParams.get("lesson");
+  const queryLessonId = (searchLessonId as Id<"lessons"> | null) ?? null;
+
   useEffect(() => {
     if (lessonList.length === 0) {
       setActiveLessonId(null);
       return;
     }
 
-    if (!activeLessonId || !lessonList.some((lesson) => lesson._id === activeLessonId)) {
-      setActiveLessonId(lessonList[0]._id);
+    if (queryLessonId && lessonList.some((lesson) => lesson._id === queryLessonId)) {
+      setActiveLessonId((prev) => {
+        if (prev === queryLessonId) {
+          return prev;
+        }
+        return queryLessonId;
+      });
+      return;
     }
-  }, [activeLessonId, lessonList]);
+
+    setActiveLessonId((prev) => {
+      if (!prev || !lessonList.some((lesson) => lesson._id === prev)) {
+        return lessonList[0]._id;
+      }
+      return prev;
+    });
+  }, [lessonList, queryLessonId]);
+
+  useEffect(() => {
+    if (lessonList.length === 0) {
+      return;
+    }
+
+    if (!activeLessonId) {
+      if (searchLessonId) {
+        const nextParams = new URLSearchParams(searchParams);
+        nextParams.delete("lesson");
+        setSearchParams(nextParams, { replace: true });
+      }
+      return;
+    }
+
+    if (searchLessonId === activeLessonId) {
+      return;
+    }
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set("lesson", activeLessonId);
+    setSearchParams(nextParams, { replace: true });
+  }, [activeLessonId, lessonList.length, searchLessonId, searchParams, setSearchParams]);
 
   const progressData: CourseProgress = progress ?? DEFAULT_PROGRESS;
 
@@ -336,9 +376,6 @@ const CoursePreview = () => {
                     <CreditCard className="h-4 w-4" />
                   )}
                   Subscribe & Unlock
-                </Button>
-                <Button variant="secondary" className="w-full justify-center" onClick={() => navigate("/payments")}>
-                  View subscription options
                 </Button>
                 <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => navigate("/courses/card")}>
                   Back to courses
