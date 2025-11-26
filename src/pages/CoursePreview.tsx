@@ -1,6 +1,17 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { CheckCircle2, ChevronLeft, ChevronRight, Circle, Clock, Loader2, PlayCircle, Video, ArrowLeft } from "lucide-react";
+import {
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  Circle,
+  Clock,
+  Loader2,
+  PlayCircle,
+  Video,
+  ArrowLeft,
+  Lock,
+} from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
@@ -26,6 +37,8 @@ const DEFAULT_PROGRESS: CourseProgress = {
   completedCount: 0,
   lastCompletedAt: null,
 };
+
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
 const formatDuration = (minutes: number | undefined | null) => {
   if (minutes === undefined || minutes === null) {
@@ -117,13 +130,18 @@ const CoursePreview = () => {
   const navigate = useNavigate();
 
   const course = useQuery(api.course.getCourse, courseId ? { id: courseId } : undefined);
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const subscription = useQuery(api.paymentInternal.getMySubscription);
+  const isAdmin = currentUser?.isGod ?? false;
+  const hasActiveSubscription = subscription ? ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) : false;
+  const canAccessProtectedContent = isAdmin || hasActiveSubscription;
   const lessons = useQuery(
     api.lesson.listLessons,
-    courseId ? { courseId, status: "published" } : undefined,
+    courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
   );
   const progress = useQuery(
     api.lessonProgress.getCourseProgress,
-    courseId ? { courseId } : undefined,
+    courseId && canAccessProtectedContent ? { courseId } : undefined,
   );
   const setLessonCompletion = useMutation(api.lessonProgress.setLessonCompletion);
 
@@ -162,10 +180,18 @@ const CoursePreview = () => {
     );
   }
 
-  if (course === undefined || lessons === undefined || progress === undefined) {
+  if (course === undefined) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-muted-foreground">Loading course experience…</p>
+      </div>
+    );
+  }
+
+  if (!isAdmin && subscription === undefined) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">Checking subscription status…</p>
       </div>
     );
   }
@@ -182,6 +208,44 @@ const CoursePreview = () => {
             Back to card view
           </Button>
         </div>
+      </div>
+    );
+  }
+
+  if (!canAccessProtectedContent) {
+    return (
+      <div className="flex h-full items-center justify-center p-6">
+        <Card className="w-full max-w-xl text-center">
+          <CardHeader className="space-y-4">
+            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
+              <Lock className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <CardTitle className="text-2xl">
+              Unlock {course.name}
+            </CardTitle>
+            <p className="text-sm text-muted-foreground">
+              {subscription
+                ? `Your subscription is currently marked as ${subscription.status}. Activate it to view the lessons for this course.`
+                : "An active subscription is required to access detailed lessons."}
+            </p>
+          </CardHeader>
+          <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
+            <Button variant="cta" onClick={() => navigate("/payments")}>
+              View subscription status
+            </Button>
+            <Button variant="outline" onClick={() => navigate("/courses/card")}>
+              Back to courses
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  if (lessons === undefined || progress === undefined) {
+    return (
+      <div className="flex h-full items-center justify-center">
+        <p className="text-muted-foreground">Loading course experience…</p>
       </div>
     );
   }

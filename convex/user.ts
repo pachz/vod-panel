@@ -281,7 +281,9 @@ export const updateUser = mutation({
     isAdmin: v.optional(v.boolean()),
   },
   handler: async (ctx, { id, name, email, phone, isAdmin }) => {
-    await requireUser(ctx, { requireGod: true });
+    const { user: currentUser } = (await requireUser(ctx, {
+      requireGod: true,
+    })) as { identity: any; user: any };
 
     const user = await ctx.db.get(id);
 
@@ -319,6 +321,14 @@ export const updateUser = mutation({
       // For now, we'll just update the users table
     }
 
+    // Prevent admins from changing their own role
+    if (user._id === currentUser._id && validated.isAdmin !== user.isGod) {
+      throw new ConvexError({
+        code: "CANNOT_CHANGE_SELF_ROLE",
+        message: "You cannot change your own administrator status.",
+      });
+    }
+
     await ctx.db.patch(id, {
       name: validated.name,
       email: validated.email,
@@ -332,6 +342,50 @@ export const updateUser = mutation({
       action: "updated",
       entityId: id,
       entityName: validated.name || validated.email,
+    });
+  },
+});
+
+export const updateUserRole = mutation({
+  args: {
+    id: v.id("users"),
+    isAdmin: v.boolean(),
+  },
+  handler: async (ctx, { id, isAdmin }) => {
+    const { user: currentUser } = (await requireUser(ctx, {
+      requireGod: true,
+    })) as { identity: any; user: any };
+
+    if (currentUser._id === id) {
+      throw new ConvexError({
+        code: "CANNOT_CHANGE_SELF_ROLE",
+        message: "You cannot change your own administrator status.",
+      });
+    }
+
+    const user = await ctx.db.get(id);
+
+    if (!user || user.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+
+    if (!!user.isGod === isAdmin) {
+      return;
+    }
+
+    await ctx.db.patch(id, {
+      isGod: isAdmin,
+    });
+
+    await logActivity({
+      ctx,
+      entityType: "user",
+      action: "updated",
+      entityId: id,
+      entityName: user.name || user.email || "User",
     });
   },
 });

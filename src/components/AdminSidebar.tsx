@@ -10,6 +10,8 @@ import {
   PanelsTopLeft,
 } from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
 import {
   Sidebar,
   SidebarContent,
@@ -33,11 +35,11 @@ type MenuItem = {
   alpha?: boolean;
 };
 
-const menuItems: MenuItem[] = [
+const adminMenuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
-  { title: "Card View", url: "/courses/card", icon: PanelsTopLeft, alpha: true },
+  { title: "Card View", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Coach", url: "/coach", icon: UserRound },
   { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
@@ -45,10 +47,20 @@ const menuItems: MenuItem[] = [
   { title: "Payments", url: "/payments", icon: CreditCard, alpha: true },
 ];
 
+const memberMenuItems: MenuItem[] = [
+  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Card View", url: "/courses/card", icon: PanelsTopLeft },
+  { title: "Subscription", url: "/payments", icon: CreditCard },
+];
+
 export function AdminSidebar() {
   const { state } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const isAdmin = currentUser?.isGod ?? false;
+  const isLoadingUser = currentUser === undefined;
+  const menuItems = isLoadingUser ? memberMenuItems : isAdmin ? adminMenuItems : memberMenuItems;
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none bg-transparent">

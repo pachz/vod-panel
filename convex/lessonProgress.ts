@@ -19,12 +19,23 @@ const getUserIdOrThrow = async (ctx: QueryCtx | MutationCtx) => {
   return userId as Id<"users">;
 };
 
+const emptyProgress = {
+  completedLessonIds: [] as Id<"lessons">[],
+  completedCount: 0,
+  lastCompletedAt: null as number | null,
+};
+
 export const getCourseProgress = query({
   args: {
-    courseId: v.id("courses"),
+    courseId: v.optional(v.id("courses")),
   },
   handler: async (ctx, { courseId }) => {
     await requireUser(ctx);
+
+    if (!courseId) {
+      return emptyProgress;
+    }
+
     const userId = await getUserIdOrThrow(ctx);
 
     const completions = await ctx.db
@@ -34,15 +45,16 @@ export const getCourseProgress = query({
       )
       .collect();
 
+    if (completions.length === 0) {
+      return emptyProgress;
+    }
+
     const completedLessonIds = completions.map((doc) => doc.lesson_id);
 
     return {
       completedLessonIds,
       completedCount: completedLessonIds.length,
-      lastCompletedAt:
-        completions.length > 0
-          ? Math.max(...completions.map((doc) => doc.completedAt))
-          : null,
+      lastCompletedAt: Math.max(...completions.map((doc) => doc.completedAt)),
     };
   },
 });

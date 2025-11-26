@@ -1,6 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { FolderTree, BookOpen, GraduationCap, TrendingUp } from "lucide-react";
+import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 
@@ -62,7 +63,16 @@ const formatActivityAction = (entityType: string, action: string): string => {
 };
 
 const Dashboard = () => {
-  const activityLogs = useQuery(api.activityLog.getActivityLogs, { limit: 5 });
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const canSeeActivity = currentUser?.isGod ?? false;
+  const activityLogs = useQuery(
+    api.activityLog.getActivityLogs,
+    canSeeActivity ? { limit: 5 } : undefined,
+  );
+  const insightsGridCols = useMemo(
+    () => (canSeeActivity ? "md:grid-cols-2" : "md:grid-cols-1"),
+    [canSeeActivity],
+  );
 
   return (
     <div className="relative z-10 space-y-12 py-4">
@@ -94,52 +104,54 @@ const Dashboard = () => {
         ))}
       </div>
 
-      <div className="grid gap-8 md:grid-cols-2">
-        <Card className="card-elevated">
-          <CardHeader className="pb-4">
-            <CardTitle className="text-2xl flex items-center gap-2">
-              Recent Activity
-              <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
-                Alpha
-              </Badge>
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="space-y-6">
-              {activityLogs === undefined ? (
-                <div className="text-sm text-muted-foreground">Loading...</div>
-              ) : activityLogs.length === 0 ? (
-                <div className="text-sm text-muted-foreground">No activity yet</div>
-              ) : (
-                activityLogs.map((log) => (
-                  <div
-                    key={log._id}
-                    className="flex items-start gap-4 pb-6 border-b border-border/50 last:border-0 last:pb-0"
-                  >
-                    <div className="h-3 w-3 rounded-full bg-gradient-to-br from-primary to-primary-glow mt-1 shadow-md shadow-primary/50" />
-                    <div className="flex-1 space-y-1">
-                      <p className="text-sm font-semibold">
-                        {formatActivityAction(log.entityType, log.action)}
-                      </p>
-                      <p className="text-sm text-muted-foreground">{log.entityName}</p>
-                      <div className="flex items-center gap-2">
-                        <p className="text-xs text-muted-foreground/80">
-                          {formatTimeAgo(log.timestamp)}
+      <div className={`grid gap-8 ${insightsGridCols}`}>
+        {canSeeActivity && (
+          <Card className="card-elevated">
+            <CardHeader className="pb-4">
+              <CardTitle className="text-2xl flex items-center gap-2">
+                Recent Activity
+                <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
+                  Alpha
+                </Badge>
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <div className="space-y-6">
+                {activityLogs === undefined ? (
+                  <div className="text-sm text-muted-foreground">Loading...</div>
+                ) : activityLogs.length === 0 ? (
+                  <div className="text-sm text-muted-foreground">No activity yet</div>
+                ) : (
+                  activityLogs.map((log) => (
+                    <div
+                      key={log._id}
+                      className="flex items-start gap-4 pb-6 border-b border-border/50 last:border-0 last:pb-0"
+                    >
+                      <div className="h-3 w-3 rounded-full bg-gradient-to-br from-primary to-primary-glow mt-1 shadow-md shadow-primary/50" />
+                      <div className="flex-1 space-y-1">
+                        <p className="text-sm font-semibold">
+                          {formatActivityAction(log.entityType, log.action)}
                         </p>
-                        {log.userName && (
-                          <>
-                            <span className="text-xs text-muted-foreground/60">•</span>
-                            <p className="text-xs text-muted-foreground/80">by {log.userName}</p>
-                          </>
-                        )}
+                        <p className="text-sm text-muted-foreground">{log.entityName}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground/80">
+                            {formatTimeAgo(log.timestamp)}
+                          </p>
+                          {log.userName && (
+                            <>
+                              <span className="text-xs text-muted-foreground/60">•</span>
+                              <p className="text-xs text-muted-foreground/80">by {log.userName}</p>
+                            </>
+                          )}
+                        </div>
                       </div>
                     </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </CardContent>
-        </Card>
+                  ))
+                )}
+              </div>
+            </CardContent>
+          </Card>
+        )}
 
         <Card className="card-elevated">
           <CardHeader className="pb-4">

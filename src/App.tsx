@@ -1,5 +1,5 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useQuery } from "convex/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import LoginPage from "./LoginPage";
@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { UserProfile } from "@/components/UserProfile";
+import { api } from "../convex/_generated/api";
 
 type LocationState = {
   from?: {
@@ -66,6 +67,21 @@ const PrivateRoute = () => {
         state={{ from: location }}
       />
     );
+  }
+
+  return <Outlet />;
+};
+
+const AdminRoute = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const location = useLocation();
+
+  if (currentUser === undefined) {
+    return <LoadingScreen />;
+  }
+
+  if (!currentUser?.isGod) {
+    return <Navigate to="/" replace state={{ from: location }} />;
   }
 
   return <Outlet />;
@@ -139,17 +155,19 @@ const App = () => (
     <Route element={<PrivateRoute />}>
       <Route element={<DashboardProviders />}>
         <Route path="/" element={<Dashboard />} />
-        <Route path="/categories" element={<Categories />} />
-        <Route path="/courses" element={<Courses />} />
         <Route path="/courses/card" element={<CourseCards />} />
         <Route path="/courses/preview/:id" element={<CoursePreview />} />
-        <Route path="/courses/:id" element={<CourseDetail />} />
-        <Route path="/lessons" element={<Lessons />} />
-        <Route path="/lessons/:id" element={<LessonDetail />} />
-        <Route path="/video-panel" element={<VideoPanel />} />
-        <Route path="/coach" element={<Coach />} />
-        <Route path="/users" element={<Users />} />
         <Route path="/payments" element={<Payments />} />
+        <Route element={<AdminRoute />}>
+          <Route path="/categories" element={<Categories />} />
+          <Route path="/courses" element={<Courses />} />
+          <Route path="/courses/:id" element={<CourseDetail />} />
+          <Route path="/lessons" element={<Lessons />} />
+          <Route path="/lessons/:id" element={<LessonDetail />} />
+          <Route path="/video-panel" element={<VideoPanel />} />
+          <Route path="/coach" element={<Coach />} />
+          <Route path="/users" element={<Users />} />
+        </Route>
         <Route path="*" element={<NotFound />} />
       </Route>
     </Route>

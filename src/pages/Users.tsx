@@ -61,8 +61,10 @@ const initialFormValues: FormValues = {
 
 const Users = () => {
   const users = useQuery(api.user.listUsers);
+  const currentUser = useQuery(api.user.getCurrentUser);
   const createUser = useAction(api.user.createUser);
   const updateUser = useMutation(api.user.updateUser);
+  const updateUserRole = useMutation(api.user.updateUserRole);
   const updateUserPassword = useAction(api.user.updateUserPassword);
   const deleteUser = useMutation(api.user.deleteUser);
 
@@ -78,6 +80,7 @@ const Users = () => {
   const [passwordFormValues, setPasswordFormValues] = useState<PasswordFormValues>({
     password: "",
   });
+  const [roleUpdating, setRoleUpdating] = useState<Record<string, boolean>>({});
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -107,7 +110,21 @@ const Users = () => {
 
   const userList = useMemo<UserDoc[]>(() => users ?? [], [users]);
   const isLoading = users === undefined;
+  const adminUsers = useMemo(
+    () => userList.filter((user) => user.isGod),
+    [userList],
+  );
+  const regularUsers = useMemo(
+    () => userList.filter((user) => !user.isGod),
+    [userList],
+  );
+  const editingOwnAccount = useMemo(
+    () => (editingUser && currentUser ? editingUser._id === currentUser._id : false),
+    [editingUser, currentUser],
+  );
   const userName = userToDelete?.name ?? userToDelete?.email ?? "this user";
+  const isCurrentUser = (user: UserDoc | null | undefined) =>
+    Boolean(user && currentUser?._id && currentUser._id === user._id);
 
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -152,7 +169,7 @@ const Users = () => {
           name: validated.name,
           email: validated.email,
           phone: validated.phone,
-          isAdmin: validated.isAdmin,
+          isAdmin: editingOwnAccount ? editingUser.isGod ?? false : validated.isAdmin,
         });
         toast.success("User updated successfully");
       } else {
@@ -235,6 +252,41 @@ const Users = () => {
       toast.error(getErrorMessage(error));
     } finally {
       setIsDeleting(false);
+    }
+  };
+
+  const handleRoleToggle = async (user: UserDoc) => {
+    if (isCurrentUser(user)) {
+      toast.error("You cannot change your own administrator status.");
+      return;
+    }
+
+    const label = user.name ?? user.email ?? "User";
+
+    setRoleUpdating((prev) => ({
+      ...prev,
+      [user._id]: true,
+    }));
+
+    try {
+      await updateUserRole({
+        id: user._id,
+        isAdmin: !user.isGod,
+      });
+      toast.success(
+        user.isGod
+          ? `${label} is now a regular user`
+          : `${label} is now an administrator`,
+      );
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setRoleUpdating((prev) => {
+        const next = { ...prev };
+        delete next[user._id];
+        return next;
+      });
     }
   };
 
@@ -339,6 +391,7 @@ const Users = () => {
                 <Switch
                   id="isAdmin"
                   checked={formValues.isAdmin}
+                  disabled={editingOwnAccount}
                   onCheckedChange={(checked) =>
                     setFormValues((prev) => ({ ...prev, isAdmin: checked }))
                   }
@@ -347,6 +400,11 @@ const Users = () => {
                   Administrator (Full Access)
                 </Label>
               </div>
+              {editingOwnAccount && (
+                <p className="text-xs text-muted-foreground">
+                  You cannot change your own administrator status.
+                </p>
+              )}
               <Button
                 type="submit"
                 variant="cta"
@@ -360,97 +418,134 @@ const Users = () => {
         </Dialog>
       </div>
 
-      <div className="rounded-lg border bg-card">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Name</TableHead>
-              <TableHead>Email</TableHead>
-              <TableHead>Phone</TableHead>
-              <TableHead>Role</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {isLoading ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    Loading users…
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : userList.length === 0 ? (
-              <TableRow>
-                <TableCell colSpan={6}>
-                  <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                    No users yet. Create your first user to get started.
-                  </div>
-                </TableCell>
-              </TableRow>
-            ) : (
-              userList.map((user) => (
-                <TableRow key={user._id}>
-                  <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
-                  <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
-                  <TableCell>
-                    {user.isGod ? (
-                      <Badge variant="default">Admin</Badge>
-                    ) : (
-                      <Badge variant="secondary">User</Badge>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    {user.emailVerificationTime ? (
-                      <Badge variant="outline">Verified</Badge>
-                    ) : (
-                      <Badge variant="outline" className="opacity-50">
-                        Unverified
-                      </Badge>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="flex justify-end gap-2">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setEditingUser(user);
-                          setIsDialogOpen(true);
-                        }}
-                        title="Edit user"
-                      >
-                        <Pencil className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => {
-                          setUserToUpdatePassword(user);
-                          setIsPasswordDialogOpen(true);
-                        }}
-                        title="Change password"
-                      >
-                        <Lock className="h-4 w-4" />
-                      </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        onClick={() => setUserToDelete(user)}
-                        title="Delete user"
-                      >
-                        <Trash2 className="h-4 w-4 text-destructive" />
-                      </Button>
-                    </div>
-                  </TableCell>
+      {[
+        {
+          title: "Administrators",
+          description: "Members with full access to the panel",
+          data: adminUsers,
+          emptyState: "No administrators yet.",
+        },
+        {
+          title: "Users",
+          description: "Standard accounts with limited access",
+          data: regularUsers,
+          emptyState: "No users yet. Create your first user to get started.",
+        },
+      ].map((section) => (
+        <div className="space-y-4" key={section.title}>
+          <div>
+            <h2 className="text-2xl font-semibold">{section.title}</h2>
+            <p className="text-sm text-muted-foreground">{section.description}</p>
+          </div>
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Role</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
-              ))
-            )}
-          </TableBody>
-        </Table>
-      </div>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                        Loading users…
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : section.data.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={6}>
+                      <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                        {section.emptyState}
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  section.data.map((user) => {
+                    const roleButtonLabel = roleUpdating[user._id]
+                      ? "Updating…"
+                      : user.isGod
+                        ? "Make User"
+                        : "Make Admin";
+
+                    return (
+                      <TableRow key={user._id}>
+                        <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
+                        <TableCell>
+                          {user.isGod ? (
+                            <Badge variant="default">Admin</Badge>
+                          ) : (
+                            <Badge variant="secondary">User</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {user.emailVerificationTime ? (
+                            <Badge variant="outline">Verified</Badge>
+                          ) : (
+                            <Badge variant="outline" className="opacity-50">
+                              Unverified
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRoleToggle(user)}
+                              disabled={roleUpdating[user._id] || isCurrentUser(user)}
+                            >
+                              {roleButtonLabel}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingUser(user);
+                                setIsDialogOpen(true);
+                              }}
+                              title="Edit user"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setUserToUpdatePassword(user);
+                                setIsPasswordDialogOpen(true);
+                              }}
+                              title="Change password"
+                            >
+                              <Lock className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setUserToDelete(user)}
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </div>
+      ))}
 
       {/* Password Update Dialog */}
       <Dialog
