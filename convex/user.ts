@@ -201,6 +201,8 @@ export const createUserRecord = internalMutation({
     isAdmin: v.boolean(),
   },
   handler: async (ctx, args) => {
+    const phone = args.phone && args.phone.trim() ? args.phone.trim() : undefined;
+
     // Check if user with this email already exists
     const allUsers = await ctx.db
       .query("users")
@@ -210,17 +212,31 @@ export const createUserRecord = internalMutation({
     const existing = allUsers.find((u) => !u.deletedAt);
 
     if (existing) {
-      throw new ConvexError({
-        code: "USER_EXISTS",
-        message: "A user with this email already exists.",
+      await ctx.db.patch(existing._id, {
+        name: args.name,
+        email: args.email,
+        phone,
+        isGod: args.isAdmin,
+        emailVerificationTime: existing.emailVerificationTime ?? Date.now(),
+        deletedAt: undefined,
       });
+
+      await logActivity({
+        ctx,
+        entityType: "user",
+        action: "created",
+        entityId: existing._id,
+        entityName: args.name || args.email,
+      });
+
+      return existing._id;
     }
 
     // Create user in users table
     const userId = await ctx.db.insert("users", {
       name: args.name,
       email: args.email,
-      phone: args.phone && args.phone.trim() ? args.phone.trim() : undefined,
+      phone,
       isGod: args.isAdmin,
       emailVerificationTime: Date.now(), // Auto-verify for admin-created users
     });
