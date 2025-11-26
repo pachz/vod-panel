@@ -9,6 +9,8 @@ type LandingCourse = {
   titleAr: string;
   descriptionEn: string;
   descriptionAr: string;
+  shortDescriptionEn: string;
+  shortDescriptionAr: string;
   categoryNameEn: string;
   categoryNameAr: string;
   durationMinutes: number;
@@ -57,6 +59,8 @@ export const listLandingCourses = internalQuery({
       titleAr: v.string(),
       descriptionEn: v.string(),
       descriptionAr: v.string(),
+      shortDescriptionEn: v.string(),
+      shortDescriptionAr: v.string(),
       categoryNameEn: v.string(),
       categoryNameAr: v.string(),
       durationMinutes: v.number(),
@@ -106,6 +110,8 @@ export const listLandingCourses = internalQuery({
         titleAr: course.name_ar,
         descriptionEn: course.description ?? course.short_description ?? "",
         descriptionAr: course.description_ar ?? course.short_description_ar ?? "",
+        shortDescriptionEn: course.short_description ?? "",
+        shortDescriptionAr: course.short_description_ar ?? "",
         categoryNameEn: category?.name ?? "",
         categoryNameAr: category?.name_ar ?? "",
         durationMinutes: course.duration ?? 0,
