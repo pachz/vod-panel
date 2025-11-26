@@ -134,6 +134,22 @@ export const checkAdmin = internalQuery({
   },
 });
 
+// Internal query to get user by email
+export const getUserByEmail = internalQuery({
+  args: {
+    email: v.string(),
+  },
+  handler: async (ctx, { email }) => {
+    const allUsers = await ctx.db
+      .query("users")
+      .withIndex("email", (q) => q.eq("email", email))
+      .collect();
+    
+    const existing = allUsers.find((u) => !u.deletedAt);
+    return existing ?? null;
+  },
+});
+
 const validateUserInput = (input: UserInput) => {
   const result = userInputSchema.safeParse(input);
 
@@ -243,6 +259,18 @@ export const createUser = action({
       isAdmin: isAdmin ?? false,
     });
 
+    // Check if user already exists before creating auth account
+    const existingUser = await ctx.runQuery(internal.user.getUserByEmail, {
+      email: validated.email,
+    });
+    
+    if (existingUser) {
+      throw new ConvexError({
+        code: "USER_EXISTS",
+        message: "A user with this email already exists.",
+      });
+    }
+
     // Create auth account first
     try {
       await ctx.runAction(internal.auth.createAuthAccount, {
@@ -251,13 +279,15 @@ export const createUser = action({
         password: validated.password,
       });
     } catch (error) {
-      if (error instanceof Error && error.message.includes("already exists")) {
-        throw new ConvexError({
-          code: "USER_EXISTS",
-          message: "A user with this email already exists.",
-        });
+      // Re-throw ConvexError as-is
+      if (error instanceof ConvexError) {
+        throw error;
       }
-      throw error;
+      // Wrap other errors
+      throw new ConvexError({
+        code: "AUTH_CREATION_FAILED",
+        message: "Failed to create authentication account. Please try again.",
+      });
     }
 
     // Create user in users table using internal mutation

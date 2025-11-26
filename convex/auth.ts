@@ -17,8 +17,7 @@ export const createAuthAccount = internalAction({
   handler: async (ctx, args) => {
     const { email, name, password } = args;
 
-    let created = false;
-
+    // Try to create the account
     try {
       await createAccount(ctx, {
         provider: "password",
@@ -32,25 +31,41 @@ export const createAuthAccount = internalAction({
         } as any,
         shouldLinkViaEmail: true,
       });
-      created = true;
+      
+      // Account was created successfully, credentials are already set
+      return {
+        created: true,
+        passwordUpdated: true,
+      };
     } catch (error) {
-      if (!(error instanceof Error) || !error.message.includes("already exists")) {
-        throw error;
+      // If account already exists, try to update the credentials
+      if (error instanceof Error && error.message.includes("already exists")) {
+        // Try to update credentials, but don't fail if it doesn't work
+        // (the account exists, so we can still create the user record)
+        try {
+          await modifyAccountCredentials(ctx, {
+            provider: "password",
+            account: {
+              id: email,
+              secret: password,
+            },
+          });
+          return {
+            created: false,
+            passwordUpdated: true,
+          };
+        } catch (updateError) {
+          // If updating credentials fails, that's okay - account exists
+          // We'll still allow user record creation
+          return {
+            created: false,
+            passwordUpdated: false,
+          };
+        }
       }
+      // For any other error, re-throw it
+      throw error;
     }
-
-    await modifyAccountCredentials(ctx, {
-      provider: "password",
-      account: {
-        id: email,
-        secret: password,
-      },
-    });
-
-    return {
-      created,
-      passwordUpdated: true,
-    };
   },
 });
 

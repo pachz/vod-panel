@@ -11,8 +11,9 @@ import {
   Video,
   ArrowLeft,
   Lock,
+  CreditCard,
 } from "lucide-react";
-import { useMutation, useQuery } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
 import { api } from "../../convex/_generated/api";
@@ -23,6 +24,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
+import { useSidebar } from "@/components/ui/sidebar";
 
 type LessonDoc = Doc<"lessons">;
 
@@ -132,9 +134,23 @@ const CoursePreview = () => {
   const course = useQuery(api.course.getCourse, courseId ? { id: courseId } : undefined);
   const currentUser = useQuery(api.user.getCurrentUser);
   const subscription = useQuery(api.paymentInternal.getMySubscription);
+  const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
+  const createCheckoutSession = useAction(api.payment.createCheckoutSession);
+  const { setOpen, setOpenMobile } = useSidebar();
   const isAdmin = currentUser?.isGod ?? false;
   const hasActiveSubscription = subscription ? ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) : false;
   const canAccessProtectedContent = isAdmin || hasActiveSubscription;
+
+  useEffect(() => {
+    if (subscription === undefined) {
+      return;
+    }
+
+    if (!canAccessProtectedContent) {
+      setOpen(false);
+      setOpenMobile(false);
+    }
+  }, [canAccessProtectedContent, setOpen, setOpenMobile, subscription]);
   const lessons = useQuery(
     api.lesson.listLessons,
     courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
@@ -147,6 +163,24 @@ const CoursePreview = () => {
 
   const [activeLessonId, setActiveLessonId] = useState<Id<"lessons"> | null>(null);
   const [isTogglingCompletion, setIsTogglingCompletion] = useState(false);
+  const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+
+  const priceSummary = useMemo(() => {
+    if (!paymentSettings) {
+      return null;
+    }
+
+    return {
+      amount: new Intl.NumberFormat("en-US", {
+        style: "currency",
+        currency: paymentSettings.priceCurrency.toUpperCase(),
+      }).format(paymentSettings.priceAmount / 100),
+      interval: paymentSettings.priceInterval,
+      productName: paymentSettings.productName,
+    };
+  }, [paymentSettings]);
+
+  const isPriceLoading = paymentSettings === undefined;
 
   const lessonList = useMemo<LessonDoc[]>(() => {
     if (!lessons) {
@@ -212,31 +246,121 @@ const CoursePreview = () => {
     );
   }
 
+  const handleStartSubscription = async () => {
+    setIsStartingCheckout(true);
+
+    try {
+      const checkoutUrl = await createCheckoutSession();
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+        return;
+      }
+
+      toast.error("Unable to start the subscription checkout. Please try again.");
+    } catch (error) {
+      console.error(error);
+      toast.error("Unable to start the subscription checkout. Please try again.");
+    } finally {
+      setIsStartingCheckout(false);
+    }
+  };
+
   if (!canAccessProtectedContent) {
+    const courseImageUrl = course.thumbnail_image_url ?? course.banner_image_url ?? "/RehamDivaLogo.png";
+
     return (
-      <div className="flex h-full items-center justify-center p-6">
-        <Card className="w-full max-w-xl text-center">
-          <CardHeader className="space-y-4">
-            <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-full bg-muted">
-              <Lock className="h-6 w-6 text-muted-foreground" />
+      <div className="flex h-full items-center justify-center p-4 md:p-10">
+        <Card className="w-full max-w-5xl overflow-hidden border border-border/40 bg-card/95 shadow-2xl">
+          <div className="grid gap-0 lg:grid-cols-2">
+            <div className="relative h-64 w-full lg:h-full">
+              {courseImageUrl ? (
+                <img src={courseImageUrl} alt={`Preview of ${course.name}`} className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-background via-muted to-background text-muted-foreground">
+                  <Video className="h-10 w-10" />
+                  <span className="text-sm font-medium">Course preview coming soon</span>
+                </div>
+              )}
+              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+              <div className="absolute bottom-6 left-6 right-6 space-y-1 text-white">
+                <p className="text-xs uppercase tracking-[0.35em] text-white/70">Premium Course</p>
+                <p className="text-2xl font-semibold leading-snug">{course.name}</p>
+                <p className="text-sm text-white/80 line-clamp-2">
+                  {course.short_description ?? course.description ?? "Unlock the full program to access every lesson."}
+                </p>
+              </div>
             </div>
-            <CardTitle className="text-2xl">
-              Unlock {course.name}
-            </CardTitle>
-            <p className="text-sm text-muted-foreground">
-              {subscription
-                ? `Your subscription is currently marked as ${subscription.status}. Activate it to view the lessons for this course.`
-                : "An active subscription is required to access detailed lessons."}
-            </p>
-          </CardHeader>
-          <CardContent className="flex flex-col gap-3 sm:flex-row sm:justify-center">
-            <Button variant="cta" onClick={() => navigate("/payments")}>
-              View subscription status
-            </Button>
-            <Button variant="outline" onClick={() => navigate("/courses/card")}>
-              Back to courses
-            </Button>
-          </CardContent>
+
+            <div className="flex flex-col gap-6 p-6 md:p-10">
+              <div className="space-y-3">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                    <Lock className="h-5 w-5" />
+                  </div>
+                  <div>
+                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Membership required</p>
+                    <CardTitle className="text-3xl">Unlock {course.name}</CardTitle>
+                  </div>
+                </div>
+                <p className="text-sm text-muted-foreground">
+                  {subscription
+                    ? `Your subscription is currently marked as ${subscription.status}. Activate it to view every lesson for this course.`
+                    : "An active subscription lets you stream each lesson, track your progress, and download exclusive resources."}
+                </p>
+              </div>
+
+              <div className="space-y-1">
+                <p className="text-xs uppercase tracking-wide text-muted-foreground">Your investment</p>
+                {isPriceLoading ? (
+                  <div className="h-10 w-40 animate-pulse rounded-xl bg-muted" />
+                ) : priceSummary ? (
+                  <div className="flex items-baseline gap-2">
+                    <span className="text-4xl font-bold text-foreground">{priceSummary.amount}</span>
+                    <span className="text-sm text-muted-foreground">per {priceSummary.interval}</span>
+                  </div>
+                ) : (
+                  <p className="text-sm text-muted-foreground">
+                    Subscription pricing will appear here once configured. You can still manage your plan on the payments page.
+                  </p>
+                )}
+                {priceSummary?.productName && (
+                  <p className="text-xs text-muted-foreground/80">Plan: {priceSummary.productName}</p>
+                )}
+              </div>
+
+              <div className="space-y-3">
+                <Button variant="cta" className="w-full justify-center gap-2 text-base" onClick={handleStartSubscription} disabled={isStartingCheckout}>
+                  {isStartingCheckout ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CreditCard className="h-4 w-4" />
+                  )}
+                  Subscribe & Unlock
+                </Button>
+                <Button variant="secondary" className="w-full justify-center" onClick={() => navigate("/payments")}>
+                  View subscription options
+                </Button>
+                <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => navigate("/courses/card")}>
+                  Back to courses
+                </Button>
+              </div>
+
+              <ul className="space-y-2 text-sm text-muted-foreground">
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Unlimited HD streaming of every lesson
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Guided progress tracking and completion badges
+                </li>
+                <li className="flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                  Bonus resources and worksheets per lesson
+                </li>
+              </ul>
+            </div>
+          </div>
         </Card>
       </div>
     );
