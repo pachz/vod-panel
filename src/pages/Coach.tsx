@@ -258,6 +258,7 @@ const Coach = () => {
       const convertedStorageId = await convertToJpeg({
         storageId: originalStorageId,
         quality: 90,
+        cropToSquare: true,
       });
 
       setImageUploadState({

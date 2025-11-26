@@ -7,6 +7,32 @@ import { ConvexError } from "convex/values";
 import { Jimp, JimpMime, ResizeStrategy } from "jimp";
 import { requireUserAction } from "./utils/auth";
 
+type CroppableImage = {
+  width: number;
+  height: number;
+  crop: (options: { x: number; y: number; w: number; h: number }) => unknown;
+};
+
+const cropImageToCenterSquare = (image: CroppableImage) => {
+  const imageWidth = image.width;
+  const imageHeight = image.height;
+
+  if (imageWidth === imageHeight) {
+    return;
+  }
+
+  const size = Math.min(imageWidth, imageHeight);
+  const x = Math.floor((imageWidth - size) / 2);
+  const y = Math.floor((imageHeight - size) / 2);
+
+  image.crop({
+    x,
+    y,
+    w: size,
+    h: size,
+  });
+};
+
 /**
  * Action to generate a thumbnail from an uploaded image
  * This runs in Node.js environment to use jimp for image processing
@@ -104,8 +130,9 @@ export const convertToJpeg = action({
   args: {
     storageId: v.id("_storage"),
     quality: v.optional(v.number()),
+    cropToSquare: v.optional(v.boolean()),
   },
-  handler: async (ctx, { storageId, quality = 85 }) => {
+  handler: async (ctx, { storageId, quality = 85, cropToSquare = false }) => {
     // Verify user is authenticated
     await requireUserAction(ctx);
     try {
@@ -124,6 +151,10 @@ export const convertToJpeg = action({
 
       // Load the image using jimp
       const image = await Jimp.read(buffer);
+
+      if (cropToSquare) {
+        cropImageToCenterSquare(image);
+      }
 
       // Convert to JPEG with specified quality (no resize)
       const jpegBuffer = await image.getBuffer(JimpMime.jpeg, { quality });
