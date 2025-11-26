@@ -42,14 +42,14 @@ const adminMenuItems: MenuItem[] = [
   { title: "Card View", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Coach", url: "/coach", icon: UserRound },
-  { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
+  // { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
   { title: "Users", url: "/users", icon: Users, alpha: true },
   { title: "Payments", url: "/payments", icon: CreditCard, alpha: true },
 ];
 
 const memberMenuItems: MenuItem[] = [
   { title: "Dashboard", url: "/", icon: LayoutDashboard },
-  { title: "Card View", url: "/courses/card", icon: PanelsTopLeft },
+  { title: "Courses", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Subscription", url: "/payments", icon: CreditCard },
 ];
 
