@@ -1,10 +1,27 @@
 import { Password } from "@convex-dev/auth/providers/Password";
+import Google from "@auth/core/providers/google";
 import { convexAuth, createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
 import { internalAction } from "./_generated/server";
-import { v } from "convex/values";
+import { v, ConvexError } from "convex/values";
+import { ResendOTPPasswordReset } from "./ResendOTPPasswordReset";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
-  providers: [Password({})],
+  providers: [Password({
+    reset: ResendOTPPasswordReset,
+    validatePasswordRequirements: (password: string) => {
+      if (
+        !password ||
+        password.length < 8 ||
+        !/\d/.test(password) ||
+        !/[a-z]/.test(password) ||
+        !/[A-Z]/.test(password)
+      ) {
+        throw new ConvexError(
+          "Password must be at least 8 characters long, must contain an uppercase letter, a lowercase letter, and a number"
+        );
+      }
+    },
+  }), Google],
   callbacks: {},
 });
 

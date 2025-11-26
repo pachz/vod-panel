@@ -253,6 +253,65 @@ export const createUserRecord = internalMutation({
   },
 });
 
+// Public action for user registration (no auth required)
+export const registerUser = action({
+  args: {
+    name: v.string(),
+    email: v.string(),
+    password: v.string(),
+  },
+  handler: async (ctx, { name, email, password }) => {
+    const validated = validateUserInput({
+      name,
+      email,
+      phone: undefined,
+      password,
+      isAdmin: false,
+    });
+
+    // Check if user already exists before creating auth account
+    const existingUser = await ctx.runQuery(internal.user.getUserByEmail, {
+      email: validated.email,
+    });
+    
+    if (existingUser) {
+      throw new ConvexError({
+        code: "USER_EXISTS",
+        message: "A user with this email already exists.",
+      });
+    }
+
+    // Create auth account first
+    try {
+      await ctx.runAction(internal.auth.createAuthAccount, {
+        email: validated.email,
+        name: validated.name,
+        password: validated.password,
+      });
+    } catch (error) {
+      // Re-throw ConvexError as-is
+      if (error instanceof ConvexError) {
+        throw error;
+      }
+      // Wrap other errors
+      throw new ConvexError({
+        code: "AUTH_CREATION_FAILED",
+        message: "Failed to create authentication account. Please try again.",
+      });
+    }
+
+    // Create user in users table using internal mutation
+    const userId: Id<"users"> = await ctx.runMutation(internal.user.createUserRecord, {
+      name: validated.name,
+      email: validated.email,
+      phone: undefined,
+      isAdmin: false,
+    });
+
+    return userId;
+  },
+});
+
 // Action to create user (can call both actions and mutations)
 export const createUser = action({
   args: {

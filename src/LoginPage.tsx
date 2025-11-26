@@ -2,9 +2,18 @@ import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
 import { useConvexAuth } from "convex/react";
 import { useLocation } from "react-router-dom";
+import { useAction } from "convex/react";
+import { api } from "../convex/_generated/api";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import { Separator } from "@/components/ui/separator";
+import { Eye, EyeOff } from "lucide-react";
 import "./login.css";
 
 type LoginStatus = "idle" | "submitting" | "success";
+type Mode = "login" | "register";
+type PasswordResetStep = "forgot" | { email: string };
 
 type LocationState = {
   from?: {
@@ -14,95 +23,29 @@ type LocationState = {
   };
 };
 
-const LoginLayout = ({ children }: React.PropsWithChildren) => (
-  <main className="login-page">{children}</main>
-);
-
-const LoginCard = ({ children }: React.PropsWithChildren) => (
-  <section className="login-card">{children}</section>
-);
-
-const LoginHeader = () => (
-  <header className="login-header">
-    <h1>Welcome back</h1>
-    <p>
-      CoursHub Management Panel
-    </p>
-  </header>
-);
-
-type LoginFieldProps = {
-  id: string;
-  label: string;
-  type: string;
-  autoComplete: string;
-  value: string;
-  placeholder: string;
-  disabled: boolean;
-  onChange: (value: string) => void;
-};
-
-const LoginField = ({
-  id,
-  label,
-  type,
-  autoComplete,
-  value,
-  placeholder,
-  disabled,
-  onChange,
-}: LoginFieldProps) => (
-  <label className="login-field" htmlFor={id}>
-    <span>{label}</span>
-    <input
-      id={id}
-      name={id}
-      type={type}
-      autoComplete={autoComplete}
-      value={value}
-      placeholder={placeholder}
-      onChange={(event) => onChange(event.target.value)}
-      className="login-input"
-      disabled={disabled}
-      required
-    />
-  </label>
-);
-
-const LoginButton = ({
-  disabled,
-  label,
-}: {
-  disabled: boolean;
-  label: string;
-}) => (
-  <button type="submit" className="login-button" disabled={disabled}>
-    {label}
-  </button>
-);
-
-const LoginStatusMessage = ({ error, status }: { error: boolean; status: LoginStatus }) => {
-  if (error) {
-    return <p role="alert" className="login-status login-status--error">Failed to log in.</p>;
-  }
-  if (status === "success") {
-    return (
-      <p className="login-status login-status--success">
-        Signed in. Redirecting…
-      </p>
-    );
-  }
-  return <p className="login-status login-status--placeholder" aria-hidden="true" />;
+type PasswordValidation = {
+  minLength: boolean;
+  hasUpperCase: boolean;
+  hasLowerCase: boolean;
+  hasNumber: boolean;
 };
 
 const LoginPage = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading: authStateLoading } = useConvexAuth();
   const location = useLocation();
+  const registerUser = useAction(api.user.registerUser);
 
+  const [mode, setMode] = useState<Mode>("login");
+  const [passwordResetStep, setPasswordResetStep] = useState<PasswordResetStep | null>(null);
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
-  const [error, setError] = useState(false);
+  const [resetCode, setResetCode] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [error, setError] = useState<string | false>(false);
   const [status, setStatus] = useState<LoginStatus>("idle");
 
   const redirectPath = useMemo(() => {
@@ -151,6 +94,37 @@ const LoginPage = () => {
     return status === "submitting" || authStateLoading;
   }, [authStateLoading, status]);
 
+  const passwordValidation = useMemo((): PasswordValidation => {
+    const pwd = passwordResetStep && passwordResetStep !== "forgot" ? newPassword : password;
+    return {
+      minLength: pwd.length >= 8,
+      hasUpperCase: /[A-Z]/.test(pwd),
+      hasLowerCase: /[a-z]/.test(pwd),
+      hasNumber: /[0-9]/.test(pwd),
+    };
+  }, [password, newPassword, passwordResetStep]);
+
+  const isPasswordValid = useMemo(() => {
+    const validation = passwordValidation;
+    return validation.minLength && validation.hasUpperCase && validation.hasLowerCase && validation.hasNumber;
+  }, [passwordValidation]);
+
+  const handleGoogleSignIn = async () => {
+    if (isProcessing) {
+      return;
+    }
+    setError(false);
+    setStatus("submitting");
+
+    try {
+      await signIn("google");
+    } catch (cause) {
+      console.error(cause);
+      setError("Failed to sign in with Google. Please try again.");
+      setStatus("idle");
+    }
+  };
+
   const handleSubmit = async (event: FormEvent<HTMLFormElement>) => {
     event.preventDefault();
     if (isProcessing) {
@@ -159,17 +133,39 @@ const LoginPage = () => {
     setError(false);
     setStatus("submitting");
 
-    try {
-      await signIn("password", {
-        flow: "signIn",
-        email: email.trim(),
-        password,
-      });
-    } catch (cause) {
-      console.error(cause);
-      setError(true);
-      setStatus("idle");
-      return;
+    if (mode === "register") {
+      try {
+        await registerUser({
+          name: name.trim(),
+          email: email.trim(),
+          password,
+        });
+        // After successful registration, sign in
+        await signIn("password", {
+          flow: "signIn",
+          email: email.trim(),
+          password,
+        });
+      } catch (cause: any) {
+        console.error(cause);
+        const errorMessage = cause?.data?.message || cause?.message || "Failed to register. Please try again.";
+        setError(errorMessage);
+        setStatus("idle");
+        return;
+      }
+    } else {
+      try {
+        await signIn("password", {
+          flow: "signIn",
+          email: email.trim(),
+          password,
+        });
+      } catch (cause) {
+        console.error(cause);
+        setError("Failed to log in. Please check your credentials and try again.");
+        setStatus("idle");
+        return;
+      }
     }
   };
 
@@ -178,41 +174,514 @@ const LoginPage = () => {
       return "Redirecting…";
     }
     if (status === "submitting" || authStateLoading) {
-      return "Signing in…";
+      return mode === "register" ? "Creating account…" : "Signing in…";
     }
-    return "Sign in";
+    return mode === "register" ? "Create Account" : "Log In";
   })();
 
+  const isFormValid = useMemo(() => {
+    if (passwordResetStep) {
+      if (passwordResetStep === "forgot") {
+        return email.trim().length > 0;
+      }
+      return resetCode.trim().length > 0 && isPasswordValid;
+    }
+    if (mode === "register") {
+      return name.trim().length > 0 && email.trim().length > 0 && isPasswordValid;
+    }
+    return email.trim().length > 0 && password.length > 0;
+  }, [mode, name, email, password, resetCode, isPasswordValid, passwordResetStep]);
+
+  const switchMode = () => {
+    setMode(mode === "login" ? "register" : "login");
+    setPasswordResetStep(null);
+    setError(false);
+    setName("");
+    setEmail("");
+    setPassword("");
+    setResetCode("");
+    setNewPassword("");
+    setShowPassword(false);
+    setShowNewPassword(false);
+  };
+
+  const handleForgotPasswordClick = (e: React.MouseEvent<HTMLAnchorElement>) => {
+    e.preventDefault();
+    setPasswordResetStep("forgot");
+    setError(false);
+    setEmail("");
+    setPassword("");
+    setResetCode("");
+    setNewPassword("");
+  };
+
+  const handlePasswordResetRequest = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isProcessing) {
+      return;
+    }
+    setError(false);
+    setStatus("submitting");
+
+    const formData = new FormData(event.currentTarget);
+    const emailValue = formData.get("email") as string;
+
+    try {
+      await signIn("password", {
+        flow: "reset",
+        email: emailValue.trim(),
+      });
+      setPasswordResetStep({ email: emailValue.trim() });
+      setStatus("idle");
+    } catch (cause: any) {
+      console.error(cause);
+      
+      // Parse error to provide better messages
+      let errorMessage = "Failed to send reset code. Please check your email address and try again.";
+      
+      if (cause?.data) {
+        const errorData = cause.data;
+        if (errorData.message) {
+          const message = errorData.message.toLowerCase();
+          if (message.includes("email") || message.includes("not found") || message.includes("invalid")) {
+            errorMessage = errorData.message;
+          } else {
+            errorMessage = errorData.message;
+          }
+        }
+      } else if (cause?.message) {
+        errorMessage = cause.message;
+      }
+      
+      setError(errorMessage);
+      setStatus("idle");
+    }
+  };
+
+  const handlePasswordResetVerification = async (event: FormEvent<HTMLFormElement>) => {
+    event.preventDefault();
+    if (isProcessing) {
+      return;
+    }
+    setError(false);
+    setStatus("submitting");
+
+    if (!passwordResetStep || passwordResetStep === "forgot") {
+      return;
+    }
+
+    try {
+      await signIn("password", {
+        flow: "reset-verification",
+        email: passwordResetStep.email,
+        code: resetCode.trim(),
+        newPassword,
+      });
+      // Password reset successful, user will be signed in automatically
+      setStatus("success");
+    } catch (cause: any) {
+      console.error(cause);
+      
+      // Parse error to provide better messages
+      let errorMessage = "Invalid code or password. Please try again.";
+      
+      // Extract error message from various error structures
+      let rawMessage = "";
+      if (cause?.data?.message) {
+        rawMessage = cause.data.message;
+      } else if (cause?.message) {
+        rawMessage = cause.message;
+      } else if (typeof cause === "string") {
+        rawMessage = cause;
+      }
+      
+      // Check for specific error patterns
+      const messageLower = rawMessage.toLowerCase();
+      
+      // Check for "Could not verify code" or similar verification errors
+      if (messageLower.includes("could not verify") || messageLower.includes("could not verify code")) {
+        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+      }
+      // Check for invalid token/code errors
+      else if (cause?.data?.code === "INVALID_TOKEN" || cause?.data?.code === "INVALID_CODE" || 
+               messageLower.includes("invalid code") || messageLower.includes("invalid token")) {
+        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+      }
+      // Check for expired code
+      else if (messageLower.includes("expired") || messageLower.includes("expire")) {
+        errorMessage = "The reset code has expired. Please request a new one.";
+      }
+      // Check for password validation errors
+      else if (messageLower.includes("password") && (messageLower.includes("requirement") || messageLower.includes("must") || messageLower.includes("need"))) {
+        errorMessage = "Password does not meet requirements. " + (rawMessage || "Please check the password requirements above.");
+      }
+      // If we have a clean error message without stack traces, use it
+      else if (rawMessage && !rawMessage.includes("at ") && !rawMessage.includes("Error:") && !rawMessage.includes("Stack:")) {
+        // Use the message if it's user-friendly (no stack traces)
+        errorMessage = rawMessage;
+      }
+      // Default fallback
+      else {
+        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+      }
+      
+      setError(errorMessage);
+      setStatus("idle");
+    }
+  };
+
+  const cancelPasswordReset = () => {
+    setPasswordResetStep(null);
+    setError(false);
+    setEmail("");
+    setResetCode("");
+    setNewPassword("");
+    setShowNewPassword(false);
+  };
+
   return (
-    <LoginLayout>
-      <LoginCard>
-        <LoginHeader />
-        <form className="login-form" onSubmit={handleSubmit} noValidate>
-          <LoginField
-            id="email"
-            label="Email address"
-            type="email"
-            autoComplete="email"
-            value={email}
-            placeholder="you@example.com"
-            onChange={setEmail}
-            disabled={isProcessing}
+    <div className="login-container">
+      <div className="login-content">
+        <div className="login-header-section">
+          <img 
+            src="/RehamDivaLogo.png" 
+            alt="Logo" 
+            className="login-logo"
           />
-          <LoginField
-            id="password"
-            label="Password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            placeholder="••••••••"
-            onChange={setPassword}
+          <h1 className="login-title">
+            {passwordResetStep
+              ? passwordResetStep === "forgot"
+                ? "Reset your password"
+                : "Enter reset code"
+              : mode === "register"
+              ? "Create an account"
+              : "Log in to Reham Diva"}
+          </h1>
+        </div>
+
+        {!passwordResetStep && (
+          <div className="login-social-buttons">
+          <Button
+            type="button"
+            variant="outline"
+            onClick={handleGoogleSignIn}
             disabled={isProcessing}
-          />
-          <LoginButton disabled={isProcessing} label={buttonLabel} />
-          <LoginStatusMessage error={error} status={status} />
+            className="login-social-button"
+          >
+            <svg className="login-social-icon" viewBox="0 0 24 24" width="18" height="18">
+              <path
+                fill="#4285F4"
+                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+              />
+              <path
+                fill="#34A853"
+                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+              />
+              <path
+                fill="#FBBC05"
+                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+              />
+              <path
+                fill="#EA4335"
+                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+              />
+            </svg>
+            Login with Google
+          </Button>
+          </div>
+        )}
+
+        {!passwordResetStep && (
+          <div className="login-separator">
+            <Separator />
+            <span className="login-separator-text">or</span>
+            <Separator />
+          </div>
+        )}
+
+        {passwordResetStep ? (
+          passwordResetStep === "forgot" ? (
+            <form className="login-form" onSubmit={handlePasswordResetRequest} noValidate>
+              <div className="login-field-group">
+                <Label htmlFor="reset-email" className="login-label">Email</Label>
+                <Input
+                  id="reset-email"
+                  name="email"
+                  type="email"
+                  autoComplete="email"
+                  value={email}
+                  placeholder="alan.turing@example.com"
+                  onChange={(e) => setEmail(e.target.value)}
+                  disabled={isProcessing}
+                  className="login-input"
+                  required
+                />
+              </div>
+
+              {error && (
+                <p role="alert" className="login-error">
+                  {error}
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isProcessing || !isFormValid}
+                className="login-submit-button"
+              >
+                {status === "submitting" ? "Sending code…" : "Send reset code"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={cancelPasswordReset}
+                variant="outline"
+                className="login-cancel-button"
+                disabled={isProcessing}
+              >
+                Cancel
+              </Button>
+            </form>
+          ) : (
+            <form className="login-form" onSubmit={handlePasswordResetVerification} noValidate>
+              <div className="login-field-group">
+                <Label htmlFor="reset-code" className="login-label">Reset code</Label>
+                <Input
+                  id="reset-code"
+                  name="code"
+                  type="text"
+                  autoComplete="one-time-code"
+                  value={resetCode}
+                  placeholder="12345678"
+                  onChange={(e) => setResetCode(e.target.value)}
+                  disabled={isProcessing}
+                  className="login-input"
+                  required
+                />
+                <p className="login-hint-text">
+                  Enter the 8-digit code sent to {passwordResetStep.email}
+                </p>
+              </div>
+
+              <div className="login-field-group">
+                <Label htmlFor="new-password" className="login-label">New password</Label>
+                <div className="login-password-wrapper">
+                  <Input
+                    id="new-password"
+                    name="newPassword"
+                    type={showNewPassword ? "text" : "password"}
+                    autoComplete="new-password"
+                    value={newPassword}
+                    placeholder="••••••••••••"
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    disabled={isProcessing}
+                    className="login-input login-password-input"
+                    required
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                    className="login-password-toggle"
+                    tabIndex={-1}
+                  >
+                    {showNewPassword ? (
+                      <EyeOff className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <Eye className="h-4 w-4 text-muted-foreground" />
+                    )}
+                  </button>
+                </div>
+                {newPassword.length > 0 && (
+                  <div className="login-password-requirements">
+                    <div className={`login-requirement ${passwordValidation.minLength ? "valid" : ""}`}>
+                      At least 8 characters
+                    </div>
+                    <div className={`login-requirement ${passwordValidation.hasUpperCase ? "valid" : ""}`}>
+                      One uppercase letter
+                    </div>
+                    <div className={`login-requirement ${passwordValidation.hasLowerCase ? "valid" : ""}`}>
+                      One lowercase letter
+                    </div>
+                    <div className={`login-requirement ${passwordValidation.hasNumber ? "valid" : ""}`}>
+                      One number
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {error && (
+                <p role="alert" className="login-error">
+                  {error}
+                </p>
+              )}
+
+              {status === "success" && (
+                <p className="login-success">
+                  Password reset successful. Redirecting…
+                </p>
+              )}
+
+              <Button
+                type="submit"
+                disabled={isProcessing || !isFormValid}
+                className="login-submit-button"
+              >
+                {status === "submitting" ? "Resetting password…" : "Reset password"}
+              </Button>
+
+              <Button
+                type="button"
+                onClick={cancelPasswordReset}
+                variant="outline"
+                className="login-cancel-button"
+                disabled={isProcessing}
+              >
+                Cancel
+              </Button>
+            </form>
+          )
+        ) : (
+          <form className="login-form" onSubmit={handleSubmit} noValidate>
+          {mode === "register" && (
+            <div className="login-field-group">
+              <Label htmlFor="name" className="login-label">Name</Label>
+              <Input
+                id="name"
+                name="name"
+                type="text"
+                autoComplete="name"
+                value={name}
+                placeholder="John Doe"
+                onChange={(e) => setName(e.target.value)}
+                disabled={isProcessing}
+                className="login-input"
+                required
+              />
+            </div>
+          )}
+
+          <div className="login-field-group">
+            <Label htmlFor="email" className="login-label">Email</Label>
+            <Input
+              id="email"
+              name="email"
+              type="email"
+              autoComplete="email"
+              value={email}
+              placeholder="alan.turing@example.com"
+              onChange={(e) => setEmail(e.target.value)}
+              disabled={isProcessing}
+              className="login-input"
+              required
+            />
+          </div>
+
+          <div className="login-field-group">
+            <div className="login-label-row">
+              <Label htmlFor="password" className="login-label">Password</Label>
+              {mode === "login" && (
+                <a href="#" className="login-forgot-link" onClick={handleForgotPasswordClick}>
+                  Forgot your password?
+                </a>
+              )}
+            </div>
+            <div className="login-password-wrapper">
+              <Input
+                id="password"
+                name="password"
+                type={showPassword ? "text" : "password"}
+                autoComplete={mode === "register" ? "new-password" : "current-password"}
+                value={password}
+                placeholder="••••••••••••"
+                onChange={(e) => setPassword(e.target.value)}
+                disabled={isProcessing}
+                className="login-input login-password-input"
+                required
+              />
+              <button
+                type="button"
+                onClick={() => setShowPassword(!showPassword)}
+                className="login-password-toggle"
+                tabIndex={-1}
+              >
+                {showPassword ? (
+                  <EyeOff className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Eye className="h-4 w-4 text-muted-foreground" />
+                )}
+              </button>
+            </div>
+            {mode === "register" && password.length > 0 && (
+              <div className="login-password-requirements">
+                <div className={`login-requirement ${passwordValidation.minLength ? "valid" : ""}`}>
+                  At least 8 characters
+                </div>
+                <div className={`login-requirement ${passwordValidation.hasUpperCase ? "valid" : ""}`}>
+                  One uppercase letter
+                </div>
+                <div className={`login-requirement ${passwordValidation.hasLowerCase ? "valid" : ""}`}>
+                  One lowercase letter
+                </div>
+                <div className={`login-requirement ${passwordValidation.hasNumber ? "valid" : ""}`}>
+                  One number
+                </div>
+              </div>
+            )}
+          </div>
+
+          {error && (
+            <p role="alert" className="login-error">
+              {error}
+            </p>
+          )}
+
+          {status === "success" && (
+            <p className="login-success">
+              {mode === "register" ? "Account created. Redirecting…" : "Signed in. Redirecting…"}
+            </p>
+          )}
+
+          <Button
+            type="submit"
+            disabled={isProcessing || !isFormValid}
+            className="login-submit-button"
+          >
+            {buttonLabel}
+          </Button>
         </form>
-      </LoginCard>
-    </LoginLayout>
+        )}
+
+        {!passwordResetStep && (
+          <div className="login-mode-switch">
+          <p className="login-mode-text">
+            {mode === "login" ? "Don't have an account? " : "Already have an account? "}
+            <button
+              type="button"
+              onClick={switchMode}
+              className="login-mode-link"
+              disabled={isProcessing}
+            >
+              {mode === "login" ? "Sign up" : "Log in"}
+            </button>
+          </p>
+          </div>
+        )}
+
+        {!passwordResetStep && (
+          <p className="login-footer-text">
+          By signing in, you agree to our{" "}
+          <a href="#" className="login-footer-link" onClick={(e) => e.preventDefault()}>
+            Terms
+          </a>{" "}
+          and{" "}
+          <a href="#" className="login-footer-link" onClick={(e) => e.preventDefault()}>
+            Privacy Policy
+          </a>
+          .
+          </p>
+        )}
+      </div>
+    </div>
   );
 };
 
