@@ -183,6 +183,94 @@ http.route({
 });
 
 http.route({
+  path: "/landing/subscription",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const paymentSettings = await ctx.runQuery(
+        internal.paymentInternal.getPaymentSettings,
+        {},
+      );
+
+      if (!paymentSettings) {
+        return new Response(
+          JSON.stringify({ error: "Subscription settings not configured" }),
+          {
+            status: 404,
+            headers: { "Content-Type": "application/json" },
+          },
+        );
+      }
+
+      const amount = paymentSettings.priceAmount / 100;
+      const intervalLabelMap: Record<typeof paymentSettings.priceInterval, string> = {
+        month: "Monthly",
+        year: "Yearly",
+        week: "Weekly",
+        day: "Daily",
+      };
+      const intervalLabel = intervalLabelMap[paymentSettings.priceInterval];
+
+      const body = {
+        productId: paymentSettings.selectedProductId,
+        priceId: paymentSettings.selectedPriceId,
+        name: paymentSettings.productName,
+        amountCents: paymentSettings.priceAmount,
+        amount,
+        currency: paymentSettings.priceCurrency.toUpperCase(),
+        interval: paymentSettings.priceInterval,
+        intervalLabel,
+        priceDisplay: `${paymentSettings.priceCurrency.toUpperCase()} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
+      };
+
+      return new Response(JSON.stringify(body), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing subscription endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load subscription settings",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
+http.route({
   pathPrefix: "/landing/course/",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
