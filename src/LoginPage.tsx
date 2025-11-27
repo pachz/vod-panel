@@ -160,9 +160,13 @@ const LoginPage = () => {
           email: email.trim(),
           password,
         });
-      } catch (cause) {
+      } catch (cause: any) {
         console.error(cause);
-        setError("Failed to log in. Please check your credentials and try again.");
+        const errorMessage =
+          cause?.data?.message ||
+          cause?.message ||
+          "Failed to log in. Please check your credentials and try again.";
+        setError(errorMessage);
         setStatus("idle");
         return;
       }

@@ -1,7 +1,8 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import Google from "@auth/core/providers/google";
 import { convexAuth, createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
-import { internalAction } from "./_generated/server";
+import { internalAction, MutationCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { ResendOTPPasswordReset } from "./ResendOTPPasswordReset";
 
@@ -22,7 +23,53 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
     },
   }), Google],
-  callbacks: {},
+  callbacks: {
+    afterUserCreatedOrUpdated: async (ctx, args) => {
+      const user = await ctx.db.get(args.userId as Id<"users">);
+
+      if (user?.deletedAt) {
+        throw new ConvexError({
+          code: "UNAUTHORIZED",
+          message: "This account has been deactivated. Please contact support.",
+        });
+      }
+    },
+    // async createOrUpdateUser(ctx: MutationCtx, args) {
+    //   // Helper function to update user image
+    //   const updateUserImage = async (userId: Id<"users">) => {
+    //     if (args.type === "oauth" && args.profile.image) {
+    //       await ctx.db.patch(userId, {
+    //         image: args.profile.image as string
+    //       });
+    //     }
+    //     return userId;
+    //   };
+
+    //   if (args.existingUserId) {
+    //     return updateUserImage(args.existingUserId);
+    //   }
+
+    //   // Implement your own account linking logic:
+    //   const existingUser = await ctx.runMutation(api.vendors.auth.findUserByEmail, { 
+    //     email: args.profile.email as string
+    //   })
+    //   if (existingUser) {
+    //     return updateUserImage(existingUser._id);
+    //   }
+
+    //   //if google login, then throw on signup
+    //   if (args.type === "oauth" && args.provider.id === "google") {
+    //     throw new ConvexError("Google signup is not allowed");
+    //   }
+
+    //   // Implement your own user creation:
+    //   return ctx.db.insert("users", {
+    //     name: args.profile.name as string,
+    //     email: args.profile.email as string,
+    //     image: args.profile.image as string,
+    //   });
+    // },
+  },
 });
 
 export const createAuthAccount = internalAction({
