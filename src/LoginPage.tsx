@@ -117,8 +117,7 @@ const LoginPage = () => {
     setStatus("submitting");
 
     try {
-      // ready from VERCEL_PROJECT_PRODUCTION_URL
-      await signIn("google", { redirectTo: `https://${import.meta.env.VITE_VERCEL_PROJECT_PRODUCTION_URL}/` });
+      await signIn("google");
     } catch (cause) {
       console.error(cause);
       setError("Failed to sign in with Google. Please try again.");
