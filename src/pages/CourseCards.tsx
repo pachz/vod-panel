@@ -95,9 +95,9 @@ const CourseCards = () => {
   return (
     <div className="space-y-8">
       <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">Course Card View</h1>
+        <h1 className="text-3xl font-bold tracking-tight">All Courses</h1>
         <p className="text-muted-foreground">
-          Browse all purchased courses
+          Discover our comprehensive collection of courses designed to help you grow, learn, and achieve your goals.
         </p>
       </div>
 
@@ -136,7 +136,7 @@ const CourseCards = () => {
         <Input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search published courses..."
+          placeholder="Search Course"
           className="text-center"
         />
       </div>
@@ -148,8 +148,8 @@ const CourseCards = () => {
       ) : courseList.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           {categoryFilter || searchFilter
-            ? "No published courses match your filters."
-            : "No published courses available yet."}
+            ? "No courses match your filters."
+            : "No courses available yet."}
         </div>
       ) : (
         <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">

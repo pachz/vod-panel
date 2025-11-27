@@ -279,7 +279,7 @@ const CoursePreview = () => {
             The selected course is unavailable or has been removed.
           </p>
           <Button variant="cta" onClick={() => navigate("/courses/card")}>
-            Back to card view
+            Back to course list
           </Button>
         </div>
       </div>
@@ -467,7 +467,7 @@ const CoursePreview = () => {
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate("/courses/card")}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        Back to card view
+        Back to course list
       </div>
 
       <div className="rounded-3xl border border-border/40 bg-card/80 p-6 shadow-card">
