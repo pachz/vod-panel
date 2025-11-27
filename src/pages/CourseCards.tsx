@@ -21,6 +21,13 @@ const formatDuration = (minutes: number | undefined) => {
   return `${minutes} min`;
 };
 
+const formatLessonCount = (count: number | undefined) => {
+  if (typeof count !== "number" || Number.isNaN(count) || count < 0) {
+    return "0 lessons";
+  }
+  return `${count} lesson${count === 1 ? "" : "s"}`;
+};
+
 const CourseCards = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -168,11 +175,15 @@ const CourseCards = () => {
                 </div>
               )}
               <CardHeader className="space-y-2">
-                <div className="flex items-center justify-between gap-2 text-xs">
-                  <Badge variant="secondary">
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                  <Badge variant="secondary" className="text-foreground">
                     {categoryNameById[course.category_id] ?? "Uncategorized"}
                   </Badge>
-                  <span className="text-muted-foreground">{formatDuration(course.duration)}</span>
+                  <div className="flex items-center gap-2 font-medium">
+                    <span>{formatLessonCount(course.lesson_count)}</span>
+                    <span aria-hidden="true">•</span>
+                    <span>{formatDuration(course.duration)}</span>
+                  </div>
                 </div>
                 <CardTitle className="text-xl leading-tight">{course.name}</CardTitle>
               </CardHeader>
