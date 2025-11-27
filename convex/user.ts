@@ -406,24 +406,12 @@ export const updateUser = mutation({
       isAdmin: isAdmin ?? false,
     });
 
-    // Check if email is being changed and if new email already exists
+    // Prevent email changes
     if (validated.email !== user.email) {
-      const allUsers = await ctx.db
-        .query("users")
-        .withIndex("email", (q) => q.eq("email", validated.email))
-        .collect();
-      
-      const existing = allUsers.find((u) => !u.deletedAt && u._id !== id);
-
-      if (existing) {
-        throw new ConvexError({
-          code: "USER_EXISTS",
-          message: "A user with this email already exists.",
-        });
-      }
-
-      // Note: Email changes in auth system would need additional handling
-      // For now, we'll just update the users table
+      throw new ConvexError({
+        code: "EMAIL_CHANGE_NOT_ALLOWED",
+        message: "Editing user's email is not allowed.",
+      });
     }
 
     // Prevent admins from changing their own role

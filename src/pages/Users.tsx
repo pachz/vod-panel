@@ -352,7 +352,13 @@ const Users = () => {
                     }
                     required
                     maxLength={255}
+                    disabled={!!editingUser}
                   />
+                  {editingUser && (
+                    <p className="text-xs text-muted-foreground">
+                      Email cannot be changed after user creation.
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="space-y-2">
