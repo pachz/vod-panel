@@ -48,7 +48,6 @@ const adminMenuItems: MenuItem[] = [
 ];
 
 const memberMenuItems: MenuItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
   { title: "Courses", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Subscription", url: "/payments", icon: CreditCard },
 ];
@@ -85,7 +84,9 @@ export function AdminSidebar() {
             {!collapsed && (
               <div className="space-y-1">
                 <h2 className="font-semibold text-base tracking-tight">Reham Diva</h2>
-                <p className="text-xs text-sidebar-foreground/60">Admin Panel</p>
+                <p className="text-xs text-sidebar-foreground/60">
+                  {isLoadingUser ? "User Panel" : isAdmin ? "Admin Panel" : "User Panel"}
+                </p>
               </div>
             )}
           </div>

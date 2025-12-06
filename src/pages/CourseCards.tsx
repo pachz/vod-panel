@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { useLanguage } from "@/hooks/use-language";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
@@ -32,11 +34,11 @@ const formatDuration = (minutes: number | undefined) => {
   return `${hours}h ${remainder}m`;
 };
 
-const formatLessonCount = (count: number | undefined) => {
+const formatLessonCount = (count: number | undefined, t: (key: string) => string) => {
   if (typeof count !== "number" || Number.isNaN(count) || count < 0) {
-    return "0 lessons";
+    return `0 ${t("lessons")}`;
   }
-  return `${count} lesson${count === 1 ? "" : "s"}`;
+  return `${count} ${count === 1 ? t("lesson") : t("lessons")}`;
 };
 
 const CourseCards = () => {
@@ -44,6 +46,7 @@ const CourseCards = () => {
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get("category") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
+  const { language, t, isRTL } = useLanguage();
 
   const courses = useQuery(api.course.listCourses, {
     categoryId: categoryFilter as Id<"categories"> | undefined,
@@ -90,10 +93,10 @@ const CourseCards = () => {
 
   const categoryNameById = useMemo(() => {
     return categoryList.reduce<Record<string, string>>((acc, category) => {
-      acc[category._id] = category.name;
+      acc[category._id] = language === "ar" ? category.name_ar : category.name;
       return acc;
     }, {});
-  }, [categoryList]);
+  }, [categoryList, language]);
 
   const handleCategorySelect = useCallback(
     (categoryId?: string) => {
@@ -111,11 +114,14 @@ const CourseCards = () => {
   );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="flex justify-center mb-6">
+        <LanguageToggle />
+      </div>
       <div className="space-y-2 text-center">
-        <h1 className="text-3xl font-bold tracking-tight">All Courses</h1>
+        <h1 className="text-3xl font-bold tracking-tight">{t("allCourses")}</h1>
         <p className="text-muted-foreground">
-          Discover our comprehensive collection of courses designed to help you grow, learn, and achieve your goals.
+          {t("discoverCourses")}
         </p>
       </div>
 
@@ -129,7 +135,7 @@ const CourseCards = () => {
               : "border-primary bg-primary/10 text-primary"
           }`}
         >
-          All categories
+          {t("allCategories")}
         </button>
         {categoryList.map((category) => {
           const isActive = categoryFilter === category._id;
@@ -154,20 +160,21 @@ const CourseCards = () => {
         <Input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search Course"
+          placeholder={t("searchCourse")}
           className="text-center"
+          dir={isRTL ? "rtl" : "ltr"}
         />
       </div>
 
       {isLoading ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          Loading courses…
+          {t("loadingCourses")}
         </div>
       ) : courseList.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
           {categoryFilter || searchFilter
-            ? "No courses match your filters."
-            : "No courses available yet."}
+            ? t("noCoursesMatch")
+            : t("noCoursesAvailable")}
         </div>
       ) : (
         <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
@@ -184,7 +191,7 @@ const CourseCards = () => {
                 </div>
               ) : (
                 <div className="flex h-48 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
-                  No image
+                  {t("noImage")}
                 </div>
               )}
               <CardHeader className="space-y-3">
@@ -192,14 +199,18 @@ const CourseCards = () => {
                   variant="secondary" 
                   className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
                 >
-                  {categoryNameById[course.category_id] ?? "Uncategorized"}
+                  {categoryNameById[course.category_id] ?? t("uncategorized")}
                 </Badge>
-                <CardTitle className="text-lg font-bold leading-tight">{course.name}</CardTitle>
+                <CardTitle className="text-lg font-bold leading-tight">
+                  {language === "ar" ? course.name_ar : course.name}
+                </CardTitle>
                 <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {course.short_description ?? "No description available."}
+                  {language === "ar" 
+                    ? (course.short_description_ar ?? course.short_description ?? t("noDescription"))
+                    : (course.short_description ?? t("noDescription"))}
                 </p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{formatLessonCount(course.lesson_count)}</span>
+                  <span>{formatLessonCount(course.lesson_count, t)}</span>
                   <span aria-hidden="true">•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
@@ -210,9 +221,13 @@ const CourseCards = () => {
               <CardFooter className="mt-auto pt-0">
                 <Button
                   className="w-full rounded-lg bg-pink-500 text-white hover:bg-pink-600"
-                  onClick={() => navigate(`/courses/preview/${course._id}`)}
+                  onClick={() => {
+                    const currentLang = searchParams.get("lang");
+                    const url = `/courses/preview/${course._id}${currentLang ? `?lang=${currentLang}` : ""}`;
+                    navigate(url);
+                  }}
                 >
-                  View Course
+                  {t("viewCourse")}
                 </Button>
               </CardFooter>
             </Card>

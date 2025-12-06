@@ -147,6 +147,21 @@ const DashboardLayout = () => {
   );
 };
 
+const DashboardRedirect = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const location = useLocation();
+
+  if (currentUser === undefined) {
+    return <LoadingScreen />;
+  }
+
+  if (currentUser?.isGod) {
+    return <Dashboard />;
+  }
+
+  return <Navigate to="/courses/card" replace state={{ from: location }} />;
+};
+
 const App = () => (
   <Routes>
     <Route element={<PublicRoute />}>
@@ -154,7 +169,7 @@ const App = () => (
     </Route>
     <Route element={<PrivateRoute />}>
       <Route element={<DashboardProviders />}>
-        <Route path="/" element={<Dashboard />} />
+        <Route path="/" element={<DashboardRedirect />} />
         <Route path="/courses/card" element={<CourseCards />} />
         <Route path="/courses/preview/:id" element={<CoursePreview />} />
         <Route path="/payments" element={<Payments />} />

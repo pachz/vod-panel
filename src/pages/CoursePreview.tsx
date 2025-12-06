@@ -25,6 +25,8 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
+import { LanguageToggle } from "@/components/LanguageToggle";
+import { useLanguage } from "@/hooks/use-language";
 
 type LessonDoc = Doc<"lessons">;
 
@@ -130,6 +132,7 @@ const CoursePreview = () => {
   const { id } = useParams();
   const courseId = id as Id<"courses"> | undefined;
   const navigate = useNavigate();
+  const { language, t, translateInterval, isRTL } = useLanguage();
 
   const course = useQuery(api.course.getCourse, courseId ? { id: courseId } : undefined);
   const currentUser = useQuery(api.user.getCurrentUser);
@@ -248,38 +251,41 @@ const CoursePreview = () => {
   }, [progressData.completedLessonIds]);
   if (!courseId) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Invalid course identifier.</p>
+      <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
+        <p className="text-muted-foreground">{t("invalidCourseId")}</p>
       </div>
     );
   }
 
   if (course === undefined) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading course experience…</p>
+      <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
+        <p className="text-muted-foreground">{t("loadingCourse")}</p>
       </div>
     );
   }
 
   if (!isAdmin && subscription === undefined) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Checking subscription status…</p>
+      <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
+        <p className="text-muted-foreground">{t("checkingSubscription")}</p>
       </div>
     );
   }
 
   if (course === null) {
     return (
-      <div className="flex h-full items-center justify-center">
+      <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <div className="space-y-3 text-center">
-          <p className="text-lg font-semibold">Course not found</p>
+          <p className="text-lg font-semibold">{t("courseNotFound")}</p>
           <p className="text-sm text-muted-foreground">
-            The selected course is unavailable or has been removed.
+            {t("courseUnavailable")}
           </p>
-          <Button variant="cta" onClick={() => navigate("/courses/card")}>
-            Back to course list
+          <Button variant="cta" onClick={() => {
+            const currentLang = searchParams.get("lang");
+            navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
+          }}>
+            {t("backToCourseListButton")}
           </Button>
         </div>
       </div>
@@ -307,106 +313,118 @@ const CoursePreview = () => {
 
   if (!canAccessProtectedContent) {
     const courseImageUrl = course.thumbnail_image_url ?? course.banner_image_url ?? "/RehamDivaLogo.png";
+    const courseName = language === "ar" ? course.name_ar : course.name;
+    const courseDescription = language === "ar" 
+      ? (course.short_description_ar ?? course.description_ar ?? course.short_description ?? course.description ?? t("unlockFullProgram"))
+      : (course.short_description ?? course.description ?? t("unlockFullProgram"));
 
     return (
-      <div className="flex h-full items-center justify-center p-4 md:p-10">
-        <Card className="w-full max-w-5xl overflow-hidden border border-border/40 bg-card/95 shadow-2xl">
-          <div className="grid gap-0 lg:grid-cols-2">
-            <div className="relative h-64 w-full lg:h-full">
-              {courseImageUrl ? (
-                <img src={courseImageUrl} alt={`Preview of ${course.name}`} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-background via-muted to-background text-muted-foreground">
-                  <Video className="h-10 w-10" />
-                  <span className="text-sm font-medium">Course preview coming soon</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-              <div className="absolute bottom-6 left-6 right-6 space-y-1 text-white">
-                <p className="text-xs uppercase tracking-[0.35em] text-white/70">Premium Course</p>
-                <p className="text-2xl font-semibold leading-snug">{course.name}</p>
-                <p className="text-sm text-white/80 line-clamp-2">
-                  {course.short_description ?? course.description ?? "Unlock the full program to access every lesson."}
-                </p>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-6 p-6 md:p-10">
-              <div className="space-y-3">
-                <div className="flex items-center gap-3">
-                  <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
-                    <Lock className="h-5 w-5" />
-                  </div>
-                  <div>
-                    <p className="text-xs uppercase tracking-wide text-muted-foreground">Membership required</p>
-                    <CardTitle className="text-3xl">Unlock {course.name}</CardTitle>
-                  </div>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  {subscription
-                    ? `Your subscription is currently marked as ${subscription.status}. Activate it to view every lesson for this course.`
-                    : "An active subscription lets you stream each lesson, track your progress, and download exclusive resources."}
-                </p>
-              </div>
-
-              <div className="space-y-1">
-                <p className="text-xs uppercase tracking-wide text-muted-foreground">Your investment</p>
-                {isPriceLoading ? (
-                  <div className="h-10 w-40 animate-pulse rounded-xl bg-muted" />
-                ) : priceSummary ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold text-foreground">{priceSummary.amount}</span>
-                    <span className="text-sm text-muted-foreground">per {priceSummary.interval}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    Subscription pricing will appear here once configured. You can still manage your plan on the payments page.
-                  </p>
-                )}
-                {priceSummary?.productName && (
-                  <p className="text-xs text-muted-foreground/80">Plan: {priceSummary.productName}</p>
-                )}
-              </div>
-
-              <div className="space-y-3">
-                <Button variant="cta" className="w-full justify-center gap-2 text-base" onClick={handleStartSubscription} disabled={isStartingCheckout}>
-                  {isStartingCheckout ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <CreditCard className="h-4 w-4" />
-                  )}
-                  Subscribe & Unlock
-                </Button>
-                <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => navigate("/courses/card")}>
-                  Back to courses
-                </Button>
-              </div>
-
-              <ul className="space-y-2 text-sm text-muted-foreground">
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Unlimited HD streaming of every lesson
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Guided progress tracking and completion badges
-                </li>
-                <li className="flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                  Bonus resources and worksheets per lesson
-                </li>
-              </ul>
-            </div>
+      <div className="flex h-full items-center justify-center p-4 md:p-10" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="w-full max-w-5xl space-y-6">
+          <div className="flex justify-center">
+            <LanguageToggle />
           </div>
-        </Card>
+          <Card className="w-full overflow-hidden border border-border/40 bg-card/95 shadow-2xl">
+            <div className="grid gap-0 lg:grid-cols-2">
+              <div className="relative h-64 w-full lg:h-full">
+                {courseImageUrl ? (
+                  <img src={courseImageUrl} alt={`Preview of ${courseName}`} className="h-full w-full object-cover" />
+                ) : (
+                  <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-background via-muted to-background text-muted-foreground">
+                    <Video className="h-10 w-10" />
+                    <span className="text-sm font-medium">{t("premiumCourse")}</span>
+                  </div>
+                )}
+                <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
+                <div className="absolute bottom-6 left-6 right-6 space-y-1 text-white">
+                  <p className="text-xs uppercase tracking-[0.35em] text-white/70">{t("premiumCourse")}</p>
+                  <p className="text-2xl font-semibold leading-snug">{courseName}</p>
+                  <p className="text-sm text-white/80 line-clamp-2">
+                    {courseDescription}
+                  </p>
+                </div>
+              </div>
+
+              <div className="flex flex-col gap-6 p-6 md:p-10">
+                <div className="space-y-3">
+                  <div className="flex items-center gap-3">
+                    <div className="flex h-12 w-12 items-center justify-center rounded-full bg-primary/10 text-primary">
+                      <Lock className="h-5 w-5" />
+                    </div>
+                    <div>
+                      <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("membershipRequired")}</p>
+                      <CardTitle className="text-3xl">{t("unlock")} {courseName}</CardTitle>
+                    </div>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    {subscription
+                      ? `${t("subscriptionStatus")} ${subscription.status}. ${t("activateSubscription")}`
+                      : t("activeSubscriptionDescription")}
+                  </p>
+                </div>
+
+                <div className="space-y-1">
+                  <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("yourInvestment")}</p>
+                  {isPriceLoading ? (
+                    <div className="h-10 w-40 animate-pulse rounded-xl bg-muted" />
+                  ) : priceSummary ? (
+                    <div className="flex items-baseline gap-2">
+                      <span className="text-4xl font-bold text-foreground">{priceSummary.amount}</span>
+                      <span className="text-sm text-muted-foreground">{t("per")} {translateInterval(priceSummary.interval)}</span>
+                    </div>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      {t("subscriptionPricing")}
+                    </p>
+                  )}
+                  {priceSummary?.productName && (
+                    <p className="text-xs text-muted-foreground/80">{t("plan")}: {priceSummary.productName}</p>
+                  )}
+                </div>
+
+                <div className="space-y-3">
+                  <Button variant="cta" className="w-full justify-center gap-2 text-base" onClick={handleStartSubscription} disabled={isStartingCheckout}>
+                    {isStartingCheckout ? (
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                    ) : (
+                      <CreditCard className="h-4 w-4" />
+                    )}
+                    {t("subscribeUnlock")}
+                  </Button>
+                  <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={() => {
+                    const currentLang = searchParams.get("lang");
+                    navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
+                  }}>
+                    {t("backToCourses")}
+                  </Button>
+                </div>
+
+                <ul className="space-y-2 text-sm text-muted-foreground">
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    {t("unlimitedStreaming")}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    {t("progressTracking")}
+                  </li>
+                  <li className="flex items-center gap-2">
+                    <CheckCircle2 className="h-4 w-4 text-emerald-500" />
+                    {t("bonusResources")}
+                  </li>
+                </ul>
+              </div>
+            </div>
+          </Card>
+        </div>
       </div>
     );
   }
 
   if (lessons === undefined || progress === undefined) {
     return (
-      <div className="flex h-full items-center justify-center">
-        <p className="text-muted-foreground">Loading course experience…</p>
+      <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
+        <p className="text-muted-foreground">{t("loadingCourse")}</p>
       </div>
     );
   }
@@ -461,34 +479,45 @@ const CoursePreview = () => {
     }
   };
 
+  const courseName = language === "ar" ? course.name_ar : course.name;
+  const courseShortDescription = language === "ar" 
+    ? (course.short_description_ar ?? course.short_description ?? t("addShortDescription"))
+    : (course.short_description ?? t("addShortDescription"));
+
   return (
-    <div className="mx-auto max-w-6xl space-y-8">
+    <div className="mx-auto max-w-6xl space-y-8" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="flex justify-center mb-6">
+        <LanguageToggle />
+      </div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
-        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => navigate("/courses/card")}>
+        <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => {
+          const currentLang = searchParams.get("lang");
+          navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
+        }}>
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        Back to course list
+        {t("backToCourseList")}
       </div>
 
       <div className="rounded-3xl border border-border/40 bg-card/80 p-6 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
-            <p className="text-sm font-semibold text-primary">Course progress</p>
-            <h1 className="text-3xl font-bold tracking-tight">{course.name}</h1>
+            <p className="text-sm font-semibold text-primary">{t("courseProgress")}</p>
+            <h1 className="text-3xl font-bold tracking-tight">{courseName}</h1>
             <p className="text-muted-foreground mt-1">
               {activeLesson
-                ? `Lesson ${lessonPosition} of ${totalLessons}: ${activeLesson.title}`
-                : "Publish lessons to get started."}
+                ? `${t("lessonOf")} ${lessonPosition} ${t("of")} ${totalLessons}: ${language === "ar" ? activeLesson.title_ar : activeLesson.title}`
+                : t("publishLessonsToStart")}
             </p>
           </div>
           <Badge variant="secondary" className="text-primary">
-            {completionPercent}% complete
+            {completionPercent}% {t("complete")}
           </Badge>
         </div>
         <div className="mt-4 space-y-2">
           <div className="flex items-center justify-between text-sm text-muted-foreground">
             <span>
-              {progressData.completedCount} of {totalLessons || 0} lessons completed
+              {progressData.completedCount} {t("of")} {totalLessons || 0} {t("lessonsCompleted")}
             </span>
             <span>{completionPercent}%</span>
           </div>
@@ -504,7 +533,7 @@ const CoursePreview = () => {
                 <div className="aspect-video w-full">
                   <iframe
                     src={videoEmbedUrl}
-                    title={activeLesson?.title ?? course.name}
+                    title={activeLesson ? (language === "ar" ? activeLesson.title_ar : activeLesson.title) : courseName}
                     className="h-full w-full"
                     allow="autoplay; fullscreen; picture-in-picture"
                     allowFullScreen
@@ -513,10 +542,10 @@ const CoursePreview = () => {
               ) : (
                 <div className="flex aspect-video w-full flex-col items-center justify-center gap-2 bg-gradient-to-br from-background via-muted to-background text-muted-foreground">
                   <Video className="h-12 w-12" />
-                  <p className="text-sm font-medium">No video available</p>
+                  <p className="text-sm font-medium">{t("noVideoAvailable")}</p>
                   {course.trial_video_url && (
                     <span className="text-xs text-muted-foreground">
-                      Add a video URL to this lesson to embed it here.
+                      {t("addVideoUrl")}
                     </span>
                   )}
                 </div>
@@ -533,7 +562,7 @@ const CoursePreview = () => {
               disabled={!previousLesson}
             >
               <ChevronLeft className="h-4 w-4" />
-              Previous Lesson
+              {t("previousLesson")}
             </Button>
             <Button
               type="button"
@@ -547,7 +576,7 @@ const CoursePreview = () => {
               ) : (
                 <CheckCircle2 className="h-4 w-4" />
               )}
-              {isActiveLessonCompleted ? "Completed" : "Mark Complete"}
+              {isActiveLessonCompleted ? t("completed") : t("markComplete")}
             </Button>
             <Button
               type="button"
@@ -556,7 +585,7 @@ const CoursePreview = () => {
               onClick={() => handleNavigateLesson(nextLesson)}
               disabled={!nextLesson}
             >
-              Next Lesson
+              {t("nextLesson")}
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
@@ -564,29 +593,40 @@ const CoursePreview = () => {
           <Tabs defaultValue="overview" className="space-y-4">
             <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted/60 p-1">
               <TabsTrigger value="overview" className="rounded-full">
-                Overview
+                {t("overview")}
               </TabsTrigger>
               <TabsTrigger value="objectives" className="rounded-full">
-                Learning Objectives
+                {t("learningObjectives")}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="overview">
               <Card className="border-none bg-card/70 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold">Lesson Overview</CardTitle>
+                  <CardTitle className="text-lg font-semibold">{t("lessonOverview")}</CardTitle>
                 </CardHeader>
-                <CardContent>{renderStructuredText(activeLesson?.description ?? activeLesson?.short_review)}</CardContent>
+                <CardContent>
+                  {renderStructuredText(
+                    activeLesson 
+                      ? (language === "ar" 
+                          ? (activeLesson.description_ar ?? activeLesson.short_review_ar ?? activeLesson.description ?? activeLesson.short_review)
+                          : (activeLesson.description ?? activeLesson.short_review))
+                      : undefined
+                  )}
+                </CardContent>
               </Card>
             </TabsContent>
             <TabsContent value="objectives">
               <Card className="border-none bg-card/70 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold">Learning Objectives</CardTitle>
+                  <CardTitle className="text-lg font-semibold">{t("learningObjectives")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {renderStructuredText(
-                    activeLesson?.learning_objectives ??
-                      "Highlight key takeaways or action steps for this lesson.",
+                    activeLesson
+                      ? (language === "ar"
+                          ? (activeLesson.learning_objectives_ar ?? activeLesson.learning_objectives)
+                          : activeLesson.learning_objectives)
+                      : undefined
                   )}
                 </CardContent>
               </Card>
@@ -599,23 +639,24 @@ const CoursePreview = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-muted-foreground">Course lessons</p>
-                  <CardTitle className="text-xl">Lesson playlist</CardTitle>
+                  <p className="text-sm font-semibold text-muted-foreground">{t("courseLessons")}</p>
+                  <CardTitle className="text-xl">{t("lessonPlaylist")}</CardTitle>
                 </div>
                 <Badge variant="outline">
-                  {progressData.completedCount}/{totalLessons} done
+                  {progressData.completedCount}/{totalLessons} {t("done")}
                 </Badge>
               </div>
             </CardHeader>
             <CardContent className="space-y-3">
               {lessonList.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
-                  Publish lessons to make this course playable.
+                  {t("publishLessons")}
                 </div>
               ) : (
                 lessonList.map((lesson, index) => {
                   const isActive = activeLesson?._id === lesson._id;
                   const isCompleted = completedLessonSet.has(lesson._id);
+                  const lessonTitle = language === "ar" ? lesson.title_ar : lesson.title;
 
                   return (
                     <button
@@ -635,7 +676,7 @@ const CoursePreview = () => {
                         <Circle className="h-5 w-5 text-muted-foreground" />
                       )}
                       <div className="flex-1">
-                        <p className="text-sm font-semibold leading-5">{lesson.title}</p>
+                        <p className="text-sm font-semibold leading-5">{lessonTitle}</p>
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5" />
@@ -643,7 +684,7 @@ const CoursePreview = () => {
                           </span>
                           <span className="inline-flex items-center gap-1">
                             <PlayCircle className="h-3.5 w-3.5" />
-                            Lesson {index + 1}
+                            {t("lessonOf")} {index + 1}
                           </span>
                         </div>
                       </div>
@@ -656,16 +697,16 @@ const CoursePreview = () => {
 
           <Card className="border border-border/60 bg-card/70 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">About this course</CardTitle>
+              <CardTitle className="text-lg font-semibold">{t("aboutThisCourse")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>{course.short_description ?? "Add a short description to highlight the course story."}</p>
+              <p>{courseShortDescription}</p>
               <div className="flex flex-wrap gap-4 text-xs uppercase tracking-wide text-muted-foreground/80">
                 <span>
-                  Lessons: <span className="font-semibold text-foreground">{course.lesson_count}</span>
+                  {t("lessons")}: <span className="font-semibold text-foreground">{course.lesson_count}</span>
                 </span>
                 <span>
-                  Duration:{" "}
+                  {t("duration")}:{" "}
                   <span className="font-semibold text-foreground">
                     {formatDuration(course.duration)}
                   </span>
