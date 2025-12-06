@@ -30,6 +30,83 @@ type PasswordValidation = {
   hasNumber: boolean;
 };
 
+/**
+ * Parses Convex errors and converts them to user-friendly messages
+ */
+const parseAuthError = (error: any): string => {
+  // Extract the raw error message
+  let rawMessage = "";
+  if (error?.data?.message) {
+    rawMessage = error.data.message;
+  } else if (error?.message) {
+    rawMessage = error.message;
+  } else if (typeof error === "string") {
+    rawMessage = error;
+  }
+
+  // Convert to lowercase for pattern matching
+  const messageLower = rawMessage.toLowerCase();
+
+  // Map technical errors to user-friendly messages
+  if (messageLower.includes("invalidaccountid")) {
+    return "Invalid email or password. Please check your credentials and try again.";
+  }
+  
+  if (messageLower.includes("invalid email") || messageLower.includes("email not found") || messageLower.includes("user not found")) {
+    return "No account found with this email address. Please check your email and try again.";
+  }
+  
+  if (messageLower.includes("invalid password") || messageLower.includes("incorrect password") || messageLower.includes("wrong password")) {
+    return "Incorrect password. Please check your password and try again.";
+  }
+  
+  if ((messageLower.includes("account") && messageLower.includes("deactivated")) || messageLower.includes("deleted")) {
+    return "This account has been deactivated. Please contact support for assistance.";
+  }
+  
+  if (messageLower.includes("unauthorized")) {
+    return "You are not authorized to access this account. Please contact support.";
+  }
+  
+  if (messageLower.includes("email already exists") || messageLower.includes("email already registered") || messageLower.includes("user already exists")) {
+    return "An account with this email already exists. Please sign in instead.";
+  }
+  
+  // Password reset specific errors
+  if (messageLower.includes("could not verify") || messageLower.includes("could not verify code")) {
+    return "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+  }
+  
+  if (messageLower.includes("invalid code") || messageLower.includes("invalid token") || 
+      error?.data?.code === "INVALID_TOKEN" || error?.data?.code === "INVALID_CODE") {
+    return "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+  }
+  
+  if (messageLower.includes("expired") || messageLower.includes("expire")) {
+    return "The reset code has expired. Please request a new one.";
+  }
+  
+  // Check if the message contains stack traces or technical details
+  if (rawMessage.includes("at ") || rawMessage.includes("Error:") || rawMessage.includes("Stack:") || rawMessage.includes("Request ID:") || rawMessage.includes("[CONVEX")) {
+    // It's a technical error, return a generic user-friendly message
+    if (messageLower.includes("signin") || messageLower.includes("login") || messageLower.includes("authenticate")) {
+      return "Failed to sign in. Please check your email and password and try again.";
+    }
+    if (messageLower.includes("register") || messageLower.includes("signup") || messageLower.includes("create")) {
+      return "Failed to create account. Please try again or contact support if the problem persists.";
+    }
+    return "An error occurred. Please try again or contact support if the problem persists.";
+  }
+  
+  // If we have a clean message without technical details, use it
+  if (rawMessage && rawMessage.trim().length > 0) {
+    return rawMessage;
+  }
+  
+  // Default fallback
+  return "An unexpected error occurred. Please try again.";
+};
+
 const LoginPage = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading: authStateLoading } = useConvexAuth();
@@ -118,9 +195,10 @@ const LoginPage = () => {
 
     try {
       await signIn("google");
-    } catch (cause) {
+    } catch (cause: any) {
       console.error(cause);
-      setError("Failed to sign in with Google. Please try again.");
+      const errorMessage = parseAuthError(cause);
+      setError(errorMessage || "Failed to sign in with Google. Please try again.");
       setStatus("idle");
     }
   };
@@ -148,7 +226,7 @@ const LoginPage = () => {
         });
       } catch (cause: any) {
         console.error(cause);
-        const errorMessage = cause?.data?.message || cause?.message || "Failed to register. Please try again.";
+        const errorMessage = parseAuthError(cause);
         setError(errorMessage);
         setStatus("idle");
         return;
@@ -162,10 +240,7 @@ const LoginPage = () => {
         });
       } catch (cause: any) {
         console.error(cause);
-        const errorMessage =
-          cause?.data?.message ||
-          cause?.message ||
-          "Failed to log in. Please check your credentials and try again.";
+        const errorMessage = parseAuthError(cause);
         setError(errorMessage);
         setStatus("idle");
         return;
@@ -239,24 +314,7 @@ const LoginPage = () => {
       setStatus("idle");
     } catch (cause: any) {
       console.error(cause);
-      
-      // Parse error to provide better messages
-      let errorMessage = "Failed to send reset code. Please check your email address and try again.";
-      
-      if (cause?.data) {
-        const errorData = cause.data;
-        if (errorData.message) {
-          const message = errorData.message.toLowerCase();
-          if (message.includes("email") || message.includes("not found") || message.includes("invalid")) {
-            errorMessage = errorData.message;
-          } else {
-            errorMessage = errorData.message;
-          }
-        }
-      } else if (cause?.message) {
-        errorMessage = cause.message;
-      }
-      
+      const errorMessage = parseAuthError(cause) || "Failed to send reset code. Please check your email address and try again.";
       setError(errorMessage);
       setStatus("idle");
     }
@@ -285,50 +343,25 @@ const LoginPage = () => {
       setStatus("success");
     } catch (cause: any) {
       console.error(cause);
-      
-      // Parse error to provide better messages
-      let errorMessage = "Invalid code or password. Please try again.";
-      
-      // Extract error message from various error structures
+      // Check for password validation errors first (these should be shown as-is)
       let rawMessage = "";
       if (cause?.data?.message) {
         rawMessage = cause.data.message;
       } else if (cause?.message) {
         rawMessage = cause.message;
-      } else if (typeof cause === "string") {
-        rawMessage = cause;
       }
-      
-      // Check for specific error patterns
       const messageLower = rawMessage.toLowerCase();
       
-      // Check for "Could not verify code" or similar verification errors
-      if (messageLower.includes("could not verify") || messageLower.includes("could not verify code")) {
-        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
-      }
-      // Check for invalid token/code errors
-      else if (cause?.data?.code === "INVALID_TOKEN" || cause?.data?.code === "INVALID_CODE" || 
-               messageLower.includes("invalid code") || messageLower.includes("invalid token")) {
-        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
-      }
-      // Check for expired code
-      else if (messageLower.includes("expired") || messageLower.includes("expire")) {
-        errorMessage = "The reset code has expired. Please request a new one.";
-      }
-      // Check for password validation errors
-      else if (messageLower.includes("password") && (messageLower.includes("requirement") || messageLower.includes("must") || messageLower.includes("need"))) {
-        errorMessage = "Password does not meet requirements. " + (rawMessage || "Please check the password requirements above.");
-      }
-      // If we have a clean error message without stack traces, use it
-      else if (rawMessage && !rawMessage.includes("at ") && !rawMessage.includes("Error:") && !rawMessage.includes("Stack:")) {
-        // Use the message if it's user-friendly (no stack traces)
-        errorMessage = rawMessage;
-      }
-      // Default fallback
-      else {
-        errorMessage = "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+      // Password validation errors should be shown with context
+      if (messageLower.includes("password") && (messageLower.includes("requirement") || messageLower.includes("must") || messageLower.includes("need"))) {
+        const errorMessage = "Password does not meet requirements. " + (rawMessage || "Please check the password requirements above.");
+        setError(errorMessage);
+        setStatus("idle");
+        return;
       }
       
+      // Use the general error parser for other errors
+      const errorMessage = parseAuthError(cause) || "Invalid code or password. Please try again.";
       setError(errorMessage);
       setStatus("idle");
     }
