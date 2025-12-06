@@ -32,6 +32,13 @@ const formatDuration = (minutes: number | undefined) => {
   return `${hours}h ${remainder}m`;
 };
 
+const formatLessonCount = (count: number | undefined) => {
+  if (typeof count !== "number" || Number.isNaN(count) || count < 0) {
+    return "0 lessons";
+  }
+  return `${count} lesson${count === 1 ? "" : "s"}`;
+};
+
 const CourseCards = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -191,9 +198,13 @@ const CourseCards = () => {
                 <p className="line-clamp-2 text-sm text-muted-foreground">
                   {course.short_description ?? "No description available."}
                 </p>
-                <div className="flex items-center gap-1 text-xs text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  <span>{formatDuration(course.duration)}</span>
+                <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                  <span>{formatLessonCount(course.lesson_count)}</span>
+                  <span aria-hidden="true">•</span>
+                  <span className="flex items-center gap-1">
+                    <Clock className="h-3.5 w-3.5" />
+                    <span>{formatDuration(course.duration)}</span>
+                  </span>
                 </div>
               </CardHeader>
               <CardFooter className="mt-auto pt-0">
