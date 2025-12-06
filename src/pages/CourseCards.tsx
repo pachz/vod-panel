@@ -139,6 +139,7 @@ const CourseCards = () => {
         </button>
         {categoryList.map((category) => {
           const isActive = categoryFilter === category._id;
+          const categoryName = language === "ar" ? category.name_ar : category.name;
           return (
             <button
               type="button"
@@ -150,7 +151,7 @@ const CourseCards = () => {
                   : "text-muted-foreground hover:text-foreground"
               }`}
             >
-              {category.name}
+              {categoryName}
             </button>
           );
         })}
