@@ -54,13 +54,19 @@ const memberMenuItems: MenuItem[] = [
 ];
 
 export function AdminSidebar() {
-  const { state } = useSidebar();
+  const { state, setOpenMobile, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
   const currentUser = useQuery(api.user.getCurrentUser);
   const isAdmin = currentUser?.isGod ?? false;
   const isLoadingUser = currentUser === undefined;
   const menuItems = isLoadingUser ? memberMenuItems : isAdmin ? adminMenuItems : memberMenuItems;
+
+  const handleLinkClick = () => {
+    if (isMobile) {
+      setOpenMobile(false);
+    }
+  };
 
   return (
     <Sidebar collapsible="offcanvas" className="border-none bg-transparent">
@@ -105,7 +111,7 @@ export function AdminSidebar() {
                         "data-[active=false]:text-sidebar-foreground/70 data-[active=false]:hover:bg-[color:hsl(var(--sidebar-accent)/0.12)] data-[active=false]:hover:text-sidebar-foreground",
                       )}
                     >
-                      <Link to={item.url} className="flex w-full items-center gap-3">
+                      <Link to={item.url} onClick={handleLinkClick} className="flex w-full items-center gap-3">
                         <item.icon
                           className={cn(
                             "h-5 w-5 transition-colors duration-200",
