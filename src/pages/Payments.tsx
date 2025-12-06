@@ -396,9 +396,6 @@ const Payments = () => {
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
             Payments
-            <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
-              Alpha
-            </Badge>
           </h1>
           <p className="text-muted-foreground mt-2">
             Manage subscriptions and payment processing

@@ -24,7 +24,6 @@ import {
   SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import type { LucideIcon } from "lucide-react";
 
@@ -32,7 +31,6 @@ type MenuItem = {
   title: string;
   url: string;
   icon: LucideIcon;
-  alpha?: boolean;
 };
 
 const adminMenuItems: MenuItem[] = [
@@ -42,9 +40,9 @@ const adminMenuItems: MenuItem[] = [
   { title: "Card View", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Coach", url: "/coach", icon: UserRound },
-  // { title: "Video Panel", url: "/video-panel", icon: PlayCircle, alpha: true },
-  { title: "Users", url: "/users", icon: Users, alpha: true },
-  { title: "Payments", url: "/payments", icon: CreditCard, alpha: true },
+  // { title: "Video Panel", url: "/video-panel", icon: PlayCircle },
+  { title: "Users", url: "/users", icon: Users },
+  { title: "Payments", url: "/payments", icon: CreditCard },
 ];
 
 const memberMenuItems: MenuItem[] = [
@@ -129,11 +127,6 @@ export function AdminSidebar() {
                             >
                               {item.title}
                             </span>
-                            {item.alpha && (
-                              <Badge variant="destructive" className="ml-auto text-xs px-1.5 py-0 h-5">
-                                Alpha
-                              </Badge>
-                            )}
                           </>
                         )}
                       </Link>

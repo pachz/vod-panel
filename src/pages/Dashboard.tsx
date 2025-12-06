@@ -110,9 +110,6 @@ const Dashboard = () => {
             <CardHeader className="pb-4">
               <CardTitle className="text-2xl flex items-center gap-2">
                 Recent Activity
-                <Badge variant="destructive" className="text-xs px-1.5 py-0 h-5">
-                  Alpha
-                </Badge>
               </CardTitle>
             </CardHeader>
             <CardContent>
