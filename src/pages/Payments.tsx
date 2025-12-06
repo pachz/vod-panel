@@ -714,12 +714,30 @@ const Payments = () => {
                       <SelectValue placeholder="Choose a product" />
                     </SelectTrigger>
                     <SelectContent>
-                      {stripeProducts.map((product) => (
-                        <SelectItem key={product.id} value={product.id}>
-                          {product.name}
-                          {product.description && ` - ${product.description}`}
-                        </SelectItem>
-                      ))}
+                      {stripeProducts.map((product) => {
+                        const activePrices = product.prices?.filter((p: any) => p.active && p.type === "recurring") || [];
+                        const priceDisplay = activePrices.length > 0
+                          ? activePrices.map((price: any) => {
+                              const formatted = formatPrice(price.unitAmount, price.currency);
+                              const interval = price.recurring?.interval || "one-time";
+                              const intervalCount = price.recurring?.intervalCount;
+                              const intervalText = intervalCount && intervalCount > 1
+                                ? `every ${intervalCount} ${interval}s`
+                                : interval;
+                              return `${formatted} / ${intervalText}`;
+                            }).join(", ")
+                          : "No active prices";
+                        
+                        const displayText = product.description
+                          ? `${product.name} - ${product.description} (${priceDisplay})`
+                          : `${product.name} (${priceDisplay})`;
+                        
+                        return (
+                          <SelectItem key={product.id} value={product.id}>
+                            {displayText}
+                          </SelectItem>
+                        );
+                      })}
                     </SelectContent>
                   </Select>
                 </div>
