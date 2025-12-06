@@ -1,7 +1,7 @@
 {
   "name": "vod-panel",
   "private": true,
-  "version": "0.2.61",
+  "version": "0.2.62",
   "type": "module",
   "scripts": {
     "dev": "npm-run-all --parallel dev:frontend dev:backend https",
@@ -64,6 +64,7 @@
     "react-day-picker": "^8.10.1",
     "react-dom": "^18.3.1",
     "react-hook-form": "^7.61.1",
+    "react-markdown": "^10.1.0",
     "react-resizable-panels": "^2.1.9",
     "react-router-dom": "^7.9.5",
     "recharts": "^2.15.4",

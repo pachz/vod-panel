@@ -72,6 +72,12 @@ const translations = {
     "year": "year",
     "week": "week",
     "day": "day",
+    "min": "min",
+    "hr": "hr",
+    "hours": "hours",
+    "hour": "hour",
+    "minutes": "minutes",
+    "minute": "minute",
   },
   ar: {
     // CourseCards
@@ -139,6 +145,12 @@ const translations = {
     "year": "سنة",
     "week": "أسبوع",
     "day": "يوم",
+    "min": "دقيقة",
+    "hr": "ساعة",
+    "hours": "ساعات",
+    "hour": "ساعة",
+    "minutes": "دقائق",
+    "minute": "دقيقة",
   },
 } as const;
 

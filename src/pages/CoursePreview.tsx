@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
+import ReactMarkdown from "react-markdown";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -44,23 +45,26 @@ const DEFAULT_PROGRESS: CourseProgress = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-const formatDuration = (minutes: number | undefined | null) => {
+const formatDuration = (minutes: number | undefined | null, t: (key: string) => string) => {
   if (minutes === undefined || minutes === null) {
     return "—";
   }
 
   if (minutes < 60) {
-    return `${minutes} min`;
+    return `${minutes} ${t("min")}`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
 
   if (remainder === 0) {
-    return `${hours} hr`;
+    const hourText = hours === 1 ? t("hour") : t("hours");
+    return `${hours} ${hourText}`;
   }
 
-  return `${hours} hr ${remainder} min`;
+  const hourText = hours === 1 ? t("hour") : t("hours");
+  const minuteText = remainder === 1 ? t("minute") : t("minutes");
+  return `${hours} ${hourText} ${remainder} ${minuteText}`;
 };
 
 const getVimeoEmbedUrl = (url?: string | null) => {
@@ -78,54 +82,32 @@ const getVimeoEmbedUrl = (url?: string | null) => {
   return trimmed;
 };
 
-const renderStructuredText = (value?: string | null) => {
+const renderMarkdown = (value?: string | null, isRTL: boolean = false) => {
   if (!value || !value.trim()) {
     return <p className="text-sm text-muted-foreground">Content for this section is coming soon.</p>;
   }
 
-  const lines = value.split(/\r?\n/);
-  const blocks: Array<JSX.Element> = [];
-  let currentList: string[] = [];
-
-  const flushList = () => {
-    if (currentList.length === 0) {
-      return;
-    }
-
-    blocks.push(
-      <ul key={`list-${blocks.length}`} className="list-disc space-y-1 pl-5 text-sm leading-6">
-        {currentList.map((item, index) => (
-          <li key={`item-${index}`}>{item}</li>
-        ))}
-      </ul>,
-    );
-    currentList = [];
-  };
-
-  lines.forEach((line, index) => {
-    const trimmed = line.trim();
-
-    if (!trimmed) {
-      flushList();
-      return;
-    }
-
-    if (trimmed.startsWith("- ")) {
-      currentList.push(trimmed.slice(2));
-      return;
-    }
-
-    flushList();
-    blocks.push(
-      <p key={`paragraph-${index}`} className="text-sm leading-6 text-muted-foreground">
-        {trimmed}
-      </p>,
-    );
-  });
-
-  flushList();
-
-  return <div className="space-y-3">{blocks}</div>;
+  return (
+    <div className={cn("prose prose-sm max-w-none dark:prose-invert", isRTL && "prose-rtl")} dir={isRTL ? "rtl" : "ltr"}>
+      <ReactMarkdown
+        components={{
+          p: ({ children }) => <p className="text-sm leading-6 text-muted-foreground mb-3 last:mb-0">{children}</p>,
+          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ul>,
+          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ol>,
+          li: ({ children }) => <li className="text-sm leading-6 text-muted-foreground">{children}</li>,
+          h1: ({ children }) => <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>,
+          h2: ({ children }) => <h2 className="text-xl font-semibold mb-2 mt-3 first:mt-0">{children}</h2>,
+          h3: ({ children }) => <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>,
+          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+          em: ({ children }) => <em className="italic">{children}</em>,
+          code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+          blockquote: ({ children }) => <blockquote className="border-l-4 border-primary pl-4 italic my-3">{children}</blockquote>,
+        }}
+      >
+        {value}
+      </ReactMarkdown>
+    </div>
+  );
 };
 
 const CoursePreview = () => {
@@ -554,40 +536,81 @@ const CoursePreview = () => {
           </Card>
 
           <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/60 p-4 shadow-sm md:grid-cols-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-center gap-2"
-              onClick={() => handleNavigateLesson(previousLesson)}
-              disabled={!previousLesson}
-            >
-              <ChevronLeft className="h-4 w-4" />
-              {t("previousLesson")}
-            </Button>
-            <Button
-              type="button"
-              variant={isActiveLessonCompleted ? "secondary" : "cta"}
-              className="w-full gap-2"
-              disabled={!activeLesson || isTogglingCompletion}
-              onClick={handleToggleCompletion}
-            >
-              {isTogglingCompletion ? (
-                <Loader2 className="h-4 w-4 animate-spin" />
-              ) : (
-                <CheckCircle2 className="h-4 w-4" />
-              )}
-              {isActiveLessonCompleted ? t("completed") : t("markComplete")}
-            </Button>
-            <Button
-              type="button"
-              variant="outline"
-              className="w-full justify-center gap-2"
-              onClick={() => handleNavigateLesson(nextLesson)}
-              disabled={!nextLesson}
-            >
-              {t("nextLesson")}
-              <ChevronRight className="h-4 w-4" />
-            </Button>
+            {isRTL ? (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-center gap-2"
+                  onClick={() => handleNavigateLesson(nextLesson)}
+                  disabled={!nextLesson}
+                >
+                  {t("nextLesson")}
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  type="button"
+                  variant={isActiveLessonCompleted ? "secondary" : "cta"}
+                  className="w-full gap-2"
+                  disabled={!activeLesson || isTogglingCompletion}
+                  onClick={handleToggleCompletion}
+                >
+                  {isTogglingCompletion ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {isActiveLessonCompleted ? t("completed") : t("markComplete")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-center gap-2"
+                  onClick={() => handleNavigateLesson(previousLesson)}
+                  disabled={!previousLesson}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                  {t("previousLesson")}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-center gap-2"
+                  onClick={() => handleNavigateLesson(previousLesson)}
+                  disabled={!previousLesson}
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                  {t("previousLesson")}
+                </Button>
+                <Button
+                  type="button"
+                  variant={isActiveLessonCompleted ? "secondary" : "cta"}
+                  className="w-full gap-2"
+                  disabled={!activeLesson || isTogglingCompletion}
+                  onClick={handleToggleCompletion}
+                >
+                  {isTogglingCompletion ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {isActiveLessonCompleted ? t("completed") : t("markComplete")}
+                </Button>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full justify-center gap-2"
+                  onClick={() => handleNavigateLesson(nextLesson)}
+                  disabled={!nextLesson}
+                >
+                  {t("nextLesson")}
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
 
           <Tabs defaultValue="overview" className="space-y-4">
@@ -605,12 +628,13 @@ const CoursePreview = () => {
                   <CardTitle className="text-lg font-semibold">{t("lessonOverview")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {renderStructuredText(
+                  {renderMarkdown(
                     activeLesson 
                       ? (language === "ar" 
                           ? (activeLesson.description_ar ?? activeLesson.short_review_ar ?? activeLesson.description ?? activeLesson.short_review)
                           : (activeLesson.description ?? activeLesson.short_review))
-                      : undefined
+                      : undefined,
+                    isRTL
                   )}
                 </CardContent>
               </Card>
@@ -621,12 +645,13 @@ const CoursePreview = () => {
                   <CardTitle className="text-lg font-semibold">{t("learningObjectives")}</CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {renderStructuredText(
+                  {renderMarkdown(
                     activeLesson
                       ? (language === "ar"
                           ? (activeLesson.learning_objectives_ar ?? activeLesson.learning_objectives)
                           : activeLesson.learning_objectives)
-                      : undefined
+                      : undefined,
+                    isRTL
                   )}
                 </CardContent>
               </Card>
@@ -680,7 +705,7 @@ const CoursePreview = () => {
                         <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                           <span className="inline-flex items-center gap-1">
                             <Clock className="h-3.5 w-3.5" />
-                            {formatDuration(lesson.duration)}
+                            {formatDuration(lesson.duration, t)}
                           </span>
                           <span className="inline-flex items-center gap-1">
                             <PlayCircle className="h-3.5 w-3.5" />
@@ -700,7 +725,7 @@ const CoursePreview = () => {
               <CardTitle className="text-lg font-semibold">{t("aboutThisCourse")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
-              <p>{courseShortDescription}</p>
+              {renderMarkdown(courseShortDescription, isRTL)}
               <div className="flex flex-wrap gap-4 text-xs uppercase tracking-wide text-muted-foreground/80">
                 <span>
                   {t("lessons")}: <span className="font-semibold text-foreground">{course.lesson_count}</span>
@@ -708,7 +733,7 @@ const CoursePreview = () => {
                 <span>
                   {t("duration")}:{" "}
                   <span className="font-semibold text-foreground">
-                    {formatDuration(course.duration)}
+                    {formatDuration(course.duration, t)}
                   </span>
                 </span>
               </div>
