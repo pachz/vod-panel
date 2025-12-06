@@ -1,13 +1,13 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Eye } from "lucide-react";
+import { Clock } from "lucide-react";
 import { useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 
 type CourseDoc = Doc<"courses">;
@@ -15,17 +15,21 @@ type CategoryDoc = Doc<"categories">;
 
 const formatDuration = (minutes: number | undefined) => {
   if (minutes === undefined || minutes === null) {
-    return "—";
+    return "0m";
   }
 
-  return `${minutes} min`;
-};
-
-const formatLessonCount = (count: number | undefined) => {
-  if (typeof count !== "number" || Number.isNaN(count) || count < 0) {
-    return "0 lessons";
+  if (minutes < 60) {
+    return `${minutes}m`;
   }
-  return `${count} lesson${count === 1 ? "" : "s"}`;
+
+  const hours = Math.floor(minutes / 60);
+  const remainder = minutes % 60;
+
+  if (remainder === 0) {
+    return `${hours}h`;
+  }
+
+  return `${hours}h ${remainder}m`;
 };
 
 const CourseCards = () => {
@@ -159,47 +163,45 @@ const CourseCards = () => {
             : "No courses available yet."}
         </div>
       ) : (
-        <div className="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {courseList.map((course) => (
             <Card key={course._id} className="flex h-full flex-col overflow-hidden">
               {course.thumbnail_image_url ? (
-                <img
-                  src={course.thumbnail_image_url}
-                  alt={course.name}
-                  className="h-48 w-full object-cover"
-                  loading="lazy"
-                />
+                <div className="relative h-48 w-full overflow-hidden">
+                  <img
+                    src={course.thumbnail_image_url}
+                    alt={course.name}
+                    className="h-full w-full object-cover"
+                    loading="lazy"
+                  />
+                </div>
               ) : (
                 <div className="flex h-48 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
                   No image
                 </div>
               )}
-              <CardHeader className="space-y-2">
-                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
-                  <Badge variant="secondary" className="text-foreground">
-                    {categoryNameById[course.category_id] ?? "Uncategorized"}
-                  </Badge>
-                  <div className="flex items-center gap-2 font-medium">
-                    <span>{formatLessonCount(course.lesson_count)}</span>
-                    <span aria-hidden="true">•</span>
-                    <span>{formatDuration(course.duration)}</span>
-                  </div>
-                </div>
-                <CardTitle className="text-xl leading-tight">{course.name}</CardTitle>
-              </CardHeader>
-              <CardContent className="flex-1">
-                <p className="text-sm text-muted-foreground">
+              <CardHeader className="space-y-3">
+                <Badge 
+                  variant="secondary" 
+                  className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
+                >
+                  {categoryNameById[course.category_id] ?? "Uncategorized"}
+                </Badge>
+                <CardTitle className="text-lg font-bold leading-tight">{course.name}</CardTitle>
+                <p className="line-clamp-2 text-sm text-muted-foreground">
                   {course.short_description ?? "No description available."}
                 </p>
-              </CardContent>
-              <CardFooter>
+                <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  <span>{formatDuration(course.duration)}</span>
+                </div>
+              </CardHeader>
+              <CardFooter className="mt-auto pt-0">
                 <Button
-                  variant="outline"
-                  className="w-full"
+                  className="w-full rounded-lg bg-pink-500 text-white hover:bg-pink-600"
                   onClick={() => navigate(`/courses/preview/${course._id}`)}
                 >
-                  <Eye className="mr-2 h-4 w-4" />
-                  View course
+                  View Course
                 </Button>
               </CardFooter>
             </Card>
