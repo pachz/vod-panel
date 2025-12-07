@@ -25,8 +25,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { cn } from "@/lib/utils";
-import { useSidebar } from "@/components/ui/sidebar";
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { useLanguage } from "@/hooks/use-language";
 
 type LessonDoc = Doc<"lessons">;
@@ -121,21 +119,9 @@ const CoursePreview = () => {
   const subscription = useQuery(api.paymentInternal.getMySubscription);
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
-  const { setOpen, setOpenMobile } = useSidebar();
   const isAdmin = currentUser?.isGod ?? false;
   const hasActiveSubscription = subscription ? ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) : false;
   const canAccessProtectedContent = isAdmin || hasActiveSubscription;
-
-  useEffect(() => {
-    if (subscription === undefined) {
-      return;
-    }
-
-    if (!canAccessProtectedContent) {
-      setOpen(false);
-      setOpenMobile(false);
-    }
-  }, [canAccessProtectedContent, setOpen, setOpenMobile, subscription]);
   const lessons = useQuery(
     api.lesson.listLessons,
     courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
@@ -303,9 +289,6 @@ const CoursePreview = () => {
     return (
       <div className="flex h-full items-center justify-center p-4 md:p-10" dir={isRTL ? "rtl" : "ltr"}>
         <div className="w-full max-w-5xl space-y-6">
-          <div className="flex justify-center">
-            <LanguageToggle />
-          </div>
           <Card className="w-full overflow-hidden border border-border/40 bg-card/95 shadow-2xl">
             <div className="grid gap-0 lg:grid-cols-2">
               <div className="relative h-64 w-full lg:h-full">
@@ -468,9 +451,6 @@ const CoursePreview = () => {
 
   return (
     <div className="mx-auto max-w-6xl space-y-8" dir={isRTL ? "rtl" : "ltr"}>
-      <div className="flex justify-center mb-6">
-        <LanguageToggle />
-      </div>
       <div className="flex items-center gap-2 text-sm text-muted-foreground">
         <Button variant="ghost" size="icon" className="h-9 w-9" onClick={() => {
           const currentLang = searchParams.get("lang");

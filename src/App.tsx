@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/sidebar";
 import { AdminSidebar } from "@/components/AdminSidebar";
 import { UserProfile } from "@/components/UserProfile";
+import UserLayout from "@/components/UserLayout";
 import { api } from "../convex/_generated/api";
 
 type LocationState = {
@@ -113,6 +114,18 @@ const PublicRoute = () => {
   return <Outlet />;
 };
 
+const UserProviders = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <UserLayout />
+      </TooltipProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
+
 const DashboardProviders = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
@@ -170,11 +183,15 @@ const App = () => (
       <Route path="/login" element={<LoginPage />} />
     </Route>
     <Route element={<PrivateRoute />}>
-      <Route element={<DashboardProviders />}>
+      {/* Normal user routes - no sidebar */}
+      <Route element={<UserProviders />}>
         <Route path="/" element={<DashboardRedirect />} />
         <Route path="/courses/card" element={<CourseCards />} />
         <Route path="/courses/preview/:id" element={<CoursePreview />} />
         <Route path="/payments" element={<Payments />} />
+      </Route>
+      {/* Admin routes - with sidebar */}
+      <Route element={<DashboardProviders />}>
         <Route element={<AdminRoute />}>
           <Route path="/categories" element={<Categories />} />
           <Route path="/courses" element={<Courses />} />

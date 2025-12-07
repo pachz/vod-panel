@@ -1,6 +1,6 @@
 import { useMemo } from "react";
-import { useNavigate } from "react-router-dom";
-import { BookOpen, CheckCircle2, Clock, Calendar, ArrowRight } from "lucide-react";
+import { useNavigate, useLocation } from "react-router-dom";
+import { BookOpen, CheckCircle2, Clock, Calendar, ArrowRight, Sparkles } from "lucide-react";
 import { useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -22,6 +22,7 @@ const formatDate = (timestamp: number, isRTL: boolean) => {
 
 const UserDashboard = () => {
   const navigate = useNavigate();
+  const location = useLocation();
   const { language, t, isRTL } = useLanguage();
 
   const stats = useQuery(api.lessonProgress.getUserDashboardStats);
@@ -38,6 +39,8 @@ const UserDashboard = () => {
     () => userCourses?.filter((c) => c.isCompleted) ?? [],
     [userCourses]
   );
+
+  const hasNoCourses = !isLoading && userCourses && userCourses.length === 0;
 
   const statsData = [
     {
@@ -67,6 +70,47 @@ const UserDashboard = () => {
       color: "from-orange-500 to-orange-600",
     },
   ];
+
+  if (hasNoCourses) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="max-w-md w-full px-6 text-center space-y-8">
+          <div className="flex justify-center">
+            <div className="relative">
+              <div className="absolute inset-0 bg-gradient-to-br from-primary/20 to-primary/5 rounded-full blur-2xl" />
+              <div className="relative h-24 w-24 rounded-full bg-gradient-to-br from-primary to-primary/60 flex items-center justify-center">
+                <Sparkles className="h-12 w-12 text-white" />
+              </div>
+            </div>
+          </div>
+          <div className="space-y-4">
+            <h2 className="text-3xl font-bold tracking-tight">{t("getStarted")}</h2>
+            <h3 className="text-xl text-muted-foreground">{t("noCoursesYet")}</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              {t("getStartedDescription")}
+            </p>
+          </div>
+          <Button
+            size="lg"
+            onClick={() => {
+              const searchParams = new URLSearchParams(location.search);
+              if (language === "ar") {
+                searchParams.set("lang", "ar");
+              } else {
+                searchParams.delete("lang");
+              }
+              const queryString = searchParams.toString();
+              navigate(`/courses/card${queryString ? `?${queryString}` : ""}`);
+            }}
+            className="w-full sm:w-auto px-8 rounded-lg bg-pink-500 text-white hover:bg-pink-600"
+          >
+            {t("browseCourses")}
+            <ArrowRight className={cn("h-5 w-5", isRTL ? "mr-2 rotate-180" : "ml-2")} />
+          </Button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-8" dir={isRTL ? "rtl" : "ltr"}>

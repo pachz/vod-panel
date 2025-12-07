@@ -8,6 +8,8 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { format } from "date-fns";
+import { useLanguage } from "@/hooks/use-language";
+import { cn } from "@/lib/utils";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -30,6 +32,7 @@ import { Label } from "@/components/ui/label";
 
 const Payments = () => {
   const [searchParams, setSearchParams] = useSearchParams();
+  const { t, isRTL, translateInterval } = useLanguage();
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
   const syncSubscriptionStatus = useAction(api.payment.syncSubscriptionStatus);
   const cancelSubscription = useAction(api.payment.cancelSubscription);
@@ -70,14 +73,14 @@ const Payments = () => {
       syncSubscriptionStatus({ sessionId })
         .then((result) => {
           if (result?.success) {
-            toast.success("Payment successful! Your subscription has been activated.");
+            toast.success(t("paymentSuccessfulActivated"));
           } else {
-            toast.success("Payment successful! Your subscription is being activated...");
+            toast.success(t("paymentSuccessfulActivating"));
           }
         })
         .catch((error) => {
           console.error("Error syncing subscription:", error);
-          toast.error("Payment successful, but failed to sync subscription status. Please refresh the page.");
+          toast.error(t("paymentSuccessfulSyncFailed"));
         })
         .finally(() => {
           setIsSyncing(false);
@@ -85,7 +88,7 @@ const Payments = () => {
           setSearchParams({});
         });
     } else if (canceled === "true") {
-      toast.info("Payment was canceled. You can try again anytime.");
+      toast.info(t("paymentCanceled"));
       setSearchParams({});
     }
   }, [searchParams, setSearchParams, syncSubscriptionStatus]);
@@ -98,11 +101,11 @@ const Payments = () => {
         // Redirect to Stripe checkout
         window.location.href = checkoutUrl;
       } else {
-        toast.error("Failed to create checkout session");
+        toast.error(t("failedToCreateCheckoutSession"));
       }
     } catch (error) {
       console.error("Error creating checkout session:", error);
-      toast.error("Failed to create checkout session. Please try again.");
+      toast.error(t("failedToCreateCheckoutSessionRetry"));
     } finally {
       setIsLoading(false);
     }
@@ -141,8 +144,10 @@ const Payments = () => {
         return "N/A";
       }
       
-      // Use date-fns format, but catch any errors
-      const formatted = format(date, "MMM d, yyyy");
+      // Use date-fns format with locale support
+      const formatted = format(date, "MMM d, yyyy", {
+        locale: isRTL ? undefined : undefined, // date-fns locale can be added here if needed
+      });
       
       // Check if format returned NaN (shouldn't happen, but just in case)
       if (formatted.includes("NaN") || formatted === "Invalid Date") {
@@ -160,13 +165,13 @@ const Payments = () => {
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
-        return <Badge variant="default" className="bg-green-500">Active</Badge>;
+        return <Badge variant="default" className="bg-green-500">{t("active")}</Badge>;
       case "trialing":
-        return <Badge variant="default" className="bg-blue-500">Trialing</Badge>;
+        return <Badge variant="default" className="bg-blue-500">{t("trialing")}</Badge>;
       case "past_due":
-        return <Badge variant="destructive">Past Due</Badge>;
+        return <Badge variant="destructive">{t("pastDue")}</Badge>;
       case "canceled":
-        return <Badge variant="secondary">Canceled</Badge>;
+        return <Badge variant="secondary">{t("canceled")}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
     }
@@ -183,7 +188,7 @@ const Payments = () => {
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to cancel subscription. Please try again."
+          : t("failedToCancelSubscription")
       );
     } finally {
       setIsCanceling(false);
@@ -200,7 +205,7 @@ const Payments = () => {
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to reactivate subscription. Please try again."
+          : t("failedToReactivateSubscription")
       );
     } finally {
       setIsReactivating(false);
@@ -214,14 +219,14 @@ const Payments = () => {
       if (portalUrl) {
         window.location.href = portalUrl;
       } else {
-        toast.error("Failed to open customer portal");
+        toast.error(t("failedToOpenCustomerPortal"));
       }
     } catch (error) {
       console.error("Error opening customer portal:", error);
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to open customer portal. Please try again."
+          : t("failedToOpenCustomerPortalRetry")
       );
     } finally {
       setIsOpeningPortal(false);
@@ -230,20 +235,20 @@ const Payments = () => {
 
   const handleReSyncSubscription = async () => {
     if (!subscription?.subscriptionId) {
-      toast.error("No subscription found to sync");
+      toast.error(t("noSubscriptionFoundToSync"));
       return;
     }
 
     setIsReSyncing(true);
     try {
       await syncSubscriptionFromStripe({ subscriptionId: subscription.subscriptionId });
-      toast.success("Subscription data synced successfully");
+      toast.success(t("subscriptionDataSyncedSuccessfully"));
     } catch (error) {
       console.error("Error syncing subscription:", error);
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to sync subscription. Please try again."
+          : t("failedToSyncSubscription")
       );
     } finally {
       setIsReSyncing(false);
@@ -336,7 +341,7 @@ const Payments = () => {
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to fetch products from Stripe"
+          : t("failedToFetchProducts")
       );
     } finally {
       setIsFetchingProducts(false);
@@ -345,7 +350,7 @@ const Payments = () => {
 
   const handleSaveSettings = async () => {
     if (!selectedProductId || !selectedPriceId) {
-      toast.error("Please select both a product and a price");
+      toast.error(t("pleaseSelectProductAndPrice"));
       return;
     }
 
@@ -353,7 +358,7 @@ const Payments = () => {
     const selectedPrice = selectedProduct?.prices.find((p: any) => p.id === selectedPriceId);
 
     if (!selectedProduct || !selectedPrice) {
-      toast.error("Selected product or price not found");
+      toast.error(t("selectedProductOrPriceNotFound"));
       return;
     }
 
@@ -367,13 +372,13 @@ const Payments = () => {
         priceCurrency: selectedPrice.currency,
         priceInterval: (selectedPrice.recurring?.interval || "month") as "month" | "year" | "week" | "day",
       });
-      toast.success("Payment settings saved successfully");
+      toast.success(t("paymentSettingsSavedSuccessfully"));
     } catch (error) {
       console.error("Error saving settings:", error);
       toast.error(
         error instanceof Error 
           ? error.message 
-          : "Failed to save payment settings"
+          : t("failedToSavePaymentSettings")
       );
     } finally {
       setIsSavingSettings(false);
@@ -391,14 +396,14 @@ const Payments = () => {
   const availablePrices = selectedProduct?.prices.filter((p: any) => p.active && p.type === "recurring") || [];
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6" dir={isRTL ? "rtl" : "ltr"}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-            Payments
+            {t("payments")}
           </h1>
           <p className="text-muted-foreground mt-2">
-            Manage subscriptions and payment processing
+            {t("manageSubscriptions")}
           </p>
         </div>
       </div>
@@ -409,28 +414,28 @@ const Payments = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
-              Subscription Status
+              {t("subscriptionStatusTitle")}
               {isSyncing && (
                 <Badge variant="outline" className="text-xs">
-                  Syncing...
+                  {t("syncing")}
                 </Badge>
               )}
             </CardTitle>
             <CardDescription>
-              Your current subscription information
+              {t("yourSubscriptionInfo")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             {isSyncing ? (
               <div className="flex items-center gap-2 text-muted-foreground">
                 <div className="h-4 w-4 animate-spin rounded-full border-2 border-primary border-t-transparent" />
-                <p>Syncing subscription status from Stripe...</p>
+                <p>{t("syncingSubscriptionStatus")}</p>
               </div>
             ) : subscription === null ? (
               <div className="space-y-4">
                 <div className="flex items-center gap-2 text-muted-foreground">
                   <XCircle className="h-5 w-5" />
-                  <p>You don&apos;t have an active subscription.</p>
+                  <p>{t("noActiveSubscription")}</p>
                 </div>
                 <Button
                   variant="cta"
@@ -438,7 +443,7 @@ const Payments = () => {
                   disabled={isLoading}
                   className="w-full sm:w-auto"
                 >
-                  {isLoading ? "Creating checkout session..." : "Subscribe Now"}
+                  {isLoading ? t("creatingCheckoutSession") : t("subscribeNow")}
                 </Button>
               </div>
             ) : (
@@ -447,7 +452,7 @@ const Payments = () => {
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <span className="font-medium">Subscription Active</span>
+                    <span className="font-medium">{t("subscriptionActive")}</span>
                   </div>
                   {getStatusBadge(subscription.status)}
                 </div>
@@ -469,9 +474,9 @@ const Payments = () => {
                     return (
                       <div className="space-y-4">
                         <div className="p-4 rounded-lg bg-yellow-500/10 border border-yellow-500/20">
-                          <p className="text-sm font-medium text-yellow-500 mb-2">Subscription Data Needs Sync</p>
+                          <p className="text-sm font-medium text-yellow-500 mb-2">{t("subscriptionDataNeedsSync")}</p>
                           <p className="text-sm text-muted-foreground mb-3">
-                            The subscription dates are missing or invalid. Click the button below to sync the latest data from Stripe.
+                            {t("subscriptionDatesInvalid")}
                           </p>
                           <Button
                             variant="outline"
@@ -481,13 +486,13 @@ const Payments = () => {
                           >
                             {isReSyncing ? (
                               <>
-                                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                                Syncing...
+                                <Loader2 className={cn("h-4 w-4 animate-spin", isRTL ? "ml-2" : "mr-2")} />
+                                {t("syncing")}
                               </>
                             ) : (
                               <>
-                                <RefreshCw className="mr-2 h-4 w-4" />
-                                Sync from Stripe
+                                <RefreshCw className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+                                {t("syncFromStripe")}
                               </>
                             )}
                           </Button>
@@ -504,18 +509,18 @@ const Payments = () => {
                   return (
                     <div className="space-y-4">
                       <div>
-                        <h3 className="text-sm font-semibold mb-3">Billing Cycle</h3>
+                        <h3 className="text-sm font-semibold mb-3">{t("billingCycle")}</h3>
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground">Current Period</p>
+                            <p className="text-xs text-muted-foreground">{t("currentPeriod")}</p>
                             <p className="text-sm font-medium">
                               {formatDate(subscription.currentPeriodStart)} - {formatDate(subscription.currentPeriodEnd)}
                             </p>
                           </div>
                           <div className="space-y-1">
-                            <p className="text-xs text-muted-foreground">Days Remaining</p>
+                            <p className="text-xs text-muted-foreground">{t("daysRemaining")}</p>
                             <p className="text-sm font-medium">
-                              {cycleInfo.daysRemaining} {cycleInfo.daysRemaining === 1 ? "day" : "days"}
+                              {cycleInfo.daysRemaining} {cycleInfo.daysRemaining === 1 ? t("day") : t("days")}
                             </p>
                           </div>
                         </div>
@@ -523,18 +528,21 @@ const Payments = () => {
                         {/* Progress Bar */}
                         <div className="space-y-2 pt-2">
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>Cycle Progress</span>
+                            <span>{t("cycleProgress")}</span>
                             <span>{Math.round(cycleInfo.progress)}%</span>
                           </div>
                           <div className="relative h-2 bg-secondary/50 rounded-full overflow-hidden">
                             <div
-                              className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-300"
+                              className={cn(
+                                "absolute inset-y-0 bg-gradient-to-r from-primary to-primary-glow rounded-full transition-all duration-300",
+                                isRTL ? "right-0" : "left-0"
+                              )}
                               style={{ width: `${cycleInfo.progress}%` }}
                             />
                           </div>
                           <div className="flex justify-between text-xs text-muted-foreground">
-                            <span>{cycleInfo.daysElapsed} days elapsed</span>
-                            <span>{cycleInfo.daysRemaining} days remaining</span>
+                            <span>{cycleInfo.daysElapsed} {t("daysElapsed")}</span>
+                            <span>{cycleInfo.daysRemaining} {t("daysRemainingLabel")}</span>
                           </div>
                         </div>
                       </div>
@@ -549,11 +557,11 @@ const Payments = () => {
                     <div className="flex items-start gap-3 p-3 rounded-lg bg-orange-500/10 border border-orange-500/20">
                       <XCircle className="h-5 w-5 text-orange-500 mt-0.5 flex-shrink-0" />
                       <div className="flex-1">
-                        <p className="text-sm font-medium text-orange-500">Scheduled for Cancellation</p>
+                        <p className="text-sm font-medium text-orange-500">{t("scheduledForCancellation")}</p>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Your subscription will end on{" "}
+                          {t("subscriptionEndsOn")}{" "}
                           <span className="font-medium">{formatDate(subscription.currentPeriodEnd)}</span>.
-                          You can reactivate it anytime before then.
+                          {" "}{t("canReactivateAnytime")}
                         </p>
                       </div>
                     </div>
@@ -571,8 +579,8 @@ const Payments = () => {
                       disabled={isReactivating}
                       className="flex-1"
                     >
-                      <RefreshCw className={`mr-2 h-4 w-4 ${isReactivating ? "animate-spin" : ""}`} />
-                      {isReactivating ? "Reactivating..." : "Reactivate Subscription"}
+                      <RefreshCw className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2", isReactivating && "animate-spin")} />
+                      {isReactivating ? t("reactivating") : t("reactivateSubscription")}
                     </Button>
                   ) : (
                     <Button
@@ -581,8 +589,8 @@ const Payments = () => {
                       disabled={isCanceling}
                       className="flex-1"
                     >
-                      <Ban className="mr-2 h-4 w-4" />
-                      Cancel Subscription
+                      <Ban className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+                      {t("cancelSubscription")}
                     </Button>
                   )}
                   
@@ -592,16 +600,15 @@ const Payments = () => {
                     disabled={isOpeningPortal}
                     className="flex-1"
                   >
-                    <ExternalLink className="mr-2 h-4 w-4" />
-                    {isOpeningPortal ? "Opening..." : "Manage in Stripe"}
+                    <ExternalLink className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+                    {isOpeningPortal ? t("opening") : t("manageInStripe")}
                   </Button>
                 </div>
 
                 {/* Additional Info */}
                 <div className="text-xs text-muted-foreground pt-2 border-t">
                   <p>
-                    Use the "Manage in Stripe" button to update payment methods, view billing history, 
-                    and manage your subscription settings.
+                    {t("manageInStripeDescription")}
                   </p>
                 </div>
               </div>
@@ -614,29 +621,29 @@ const Payments = () => {
       <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Cancel Subscription?</AlertDialogTitle>
+            <AlertDialogTitle>{t("cancelSubscriptionTitle")}</AlertDialogTitle>
             <AlertDialogDescription>
-              Your subscription will remain active until the end of the current billing period.
+              {t("subscriptionRemainsActive")}
               {subscription?.currentPeriodEnd && (
                 <>
                   {" "}
-                  You will continue to have access until{" "}
+                  {t("continueAccessUntil")}{" "}
                   <span className="font-medium">{formatDate(subscription.currentPeriodEnd)}</span>.
                 </>
               )}
               <br />
               <br />
-              You can reactivate your subscription at any time before the period ends.
+              {t("canReactivateBeforePeriod")}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCanceling}>Keep Subscription</AlertDialogCancel>
+            <AlertDialogCancel disabled={isCanceling}>{t("keepSubscription")}</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleCancelSubscription}
               disabled={isCanceling}
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
-              {isCanceling ? "Canceling..." : "Cancel Subscription"}
+              {isCanceling ? t("canceling") : t("cancelSubscription")}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -648,26 +655,26 @@ const Payments = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <Settings className="h-5 w-5" />
-              Product & Price Management
+              {t("productPriceManagement")}
               <Badge variant="outline" className="text-xs">
-                Admin Only
+                {t("adminOnly")}
               </Badge>
             </CardTitle>
             <CardDescription>
-              Configure which Stripe product and price to use for subscriptions
+              {t("configureStripeProduct")}
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             {/* Current Settings Display */}
             {paymentSettings && (
               <div className="p-3 rounded-lg bg-muted/50 border">
-                <p className="text-sm font-medium mb-1">Current Configuration</p>
+                <p className="text-sm font-medium mb-1">{t("currentConfiguration")}</p>
                 <div className="text-sm text-muted-foreground space-y-1">
                   <p>
-                    <span className="font-medium">Product:</span> {paymentSettings.productName}
+                    <span className="font-medium">{t("product")}:</span> {paymentSettings.productName}
                   </p>
                   <p>
-                    <span className="font-medium">Price:</span> {formatPrice(paymentSettings.priceAmount, paymentSettings.priceCurrency)} / {paymentSettings.priceInterval}
+                    <span className="font-medium">{t("price")}:</span> {formatPrice(paymentSettings.priceAmount, paymentSettings.priceCurrency)} / {translateInterval(paymentSettings.priceInterval)}
                   </p>
                 </div>
               </div>
@@ -683,13 +690,13 @@ const Payments = () => {
               >
                 {isFetchingProducts ? (
                   <>
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    Fetching from Stripe...
+                    <Loader2 className={cn("h-4 w-4 animate-spin", isRTL ? "ml-2" : "mr-2")} />
+                    {t("fetchingFromStripe")}
                   </>
                 ) : (
                   <>
-                    <RefreshCw className="mr-2 h-4 w-4" />
-                    Fetch Products from Stripe
+                    <RefreshCw className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+                    {t("fetchProductsFromStripe")}
                   </>
                 )}
               </Button>
@@ -699,7 +706,7 @@ const Payments = () => {
             {stripeProducts && stripeProducts.length > 0 && (
               <div className="space-y-4 pt-4 border-t">
                 <div className="space-y-2">
-                  <Label htmlFor="product-select">Select Product</Label>
+                  <Label htmlFor="product-select">{t("selectProduct")}</Label>
                   <Select
                     value={selectedProductId}
                     onValueChange={(value) => {
@@ -708,7 +715,7 @@ const Payments = () => {
                     }}
                   >
                     <SelectTrigger id="product-select">
-                      <SelectValue placeholder="Choose a product" />
+                      <SelectValue placeholder={t("chooseProduct")} />
                     </SelectTrigger>
                     <SelectContent>
                       {stripeProducts.map((product) => {
@@ -721,9 +728,9 @@ const Payments = () => {
                               const intervalText = intervalCount && intervalCount > 1
                                 ? `every ${intervalCount} ${interval}s`
                                 : interval;
-                              return `${formatted} / ${intervalText}`;
+                              return `${formatted} / ${translateInterval(intervalText)}`;
                             }).join(", ")
-                          : "No active prices";
+                          : t("noActivePrices");
                         
                         const displayText = product.description
                           ? `${product.name} - ${product.description} (${priceDisplay})`
@@ -742,13 +749,13 @@ const Payments = () => {
                 {/* Price Selection */}
                 {selectedProductId && availablePrices.length > 0 && (
                   <div className="space-y-2">
-                    <Label htmlFor="price-select">Select Price</Label>
+                    <Label htmlFor="price-select">{t("selectPrice")}</Label>
                     <Select
                       value={selectedPriceId}
                       onValueChange={setSelectedPriceId}
                     >
                       <SelectTrigger id="price-select">
-                        <SelectValue placeholder="Choose a price" />
+                        <SelectValue placeholder={t("choosePrice")} />
                       </SelectTrigger>
                       <SelectContent>
                         {availablePrices.map((price: any) => (
@@ -764,7 +771,7 @@ const Payments = () => {
 
                 {selectedProductId && availablePrices.length === 0 && (
                   <p className="text-sm text-muted-foreground">
-                    No active recurring prices found for this product.
+                    {t("noActiveRecurringPrices")}
                   </p>
                 )}
 
@@ -778,11 +785,11 @@ const Payments = () => {
                   >
                     {isSavingSettings ? (
                       <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Saving...
+                        <Loader2 className={cn("h-4 w-4 animate-spin", isRTL ? "ml-2" : "mr-2")} />
+                        {t("saving")}
                       </>
                     ) : (
-                      "Save Configuration"
+                      t("saveConfiguration")
                     )}
                   </Button>
                 )}
@@ -791,7 +798,7 @@ const Payments = () => {
 
             {stripeProducts && stripeProducts.length === 0 && (
               <p className="text-sm text-muted-foreground">
-                No active products found in Stripe. Create products in your Stripe dashboard first.
+                {t("noActiveProducts")}
               </p>
             )}
           </CardContent>
@@ -804,19 +811,22 @@ const Payments = () => {
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <CreditCard className="h-5 w-5" />
-              {paymentSettings ? "Subscribe" : "Test Subscription"}
+              {paymentSettings ? t("subscribe") : t("testSubscription")}
             </CardTitle>
             <CardDescription>
               {paymentSettings 
-                ? `Subscribe to ${paymentSettings.productName} for ${formatPrice(paymentSettings.priceAmount, paymentSettings.priceCurrency)} per ${paymentSettings.priceInterval}`
-                : "Test the Stripe payment flow with a test subscription. This will redirect you to Stripe's checkout page."}
+                ? t("subscribeToProduct")
+                    .replace("{productName}", paymentSettings.productName)
+                    .replace("{price}", formatPrice(paymentSettings.priceAmount, paymentSettings.priceCurrency))
+                    .replace("{interval}", translateInterval(paymentSettings.priceInterval))
+                : t("testStripePaymentFlow")}
             </CardDescription>
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
               {!paymentSettings && (
                 <p className="text-sm text-muted-foreground">
-                  No product configured. An admin needs to configure a product first.
+                  {t("noProductConfigured")}
                 </p>
               )}
               <Button
@@ -825,7 +835,7 @@ const Payments = () => {
                 disabled={isLoading || !paymentSettings}
                 className="w-full sm:w-auto"
               >
-                {isLoading ? "Creating checkout session..." : paymentSettings ? "Subscribe" : "Test Subscribe"}
+                {isLoading ? t("creatingCheckoutSession") : paymentSettings ? t("subscribe") : t("testSubscription")}
               </Button>
             </div>
           </CardContent>

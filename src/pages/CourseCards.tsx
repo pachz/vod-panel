@@ -9,7 +9,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
-import { LanguageToggle } from "@/components/LanguageToggle";
 import { useLanguage } from "@/hooks/use-language";
 
 type CourseDoc = Doc<"courses">;
@@ -115,9 +114,6 @@ const CourseCards = () => {
 
   return (
     <div className="space-y-8" dir={isRTL ? "rtl" : "ltr"}>
-      <div className="flex justify-center mb-6">
-        <LanguageToggle />
-      </div>
       <div className="space-y-2 text-center">
         <h1 className="text-3xl font-bold tracking-tight">{t("allCourses")}</h1>
         <p className="text-muted-foreground">
