@@ -371,14 +371,15 @@ export const RichTextarea = ({
         type="button"
         onClick={() => handleDialogOpen(true)}
         className={cn(
-          "flex w-full flex-col items-start rounded-md border border-input bg-background px-3 py-2 text-left text-sm shadow-sm transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+          "flex w-full flex-col rounded-md border border-input bg-background px-3 py-2 text-sm shadow-sm transition hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary/20",
+          dir === "rtl" ? "items-end text-right" : "items-start text-left",
           textareaClassName,
         )}
         style={{ minHeight }}
         aria-label={`Edit ${label}`}
       >
         <div
-          className={cn("space-y-1", dir === "rtl" && "text-right")}
+          className={cn("space-y-1 w-full", dir === "rtl" && "text-right", textareaClassName)}
           dir={dir}
         >
           {previewContent}
