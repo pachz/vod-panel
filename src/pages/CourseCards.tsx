@@ -14,23 +14,23 @@ import { useLanguage } from "@/hooks/use-language";
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
 
-const formatDuration = (minutes: number | undefined, t: (key: string) => string) => {
+const formatDuration = (minutes: number | undefined) => {
   if (minutes === undefined || minutes === null) {
-    return `0${t("min")}`;
+    return "0m";
   }
 
   if (minutes < 60) {
-    return `${minutes}${t("min")}`;
+    return `${minutes}m`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
 
   if (remainder === 0) {
-    return `${hours}${t("hr")}`;
+    return `${hours}h`;
   }
 
-  return `${hours}${t("hr")} ${remainder}${t("min")}`;
+  return `${hours}h ${remainder}m`;
 };
 
 const formatLessonCount = (count: number | undefined, t: (key: string) => string) => {
@@ -211,7 +211,7 @@ const CourseCards = () => {
                   <span aria-hidden="true">•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{formatDuration(course.duration, t)}</span>
+                    <span>{formatDuration(course.duration)}</span>
                   </span>
                 </div>
               </CardHeader>
