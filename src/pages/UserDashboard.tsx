@@ -11,9 +11,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
 
-const formatDate = (timestamp: number, isRTL: boolean) => {
+const formatDate = (timestamp: number) => {
   const date = new Date(timestamp);
-  return new Intl.DateTimeFormat(isRTL ? "ar-SA" : "en-US", {
+  return new Intl.DateTimeFormat("en-US", {
     year: "numeric",
     month: "long",
     day: "numeric",
@@ -94,7 +94,7 @@ const UserDashboard = () => {
     {
       title: t("memberSince"),
       value: stats?.memberSince
-        ? formatDate(stats.memberSince, isRTL)
+        ? formatDate(stats.memberSince)
         : "—",
       icon: Calendar,
       color: "from-orange-500 to-orange-600",
