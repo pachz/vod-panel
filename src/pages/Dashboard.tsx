@@ -1,40 +1,9 @@
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { FolderTree, BookOpen, GraduationCap, TrendingUp } from "lucide-react";
+import { FolderTree, BookOpen, GraduationCap, Users } from "lucide-react";
 import { useMemo } from "react";
 import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
-
-const stats = [
-  {
-    title: "Total Categories",
-    value: "12",
-    icon: FolderTree,
-    trend: "+2 this month",
-    color: "from-primary to-primary-glow",
-  },
-  {
-    title: "Active Courses",
-    value: "48",
-    icon: BookOpen,
-    trend: "+8 this month",
-    color: "from-primary to-primary-glow",
-  },
-  {
-    title: "Total Lessons",
-    value: "324",
-    icon: GraduationCap,
-    trend: "+24 this week",
-    color: "from-primary to-primary-glow",
-  },
-  {
-    title: "Growth Rate",
-    value: "23%",
-    icon: TrendingUp,
-    trend: "+5% from last month",
-    color: "from-cta to-cta-glow",
-  },
-];
 
 const formatTimeAgo = (timestamp: number): string => {
   const now = Date.now();
@@ -65,6 +34,8 @@ const formatActivityAction = (entityType: string, action: string): string => {
 const Dashboard = () => {
   const currentUser = useQuery(api.user.getCurrentUser);
   const canSeeActivity = currentUser?.isGod ?? false;
+  const dashboardStats = useQuery(api.dashboard.getDashboardStats);
+  const popularCourses = useQuery(api.dashboard.getPopularCourses, { limit: 3 });
   const activityLogs = useQuery(
     api.activityLog.getActivityLogs,
     canSeeActivity ? { limit: 5 } : undefined,
@@ -72,6 +43,36 @@ const Dashboard = () => {
   const insightsGridCols = useMemo(
     () => (canSeeActivity ? "md:grid-cols-2" : "md:grid-cols-1"),
     [canSeeActivity],
+  );
+
+  const stats = useMemo(
+    () => [
+      {
+        title: "Total Categories",
+        value: dashboardStats?.totalCategories ?? 0,
+        icon: FolderTree,
+        color: "from-primary to-primary-glow",
+      },
+      {
+        title: "Active Courses",
+        value: dashboardStats?.activeCourses ?? 0,
+        icon: BookOpen,
+        color: "from-primary to-primary-glow",
+      },
+      {
+        title: "Total Lessons",
+        value: dashboardStats?.totalLessons ?? 0,
+        icon: GraduationCap,
+        color: "from-primary to-primary-glow",
+      },
+      {
+        title: "Total Users",
+        value: dashboardStats?.totalUsers ?? 0,
+        icon: Users,
+        color: "from-cta to-cta-glow",
+      },
+    ],
+    [dashboardStats]
   );
 
   return (
@@ -97,7 +98,6 @@ const Dashboard = () => {
                   {stat.title}
                 </p>
                 <div className="text-4xl font-bold">{stat.value}</div>
-                <p className="text-xs text-muted-foreground">{stat.trend}</p>
               </div>
             </CardContent>
           </Card>
@@ -156,24 +156,22 @@ const Dashboard = () => {
           </CardHeader>
           <CardContent>
             <div className="space-y-6">
-              {[
-                { name: "Web Development Masterclass", students: 1234, progress: 85 },
-                { name: "UI/UX Design Fundamentals", students: 892, progress: 72 },
-                { name: "Python for Data Science", students: 756, progress: 68 },
-              ].map((course, i) => (
-                <div key={i} className="space-y-3">
-                  <div className="flex justify-between items-start gap-4">
-                    <p className="text-sm font-semibold leading-tight">{course.name}</p>
-                    <span className="text-xs text-muted-foreground whitespace-nowrap">{course.students} students</span>
+              {popularCourses === undefined ? (
+                <div className="text-sm text-muted-foreground">Loading...</div>
+              ) : popularCourses.length === 0 ? (
+                <div className="text-sm text-muted-foreground">No courses yet</div>
+              ) : (
+                popularCourses.map((course) => (
+                  <div key={course._id}>
+                    <div className="flex justify-between items-start gap-4">
+                      <p className="text-sm font-semibold leading-tight">{course.name}</p>
+                      <span className="text-xs text-muted-foreground whitespace-nowrap">
+                        {course.lesson_count} {course.lesson_count === 1 ? "lesson" : "lessons"}
+                      </span>
+                    </div>
                   </div>
-                  <div className="relative h-2.5 bg-secondary/50 rounded-full overflow-hidden">
-                    <div
-                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-cta to-cta-glow rounded-full shadow-md"
-                      style={{ width: `${course.progress}%` }}
-                    />
-                  </div>
-                </div>
-              ))}
+                ))
+              )}
             </div>
           </CardContent>
         </Card>

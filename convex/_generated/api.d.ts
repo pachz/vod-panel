@@ -14,6 +14,7 @@ import type * as auth from "../auth.js";
 import type * as category from "../category.js";
 import type * as coach from "../coach.js";
 import type * as course from "../course.js";
+import type * as dashboard from "../dashboard.js";
 import type * as http from "../http.js";
 import type * as image from "../image.js";
 import type * as landing from "../landing.js";
@@ -41,6 +42,7 @@ declare const fullApi: ApiFromModules<{
   category: typeof category;
   coach: typeof coach;
   course: typeof course;
+  dashboard: typeof dashboard;
   http: typeof http;
   image: typeof image;
   landing: typeof landing;

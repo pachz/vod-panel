@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { Plus, Pencil, Trash2, Lock } from "lucide-react";
+import { useNavigate } from "react-router-dom";
+import { Plus, Pencil, Trash2, Lock, Eye } from "lucide-react";
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -60,6 +61,7 @@ const initialFormValues: FormValues = {
 };
 
 const Users = () => {
+  const navigate = useNavigate();
   const users = useQuery(api.user.listUsers);
   const currentUser = useQuery(api.user.getCurrentUser);
   const createUser = useAction(api.user.createUser);
@@ -514,6 +516,14 @@ const Users = () => {
                             <Button
                               variant="ghost"
                               size="icon"
+                              onClick={() => navigate(`/users/${user._id}/info`)}
+                              title="View user info"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
                               onClick={() => {
                                 setEditingUser(user);
                                 setIsDialogOpen(true);
@@ -533,14 +543,15 @@ const Users = () => {
                             >
                               <Lock className="h-4 w-4" />
                             </Button>
-                            <Button
+                            {/* Delete button hidden for now */}
+                            {/* <Button
                               variant="ghost"
                               size="icon"
                               onClick={() => setUserToDelete(user)}
                               title="Delete user"
                             >
                               <Trash2 className="h-4 w-4 text-destructive" />
-                            </Button>
+                            </Button> */}
                           </div>
                         </TableCell>
                       </TableRow>

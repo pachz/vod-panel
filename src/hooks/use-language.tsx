@@ -78,6 +78,20 @@ const translations = {
     "hour": "hour",
     "minutes": "minutes",
     "minute": "minute",
+    
+    // UserDashboard
+    "dashboard": "Dashboard",
+    "welcomeBack": "Welcome back!",
+    "coursesCompleted": "Courses Completed",
+    "inProgress": "In Progress",
+    "hoursWatched": "Hours Watched",
+    "memberSince": "Member Since",
+    "myCourses": "My Courses",
+    "inProgressTab": "In Progress",
+    "completedTab": "Completed",
+    "noCoursesInProgress": "You don't have any courses in progress yet.",
+    "noCoursesCompleted": "You haven't completed any courses yet.",
+    "startLearning": "Start learning to see your progress here!",
   },
   ar: {
     // CourseCards
@@ -151,6 +165,20 @@ const translations = {
     "hour": "ساعة",
     "minutes": "دقائق",
     "minute": "دقيقة",
+    
+    // UserDashboard
+    "dashboard": "لوحة التحكم",
+    "welcomeBack": "مرحباً بعودتك!",
+    "coursesCompleted": "الدورات المكتملة",
+    "inProgress": "قيد التنفيذ",
+    "hoursWatched": "ساعات المشاهدة",
+    "memberSince": "عضو منذ",
+    "myCourses": "دوراتي",
+    "inProgressTab": "قيد التنفيذ",
+    "completedTab": "مكتملة",
+    "noCoursesInProgress": "ليس لديك أي دورات قيد التنفيذ بعد.",
+    "noCoursesCompleted": "لم تكمل أي دورات بعد.",
+    "startLearning": "ابدأ التعلم لرؤية تقدمك هنا!",
   },
 } as const;
 

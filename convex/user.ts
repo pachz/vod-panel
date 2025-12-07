@@ -1,6 +1,6 @@
 import { mutation, query, action, internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx, ActionCtx } from "./_generated/server";
-import type { Id } from "./_generated/dataModel";
+import type { Id, Doc } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { internal } from "./_generated/api";
 
@@ -586,6 +586,153 @@ export const deleteUser = mutation({
       entityId: id,
       entityName: user.name || user.email || "User",
     });
+  },
+});
+
+export const getUserInfo = query({
+  args: {
+    id: v.id("users"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const user = await ctx.db.get(id);
+
+    if (!user || user.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+
+    // Get subscription info
+    const subscription = await ctx.db
+      .query("subscriptions")
+      .withIndex("userId", (q) => q.eq("userId", id))
+      .order("desc")
+      .first();
+
+    // Get completed checkout sessions (to count payments)
+    const checkoutSessions = await ctx.db
+      .query("checkoutSessions")
+      .withIndex("userId", (q) => q.eq("userId", id))
+      .collect();
+
+    const completedSessions = checkoutSessions.filter(
+      (session) => session.status === "complete"
+    );
+
+    // Get payment settings to calculate total paid
+    const paymentSettings = await ctx.db
+      .query("paymentSettings")
+      .order("desc")
+      .first();
+
+    // Calculate total paid (number of completed sessions * subscription price)
+    let totalPaid = 0;
+    if (paymentSettings && completedSessions.length > 0) {
+      // Convert from cents to dollars/currency unit
+      const pricePerPayment = paymentSettings.priceAmount / 100;
+      totalPaid = completedSessions.length * pricePerPayment;
+    }
+
+    // Get all lesson progress for this user to find courses they've "touched"
+    const allProgress = await ctx.db
+      .query("lessonProgress")
+      .withIndex("by_user_course_lesson", (q) => q.eq("user_id", id))
+      .collect();
+
+    // Get unique course IDs that user has activity in
+    const courseIds = [...new Set(allProgress.map((p) => p.course_id))];
+
+    // Get all courses user has activity in
+    const courses = await Promise.all(
+      courseIds.map((courseId) => ctx.db.get(courseId))
+    );
+
+    // Filter out null/undefined and deleted courses, and only include published courses
+    const validCourses = courses.filter(
+      (course) => course !== null && course.deletedAt === undefined && course.status === "published"
+    ) as Array<Doc<"courses">>;
+
+    // Build course data with progress information
+    const coursesWithProgress = await Promise.all(
+      validCourses.map(async (course) => {
+        // Get all published lessons for this course
+        const publishedLessons = await ctx.db
+          .query("lessons")
+          .withIndex("course_id", (q) =>
+            q.eq("course_id", course._id).eq("deletedAt", undefined)
+          )
+          .filter((q) => q.eq(q.field("status"), "published"))
+          .collect();
+
+        // Get completed lessons for this course
+        const courseProgress = allProgress.filter((p) => p.course_id === course._id);
+        const completedLessonIds = new Set(courseProgress.map((p) => p.lesson_id));
+        const completedCount = publishedLessons.filter((l) => completedLessonIds.has(l._id)).length;
+
+        return {
+          _id: course._id,
+          name: course.name,
+          name_ar: course.name_ar,
+          slug: course.slug,
+          category_id: course.category_id,
+          lesson_count: course.lesson_count,
+          createdAt: course.createdAt,
+          completedLessons: completedCount,
+          totalLessons: publishedLessons.length,
+        };
+      })
+    );
+
+    // Sort by most recently completed (if any progress exists)
+    coursesWithProgress.sort((a, b) => {
+      const aProgress = allProgress.filter((p) => p.course_id === a._id);
+      const bProgress = allProgress.filter((p) => p.course_id === b._id);
+      
+      if (aProgress.length > 0 && bProgress.length > 0) {
+        const aLastCompleted = Math.max(...aProgress.map((p) => p.completedAt));
+        const bLastCompleted = Math.max(...bProgress.map((p) => p.completedAt));
+        return bLastCompleted - aLastCompleted;
+      }
+      if (aProgress.length > 0) return -1;
+      if (bProgress.length > 0) return 1;
+      return (a.name ?? "").localeCompare(b.name ?? "");
+    });
+
+    return {
+      user: {
+        _id: user._id,
+        name: user.name,
+        email: user.email,
+        phone: user.phone,
+        isGod: user.isGod,
+        emailVerificationTime: user.emailVerificationTime,
+        createdAt: user._creationTime,
+      },
+      subscription: subscription
+        ? {
+            subscriptionId: subscription.subscriptionId,
+            status: subscription.status,
+            currentPeriodStart: subscription.currentPeriodStart,
+            currentPeriodEnd: subscription.currentPeriodEnd,
+            cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
+            canceledAt: subscription.canceledAt,
+            createdAt: subscription.createdAt,
+          }
+        : null,
+      paymentInfo: {
+        totalPaid,
+        currency: paymentSettings?.priceCurrency || "USD",
+        completedPayments: completedSessions.length,
+        paymentInterval: paymentSettings?.priceInterval || null,
+      },
+      courses: {
+        total: coursesWithProgress.length,
+        list: coursesWithProgress,
+      },
+    };
   },
 });
 

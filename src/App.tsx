@@ -4,6 +4,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 
 import LoginPage from "./LoginPage";
 import Dashboard from "@/pages/Dashboard";
+import UserDashboard from "@/pages/UserDashboard";
 import Categories from "@/pages/Categories";
 import Courses from "@/pages/Courses";
 import CourseCards from "@/pages/CourseCards";
@@ -14,6 +15,7 @@ import LessonDetail from "@/pages/LessonDetail";
 import NotFound from "@/pages/NotFound";
 import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
+import UserInfo from "@/pages/UserInfo";
 import Payments from "@/pages/Payments";
 import Coach from "@/pages/Coach";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -159,7 +161,7 @@ const DashboardRedirect = () => {
     return <Dashboard />;
   }
 
-  return <Navigate to="/courses/card" replace state={{ from: location }} />;
+  return <UserDashboard />;
 };
 
 const App = () => (
@@ -182,6 +184,7 @@ const App = () => (
           <Route path="/video-panel" element={<VideoPanel />} />
           <Route path="/coach" element={<Coach />} />
           <Route path="/users" element={<Users />} />
+          <Route path="/users/:id/info" element={<UserInfo />} />
         </Route>
         <Route path="*" element={<NotFound />} />
       </Route>

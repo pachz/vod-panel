@@ -1,0 +1,318 @@
+import { useParams, useNavigate } from "react-router-dom";
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen } from "lucide-react";
+import { useQuery } from "convex/react";
+import { api } from "../../convex/_generated/api";
+import { Button } from "@/components/ui/button";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Separator } from "@/components/ui/separator";
+import { format } from "date-fns";
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+
+const UserInfo = () => {
+  const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
+  
+  const userInfo = useQuery(
+    api.user.getUserInfo,
+    id ? { id: id as any } : "skip"
+  );
+
+  if (userInfo === undefined) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <p className="text-muted-foreground">Loading user information...</p>
+      </div>
+    );
+  }
+
+  if (!userInfo) {
+    return (
+      <div className="space-y-4">
+        <Button variant="ghost" onClick={() => navigate("/users")}>
+          <ArrowLeft className="mr-2 h-4 w-4" />
+          Back to Users
+        </Button>
+        <div className="flex items-center justify-center min-h-[400px]">
+          <p className="text-muted-foreground">User not found</p>
+        </div>
+      </div>
+    );
+  }
+
+  const { user, subscription, paymentInfo, courses } = userInfo;
+
+  const formatCurrency = (amount: number, currency: string) => {
+    return new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: currency || "USD",
+    }).format(amount);
+  };
+
+  const getSubscriptionStatusBadge = (status: string) => {
+    const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
+      active: { variant: "default", label: "Active" },
+      trialing: { variant: "default", label: "Trialing" },
+      canceled: { variant: "secondary", label: "Canceled" },
+      past_due: { variant: "destructive", label: "Past Due" },
+      unpaid: { variant: "destructive", label: "Unpaid" },
+      incomplete: { variant: "outline", label: "Incomplete" },
+    };
+
+    const config = statusMap[status] || { variant: "outline" as const, label: status };
+    return <Badge variant={config.variant}>{config.label}</Badge>;
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div className="flex items-center gap-4">
+          <Button variant="ghost" size="icon" onClick={() => navigate("/users")}>
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <div>
+            <h1 className="text-3xl font-bold tracking-tight">User Information</h1>
+            <p className="text-muted-foreground mt-2">View user details, payments, and courses</p>
+          </div>
+        </div>
+      </div>
+
+      {/* User Basic Info */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <User className="h-5 w-5" />
+            User Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Mail className="h-4 w-4" />
+                Email
+              </div>
+              <p className="font-medium">{user.email || "—"}</p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <User className="h-4 w-4" />
+                Name
+              </div>
+              <p className="font-medium">{user.name || "—"}</p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Phone className="h-4 w-4" />
+                Phone
+              </div>
+              <p className="font-medium">{user.phone || "—"}</p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                <Calendar className="h-4 w-4" />
+                Member Since
+              </div>
+              <p className="font-medium">
+                {user.createdAt ? format(new Date(user.createdAt), "PPP") : "—"}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                Role
+              </div>
+              <div>
+                {user.isGod ? (
+                  <Badge variant="default">Administrator</Badge>
+                ) : (
+                  <Badge variant="secondary">User</Badge>
+                )}
+              </div>
+            </div>
+            <div className="space-y-1">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                Email Status
+              </div>
+              <div>
+                {user.emailVerificationTime ? (
+                  <Badge variant="outline" className="gap-1">
+                    <CheckCircle2 className="h-3 w-3" />
+                    Verified
+                  </Badge>
+                ) : (
+                  <Badge variant="outline" className="opacity-50 gap-1">
+                    <XCircle className="h-3 w-3" />
+                    Unverified
+                  </Badge>
+                )}
+              </div>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Payment Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <CreditCard className="h-5 w-5" />
+            Payment Information
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Total Paid</div>
+              <p className="text-2xl font-bold">
+                {formatCurrency(paymentInfo.totalPaid, paymentInfo.currency)}
+              </p>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Completed Payments</div>
+              <p className="text-2xl font-bold">{paymentInfo.completedPayments}</p>
+            </div>
+            <div className="space-y-1">
+              <div className="text-sm text-muted-foreground">Payment Interval</div>
+              <p className="text-lg font-medium">
+                {paymentInfo.paymentInterval
+                  ? paymentInfo.paymentInterval.charAt(0).toUpperCase() +
+                    paymentInfo.paymentInterval.slice(1)
+                  : "—"}
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* Subscription Information */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Calendar className="h-5 w-5" />
+            Current Subscription
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {subscription ? (
+            <div className="space-y-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Status</div>
+                  <div>{getSubscriptionStatusBadge(subscription.status)}</div>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Subscription ID</div>
+                  <p className="font-mono text-sm">{subscription.subscriptionId}</p>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Current Period Start</div>
+                  <p className="font-medium">
+                    {format(new Date(subscription.currentPeriodStart), "PPP")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Current Period End</div>
+                  <p className="font-medium">
+                    {format(new Date(subscription.currentPeriodEnd), "PPP")}
+                  </p>
+                </div>
+                <div className="space-y-1">
+                  <div className="text-sm text-muted-foreground">Cancel at Period End</div>
+                  <div>
+                    {subscription.cancelAtPeriodEnd ? (
+                      <Badge variant="destructive">Yes</Badge>
+                    ) : (
+                      <Badge variant="outline">No</Badge>
+                    )}
+                  </div>
+                </div>
+                {subscription.canceledAt && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Canceled At</div>
+                    <p className="font-medium">
+                      {format(new Date(subscription.canceledAt), "PPP")}
+                    </p>
+                  </div>
+                )}
+              </div>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">No active subscription</p>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Courses List */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <BookOpen className="h-5 w-5" />
+            Courses ({courses.total})
+          </CardTitle>
+          <CardDescription>
+            Courses the user has started (completed at least one lesson)
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          {courses.list.length > 0 ? (
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Course Name</TableHead>
+                    <TableHead>Arabic Name</TableHead>
+                    <TableHead>Progress</TableHead>
+                    <TableHead>Total Lessons</TableHead>
+                    <TableHead>Created</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {courses.list.map((course) => (
+                    <TableRow key={course._id}>
+                      <TableCell className="font-medium">{course.name}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {course.name_ar}
+                      </TableCell>
+                      <TableCell>
+                        {course.completedLessons !== undefined && course.totalLessons !== undefined ? (
+                          <div className="flex items-center gap-2">
+                            <span className="text-sm font-medium">
+                              {course.completedLessons} / {course.totalLessons}
+                            </span>
+                            {course.totalLessons > 0 && (
+                              <Badge variant="outline" className="text-xs">
+                                {Math.round((course.completedLessons / course.totalLessons) * 100)}%
+                              </Badge>
+                            )}
+                          </div>
+                        ) : (
+                          <span className="text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                      <TableCell>{course.totalLessons ?? course.lesson_count ?? "—"}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(course.createdAt), "PPP")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          ) : (
+            <p className="text-muted-foreground">User has not started any courses yet</p>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+};
+
+export default UserInfo;
+
