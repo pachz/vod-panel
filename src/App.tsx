@@ -147,7 +147,7 @@ const DashboardLayout = () => {
       <div className="relative z-10 flex min-h-screen w-full">
         <AdminSidebar />
         <main className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 bg-background/80 px-6 backdrop-blur">
+          <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
             <SidebarTrigger />
             <div className="flex-1" />
             <ThemeToggle />
@@ -162,7 +162,7 @@ const DashboardLayout = () => {
   );
 };
 
-const DashboardRedirect = () => {
+const RootRedirect = () => {
   const currentUser = useQuery(api.user.getCurrentUser);
   const location = useLocation();
 
@@ -171,10 +171,10 @@ const DashboardRedirect = () => {
   }
 
   if (currentUser?.isGod) {
-    return <Dashboard />;
+    return <Navigate to="/dashboard" replace />;
   }
 
-  return <UserDashboard />;
+  return <Navigate to="/user-dashboard" replace />;
 };
 
 const App = () => (
@@ -183,16 +183,10 @@ const App = () => (
       <Route path="/login" element={<LoginPage />} />
     </Route>
     <Route element={<PrivateRoute />}>
-      {/* Normal user routes - no sidebar */}
-      <Route element={<UserProviders />}>
-        <Route path="/" element={<DashboardRedirect />} />
-        <Route path="/courses/card" element={<CourseCards />} />
-        <Route path="/courses/preview/:id" element={<CoursePreview />} />
-        <Route path="/payments" element={<Payments />} />
-      </Route>
       {/* Admin routes - with sidebar */}
       <Route element={<DashboardProviders />}>
         <Route element={<AdminRoute />}>
+          <Route path="/dashboard" element={<Dashboard />} />
           <Route path="/categories" element={<Categories />} />
           <Route path="/courses" element={<Courses />} />
           <Route path="/courses/:id" element={<CourseDetail />} />
@@ -203,6 +197,18 @@ const App = () => (
           <Route path="/users" element={<Users />} />
           <Route path="/users/:id/info" element={<UserInfo />} />
         </Route>
+      </Route>
+      {/* Normal user routes - no sidebar */}
+      <Route element={<UserProviders />}>
+        <Route path="/user-dashboard" element={<UserDashboard />} />
+        <Route path="/courses/card" element={<CourseCards />} />
+        <Route path="/courses/preview/:id" element={<CoursePreview />} />
+        <Route path="/payments" element={<Payments />} />
+      </Route>
+      {/* Root redirect */}
+      <Route path="/" element={<RootRedirect />} />
+      {/* Catch-all */}
+      <Route element={<DashboardProviders />}>
         <Route path="*" element={<NotFound />} />
       </Route>
     </Route>

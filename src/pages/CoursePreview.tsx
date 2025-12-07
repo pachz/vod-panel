@@ -289,7 +289,7 @@ const CoursePreview = () => {
     return (
       <div className="flex h-full items-center justify-center p-4 md:p-10" dir={isRTL ? "rtl" : "ltr"}>
         <div className="w-full max-w-5xl space-y-6">
-          <Card className="w-full overflow-hidden border border-border/40 bg-card/95 shadow-2xl">
+          <Card className="w-full overflow-hidden border border-border/40 dark:border-transparent bg-card/95 shadow-2xl">
             <div className="grid gap-0 lg:grid-cols-2">
               <div className="relative h-64 w-full lg:h-full">
                 {courseImageUrl ? (
@@ -461,7 +461,7 @@ const CoursePreview = () => {
         {t("backToCourseList")}
       </div>
 
-      <div className="rounded-3xl border border-border/40 bg-card/80 p-6 shadow-card">
+      <div className="rounded-3xl border border-border/40 dark:border-transparent bg-card/80 p-6 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div>
             <p className="text-sm font-semibold text-primary">{t("courseProgress")}</p>
@@ -515,7 +515,7 @@ const CoursePreview = () => {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 rounded-3xl border border-border/60 bg-background/60 p-4 shadow-sm md:grid-cols-3">
+          <div className="grid gap-4 rounded-3xl border border-border/60 dark:border-transparent bg-background/60 p-4 shadow-sm md:grid-cols-3">
             {isRTL ? (
               <>
                 <Button
@@ -640,7 +640,7 @@ const CoursePreview = () => {
         </div>
 
         <div className="space-y-4">
-          <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
@@ -672,7 +672,7 @@ const CoursePreview = () => {
                         "flex w-full items-center gap-3 rounded-2xl border px-3 py-3 text-left transition hover:border-primary/40",
                         isActive
                           ? "border-primary bg-primary/5 shadow-sm"
-                          : "border-border/40 bg-background/60",
+                          : "border-border/40 dark:border-transparent bg-background/60",
                       )}
                     >
                       {isCompleted ? (
@@ -700,7 +700,7 @@ const CoursePreview = () => {
             </CardContent>
           </Card>
 
-          <Card className="border border-border/60 bg-card/70 shadow-sm">
+          <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
             <CardHeader>
               <CardTitle className="text-lg font-semibold">{t("aboutThisCourse")}</CardTitle>
             </CardHeader>

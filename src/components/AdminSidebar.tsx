@@ -34,7 +34,7 @@ type MenuItem = {
 };
 
 const adminMenuItems: MenuItem[] = [
-  { title: "Dashboard", url: "/", icon: LayoutDashboard },
+  { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
@@ -94,9 +94,10 @@ export function AdminSidebar() {
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
-                const pattern = item.url === "/" ? "/" : `${item.url}/*`;
-                const match = matchPath({ path: pattern, end: item.url === "/" }, location.pathname);
-                const isActive = Boolean(match);
+                // For exact matches like /dashboard, check both exact and with wildcard
+                const exactMatch = matchPath({ path: item.url, end: true }, location.pathname);
+                const patternMatch = matchPath({ path: `${item.url}/*`, end: false }, location.pathname);
+                const isActive = Boolean(exactMatch || patternMatch);
 
                 return (
                   <SidebarMenuItem key={item.title}>

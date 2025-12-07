@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useNavigate, useLocation } from "react-router-dom";
+import { useNavigate, useLocation, Navigate } from "react-router-dom";
 import { BookOpen, CheckCircle2, Clock, Calendar, ArrowRight, Sparkles } from "lucide-react";
 import { useQuery } from "convex/react";
 
@@ -25,10 +25,28 @@ const UserDashboard = () => {
   const location = useLocation();
   const { language, t, isRTL } = useLanguage();
 
+  const currentUser = useQuery(api.user.getCurrentUser);
   const stats = useQuery(api.lessonProgress.getUserDashboardStats);
   const userCourses = useQuery(api.lessonProgress.getUserCourses);
 
   const isLoading = stats === undefined || userCourses === undefined;
+
+  // Redirect admin users to their dashboard
+  if (currentUser === undefined) {
+    // Still loading user data, show loading
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="text-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (currentUser?.isGod) {
+    return <Navigate to="/dashboard" replace />;
+  }
 
   const coursesInProgress = useMemo(
     () => userCourses?.filter((c) => !c.isCompleted) ?? [],
@@ -41,6 +59,18 @@ const UserDashboard = () => {
   );
 
   const hasNoCourses = !isLoading && userCourses && userCourses.length === 0;
+
+  // Show loading state while data is being fetched
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]" dir={isRTL ? "rtl" : "ltr"}>
+        <div className="text-center space-y-4">
+          <div className="h-8 w-8 animate-spin rounded-full border-4 border-primary border-t-transparent mx-auto" />
+          <p className="text-sm text-muted-foreground">Loading...</p>
+        </div>
+      </div>
+    );
+  }
 
   const statsData = [
     {
@@ -71,6 +101,7 @@ const UserDashboard = () => {
     },
   ];
 
+  // Show empty state if user has no courses (after loading is complete)
   if (hasNoCourses) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]" dir={isRTL ? "rtl" : "ltr"}>

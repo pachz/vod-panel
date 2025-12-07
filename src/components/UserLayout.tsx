@@ -11,14 +11,15 @@ const UserLayout = () => {
   const { t, isRTL, language } = useLanguage();
 
   const menuItems = [
-    { key: "home", label: t("home"), path: "/" },
+    { key: "home", label: t("home"), path: "/user-dashboard" },
     { key: "courses", label: t("courses"), path: "/courses/card" },
     { key: "subscription", label: t("subscription"), path: "/payments" },
   ];
 
   const isActive = (path: string) => {
-    if (path === "/") {
-      return location.pathname === "/";
+    // For home, match both "/" and "/user-dashboard"
+    if (path === "/user-dashboard") {
+      return location.pathname === "/" || location.pathname === "/user-dashboard";
     }
     // For courses, also match /courses/preview/:id
     if (path === "/courses/card") {
@@ -42,7 +43,13 @@ const UserLayout = () => {
     <div className="relative min-h-screen w-full bg-background" dir={isRTL ? "rtl" : "ltr"}>
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
       <div className="relative z-10 flex min-h-screen w-full flex-col">
-        <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 bg-background/80 px-6 backdrop-blur">
+        <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
+          <img
+            src="/RehamDivaLogo.png"
+            alt="Reham Diva"
+            onClick={() => handleNavigate("/user-dashboard")}
+            className="h-10 w-10 cursor-pointer rounded-xl object-cover transition-opacity hover:opacity-80"
+          />
           <nav className="flex items-center gap-6 flex-1">
             {menuItems.map((item) => (
               <Button

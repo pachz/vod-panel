@@ -35,6 +35,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Switch } from "@/components/ui/switch";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 import { userInputSchema, userUpdateSchema, userPasswordUpdateSchema } from "../../shared/validation/user";
 
@@ -426,24 +427,22 @@ const Users = () => {
         </Dialog>
       </div>
 
-      {[
-        {
-          title: "Administrators",
-          description: "Members with full access to the panel",
-          data: adminUsers,
-          emptyState: "No administrators yet.",
-        },
-        {
-          title: "Users",
-          description: "Standard accounts with limited access",
-          data: regularUsers,
-          emptyState: "No users yet. Create your first user to get started.",
-        },
-      ].map((section) => (
-        <div className="space-y-4" key={section.title}>
+      <Tabs defaultValue="users" className="space-y-4">
+        <TabsList>
+          <TabsTrigger value="users">
+            Users ({regularUsers.length})
+          </TabsTrigger>
+          <TabsTrigger value="admins">
+            Administrators ({adminUsers.length})
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="users" className="space-y-4">
           <div>
-            <h2 className="text-2xl font-semibold">{section.title}</h2>
-            <p className="text-sm text-muted-foreground">{section.description}</p>
+            <h2 className="text-2xl font-semibold">Users</h2>
+            <p className="text-sm text-muted-foreground">
+              Standard accounts with limited access
+            </p>
           </div>
           <div className="rounded-lg border bg-card">
             <Table>
@@ -452,7 +451,6 @@ const Users = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Role</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
@@ -460,22 +458,22 @@ const Users = () => {
               <TableBody>
                 {isLoading ? (
                   <TableRow>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={5}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
                         Loading users…
                       </div>
                     </TableCell>
                   </TableRow>
-                ) : section.data.length === 0 ? (
+                ) : regularUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={6}>
+                    <TableCell colSpan={5}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                        {section.emptyState}
+                        No users yet. Create your first user to get started.
                       </div>
                     </TableCell>
                   </TableRow>
                 ) : (
-                  section.data.map((user) => {
+                  regularUsers.map((user) => {
                     const roleButtonLabel = roleUpdating[user._id]
                       ? "Updating…"
                       : user.isGod
@@ -487,13 +485,6 @@ const Users = () => {
                         <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
-                        <TableCell>
-                          {user.isGod ? (
-                            <Badge variant="default">Admin</Badge>
-                          ) : (
-                            <Badge variant="secondary">User</Badge>
-                          )}
-                        </TableCell>
                         <TableCell>
                           {user.emailVerificationTime ? (
                             <Badge variant="outline">Verified</Badge>
@@ -561,8 +552,125 @@ const Users = () => {
               </TableBody>
             </Table>
           </div>
-        </div>
-      ))}
+        </TabsContent>
+
+        <TabsContent value="admins" className="space-y-4">
+          <div>
+            <h2 className="text-2xl font-semibold">Administrators</h2>
+            <p className="text-sm text-muted-foreground">
+              Members with full access to the panel
+            </p>
+          </div>
+          <div className="rounded-lg border bg-card">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Phone</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead className="text-right">Actions</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {isLoading ? (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                        Loading users…
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : adminUsers.length === 0 ? (
+                  <TableRow>
+                    <TableCell colSpan={5}>
+                      <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
+                        No administrators yet.
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ) : (
+                  adminUsers.map((user) => {
+                    const roleButtonLabel = roleUpdating[user._id]
+                      ? "Updating…"
+                      : user.isGod
+                        ? "Make User"
+                        : "Make Admin";
+
+                    return (
+                      <TableRow key={user._id}>
+                        <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
+                        <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
+                        <TableCell>
+                          {user.emailVerificationTime ? (
+                            <Badge variant="outline">Verified</Badge>
+                          ) : (
+                            <Badge variant="outline" className="opacity-50">
+                              Unverified
+                            </Badge>
+                          )}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <div className="flex flex-wrap justify-end gap-2">
+                            <Button
+                              variant="outline"
+                              size="sm"
+                              onClick={() => handleRoleToggle(user)}
+                              disabled={roleUpdating[user._id] || isCurrentUser(user)}
+                            >
+                              {roleButtonLabel}
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => navigate(`/users/${user._id}/info`)}
+                              title="View user info"
+                            >
+                              <Eye className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingUser(user);
+                                setIsDialogOpen(true);
+                              }}
+                              title="Edit user"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setUserToUpdatePassword(user);
+                                setIsPasswordDialogOpen(true);
+                              }}
+                              title="Change password"
+                            >
+                              <Lock className="h-4 w-4" />
+                            </Button>
+                            {/* Delete button hidden for now */}
+                            {/* <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => setUserToDelete(user)}
+                              title="Delete user"
+                            >
+                              <Trash2 className="h-4 w-4 text-destructive" />
+                            </Button> */}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    );
+                  })
+                )}
+              </TableBody>
+            </Table>
+          </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Password Update Dialog */}
       <Dialog
