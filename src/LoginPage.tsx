@@ -707,11 +707,11 @@ const LoginPage = () => {
         {!passwordResetStep && (
           <p className="login-footer-text">
           By signing in, you agree to our{" "}
-          <a href="#" className="login-footer-link" onClick={(e) => e.preventDefault()}>
+          <a href="https://vod.borj.dev/en/terms" className="login-footer-link" onClick={(e) => e.preventDefault()}>
             Terms
           </a>{" "}
           and{" "}
-          <a href="#" className="login-footer-link" onClick={(e) => e.preventDefault()}>
+          <a href="https://vod.borj.dev/en/privacy" className="login-footer-link" onClick={(e) => e.preventDefault()}>
             Privacy Policy
           </a>
           .
