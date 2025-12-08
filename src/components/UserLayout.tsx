@@ -44,12 +44,16 @@ const UserLayout = () => {
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
       <div className="relative z-10 flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
-          <img
-            src="/RehamDivaLogo.png"
-            alt="Reham Diva"
-            onClick={() => handleNavigate("/user-dashboard")}
-            className="h-10 w-10 cursor-pointer rounded-xl object-cover transition-opacity hover:opacity-80"
-          />
+          <a
+            href="https://vod.borj.dev"
+            className="cursor-pointer hover:opacity-80 transition-opacity"
+          >
+            <img
+              src="/RehamDivaLogo.png"
+              alt="Reham Diva"
+              className="h-10 w-10 rounded-xl object-cover"
+            />
+          </a>
           <nav className="flex items-center gap-6 flex-1">
             {menuItems.map((item) => (
               <Button
