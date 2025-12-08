@@ -49,20 +49,17 @@ const formatDuration = (minutes: number | undefined | null, t: (key: string) => 
   }
 
   if (minutes < 60) {
-    return `${minutes} ${t("min")}`;
+    return `${minutes}m`;
   }
 
   const hours = Math.floor(minutes / 60);
   const remainder = minutes % 60;
 
   if (remainder === 0) {
-    const hourText = hours === 1 ? t("hour") : t("hours");
-    return `${hours} ${hourText}`;
+    return `${hours}h`;
   }
 
-  const hourText = hours === 1 ? t("hour") : t("hours");
-  const minuteText = remainder === 1 ? t("minute") : t("minutes");
-  return `${hours} ${hourText} ${remainder} ${minuteText}`;
+  return `${hours}h ${remainder}m`;
 };
 
 const getVimeoEmbedUrl = (url?: string | null) => {
