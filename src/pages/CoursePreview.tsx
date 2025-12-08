@@ -460,16 +460,16 @@ const CoursePreview = () => {
 
       <div className="rounded-3xl border border-border/40 dark:border-transparent bg-card/80 p-6 shadow-card">
         <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
-          <div>
+          <div className="min-w-0 flex-1">
             <p className="text-sm font-semibold text-primary">{t("courseProgress")}</p>
             <h1 className="text-3xl font-bold tracking-tight">{courseName}</h1>
-            <p className="text-muted-foreground mt-1">
+            <p className="text-muted-foreground mt-1 line-clamp-2">
               {activeLesson
                 ? `${t("lessonOf")} ${lessonPosition} ${t("of")} ${totalLessons}: ${language === "ar" ? activeLesson.title_ar : activeLesson.title}`
                 : t("publishLessonsToStart")}
             </p>
           </div>
-          <Badge variant="secondary" className="text-primary">
+          <Badge variant="secondary" className="text-primary flex-shrink-0">
             {completionPercent}% {t("complete")}
           </Badge>
         </div>
