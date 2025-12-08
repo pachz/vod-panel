@@ -69,7 +69,10 @@ export function AdminSidebar() {
       <SidebarContent className="sidebar-panel">
         {/* Logo Header */}
         <div className="px-5 py-6 transition-all duration-300">
-          <div className="flex items-center gap-3">
+          <a
+            href="https://vod.borj.dev"
+            className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
+          >
             <img
               src="/RehamDivaLogo.png"
               alt="Reham Diva"
@@ -86,7 +89,7 @@ export function AdminSidebar() {
                 </p>
               </div>
             )}
-          </div>
+          </a>
         </div>
 
         {/* Menu Items */}
