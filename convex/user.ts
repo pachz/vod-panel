@@ -39,6 +39,27 @@ export const getCurrentUser = query(async (ctx) => {
   return user;
 });
 
+// Safe version that doesn't throw when unauthenticated - for use in components
+// that need to check user state without requiring authentication
+export const getCurrentUserSafe = query(async (ctx) => {
+  const identity = await ctx.auth.getUserIdentity();
+  if (!identity) {
+    return null;
+  }
+
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    return null;
+  }
+
+  const user = await ctx.db.get(userId as Id<"users">);
+  if (!user || user.deletedAt) {
+    return null;
+  }
+
+  return user;
+});
+
 export const listUsers = query(async (ctx) => {
   await requireUser(ctx, { requireGod: true });
 

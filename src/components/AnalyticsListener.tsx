@@ -15,7 +15,8 @@ const toPathKey = (pathname: string, search: string, hash: string) => `${pathnam
 const AnalyticsListener = () => {
   const location = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
-  const currentUser = useQuery(api.user.getCurrentUser);
+  // Use safe query that doesn't throw when unauthenticated
+  const currentUser = useQuery(api.user.getCurrentUserSafe);
 
   const initAttemptedRef = useRef(false);
   const lastPathRef = useRef<string | null>(null);
