@@ -31,6 +31,7 @@ import { AdminSidebar } from "@/components/AdminSidebar";
 import { UserProfile } from "@/components/UserProfile";
 import UserLayout from "@/components/UserLayout";
 import { api } from "../convex/_generated/api";
+import AnalyticsListener from "@/components/AnalyticsListener";
 
 type LocationState = {
   from?: {
@@ -178,41 +179,44 @@ const RootRedirect = () => {
 };
 
 const App = () => (
-  <Routes>
-    <Route element={<PublicRoute />}>
-      <Route path="/login" element={<LoginPage />} />
-    </Route>
-    <Route element={<PrivateRoute />}>
-      {/* Admin routes - with sidebar */}
-      <Route element={<DashboardProviders />}>
-        <Route element={<AdminRoute />}>
-          <Route path="/dashboard" element={<Dashboard />} />
-          <Route path="/categories" element={<Categories />} />
-          <Route path="/courses" element={<Courses />} />
-          <Route path="/courses/:id" element={<CourseDetail />} />
-          <Route path="/lessons" element={<Lessons />} />
-          <Route path="/lessons/:id" element={<LessonDetail />} />
-          <Route path="/video-panel" element={<VideoPanel />} />
-          <Route path="/coach" element={<Coach />} />
-          <Route path="/users" element={<Users />} />
-          <Route path="/users/:id/info" element={<UserInfo />} />
+  <>
+    <AnalyticsListener />
+    <Routes>
+      <Route element={<PublicRoute />}>
+        <Route path="/login" element={<LoginPage />} />
+      </Route>
+      <Route element={<PrivateRoute />}>
+        {/* Admin routes - with sidebar */}
+        <Route element={<DashboardProviders />}>
+          <Route element={<AdminRoute />}>
+            <Route path="/dashboard" element={<Dashboard />} />
+            <Route path="/categories" element={<Categories />} />
+            <Route path="/courses" element={<Courses />} />
+            <Route path="/courses/:id" element={<CourseDetail />} />
+            <Route path="/lessons" element={<Lessons />} />
+            <Route path="/lessons/:id" element={<LessonDetail />} />
+            <Route path="/video-panel" element={<VideoPanel />} />
+            <Route path="/coach" element={<Coach />} />
+            <Route path="/users" element={<Users />} />
+            <Route path="/users/:id/info" element={<UserInfo />} />
+          </Route>
+        </Route>
+        {/* Normal user routes - no sidebar */}
+        <Route element={<UserProviders />}>
+          <Route path="/user-dashboard" element={<UserDashboard />} />
+          <Route path="/courses/card" element={<CourseCards />} />
+          <Route path="/courses/preview/:id" element={<CoursePreview />} />
+          <Route path="/payments" element={<Payments />} />
+        </Route>
+        {/* Root redirect */}
+        <Route path="/" element={<RootRedirect />} />
+        {/* Catch-all */}
+        <Route element={<DashboardProviders />}>
+          <Route path="*" element={<NotFound />} />
         </Route>
       </Route>
-      {/* Normal user routes - no sidebar */}
-      <Route element={<UserProviders />}>
-        <Route path="/user-dashboard" element={<UserDashboard />} />
-        <Route path="/courses/card" element={<CourseCards />} />
-        <Route path="/courses/preview/:id" element={<CoursePreview />} />
-        <Route path="/payments" element={<Payments />} />
-      </Route>
-      {/* Root redirect */}
-      <Route path="/" element={<RootRedirect />} />
-      {/* Catch-all */}
-      <Route element={<DashboardProviders />}>
-        <Route path="*" element={<NotFound />} />
-      </Route>
-    </Route>
-  </Routes>
+    </Routes>
+  </>
 );
 
 export default App;
