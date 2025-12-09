@@ -49,9 +49,15 @@ export const listCourses = query({
       v.literal("archived"),
     )),
     search: v.optional(v.string()),
+    page: v.optional(v.number()),
+    pageSize: v.optional(v.number()),
   },
-  handler: async (ctx, { categoryId, status, search }) => {
+  handler: async (ctx, { categoryId, status, search, page, pageSize }) => {
     await requireUser(ctx);
+    const currentPage = Math.max(1, page ?? 1);
+    const limit = Math.min(Math.max(1, pageSize ?? 20), 100);
+    const start = (currentPage - 1) * limit;
+    const end = start + limit;
 
     // If search is provided, use full-text search index on name field
     if (search && search.trim().length > 0) {
@@ -74,7 +80,9 @@ export const listCourses = query({
       // Return results sorted by creation time (newest first)
       // Note: Search results are already in relevance order, but we're sorting by createdAt
       // to maintain consistency with non-search queries
-      return courses.sort((a, b) => b.createdAt - a.createdAt);
+      return courses
+        .sort((a, b) => b.createdAt - a.createdAt)
+        .slice(start, end);
     }
 
     // No search - use regular index queries
@@ -114,7 +122,9 @@ export const listCourses = query({
         .collect();
     }
 
-    return courses.sort((a, b) => b.createdAt - a.createdAt);
+    return courses
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .slice(start, end);
   },
 });
 
@@ -499,4 +509,3 @@ export const deleteCourse = mutation({
     });
   },
 });
-

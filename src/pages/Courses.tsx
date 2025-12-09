@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Eye, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
@@ -12,7 +6,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { DataTable, type TableColumn, type TableAction, getPreviewText } from "@/components/DataTable";
+import {
+  DataTable,
+  type TableColumn,
+  type TableAction,
+  getPreviewText,
+} from "@/components/DataTable";
 import { type TableFilter } from "@/components/TableFilters";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -68,17 +67,23 @@ const formatDuration = (minutes: number | undefined) => {
   return `${minutes} min`;
 };
 
+const PAGE_SIZE = 20;
+
 const Courses = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get("category") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
-  
+  const pageParam = parseInt(searchParams.get("page") || "1", 10);
+  const currentPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
+
   const courses = useQuery(api.course.listCourses, {
     categoryId: categoryFilter as Id<"categories"> | undefined,
     status: statusFilter as "draft" | "published" | "archived" | undefined,
     search: searchFilter,
+    page: currentPage,
+    pageSize: PAGE_SIZE,
   });
   const categories = useQuery(api.category.listCategories);
   const createCourse = useMutation(api.course.createCourse);
@@ -92,6 +97,8 @@ const Courses = () => {
   const [searchInput, setSearchInput] = useState(searchFilter || "");
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [paginatedCourses, setPaginatedCourses] = useState<CourseDoc[]>([]);
 
   const resetForm = useCallback(() => {
     setFormValues(() => ({ ...initialFormValues }));
@@ -109,16 +116,19 @@ const Courses = () => {
     }
 
     searchTimeoutRef.current = setTimeout(() => {
-      setSearchParams((prev) => {
-        const newParams = new URLSearchParams(prev);
-        const value = searchInput.trim();
-        if (value) {
-          newParams.set("search", value);
-        } else {
-          newParams.delete("search");
-        }
-        return newParams;
-      }, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const newParams = new URLSearchParams(prev);
+          const value = searchInput.trim();
+          if (value) {
+            newParams.set("search", value);
+          } else {
+            newParams.delete("search");
+          }
+          return newParams;
+        },
+        { replace: true }
+      );
     }, 300);
 
     return () => {
@@ -128,10 +138,58 @@ const Courses = () => {
     };
   }, [searchInput, setSearchParams]);
 
-  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setPaginatedCourses([]);
+    setSearchParams(
+      (prev) => {
+        const next = new URLSearchParams(prev);
+        next.set("page", "1");
+        return next;
+      },
+      { replace: true }
+    );
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryFilter, statusFilter, searchFilter]);
 
-  const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
-  const isLoading = courses === undefined;
+  // Append new page results
+  useEffect(() => {
+    if (!courses) return;
+    setPaginatedCourses((prev) => {
+      if (currentPage === 1) return courses;
+      const existingIds = new Set(prev.map((c) => c._id));
+      const merged = [...prev];
+      courses.forEach((c) => {
+        if (!existingIds.has(c._id)) merged.push(c);
+      });
+      return merged;
+    });
+    setIsLoadingMore(false);
+  }, [courses, currentPage]);
+
+  const canLoadMore = (courses?.length ?? 0) === PAGE_SIZE;
+  const isLoading = courses === undefined || isLoadingMore;
+
+  const categoryList = useMemo<CategoryDoc[]>(
+    () => categories ?? [],
+    [categories]
+  );
+  const handleLoadMore = useCallback(() => {
+    if (!canLoadMore) return;
+    setIsLoadingMore(true);
+    setSearchParams(
+      (prev) => {
+        const newParams = new URLSearchParams(prev);
+        newParams.set("page", String(currentPage + 1));
+        return newParams;
+      },
+      { replace: true }
+    );
+  }, [canLoadMore, currentPage, setSearchParams]);
+
+  useEffect(() => {
+    setIsLoadingMore(false);
+  }, [courses]);
 
   const categoryNameById = useMemo(() => {
     return categoryList.reduce<Record<string, string>>((acc, category) => {
@@ -161,9 +219,7 @@ const Courses = () => {
       },
       {
         header: "Name",
-        render: (course) => (
-          <span className="font-medium">{course.name}</span>
-        ),
+        render: (course) => <span className="font-medium">{course.name}</span>,
       },
       {
         header: "Category",
@@ -291,7 +347,6 @@ const Courses = () => {
     return "Something went wrong. Please try again.";
   };
 
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -301,12 +356,12 @@ const Courses = () => {
       // Prioritize required field errors over optional field errors
       const requiredFieldPaths = ["name", "nameAr", "categoryId"];
       const errors = validation.error.errors;
-      
+
       // Find first error for a required field, or fall back to first error
-      const requiredFieldError = errors.find(err => 
-        err.path && requiredFieldPaths.includes(String(err.path[0]))
+      const requiredFieldError = errors.find(
+        (err) => err.path && requiredFieldPaths.includes(String(err.path[0]))
       );
-      
+
       const issue = requiredFieldError ?? errors[0];
       toast.error(issue?.message ?? "Please check the form and try again.");
       return;
@@ -444,7 +499,7 @@ const Courses = () => {
       </div>
 
       <DataTable
-        data={courseList}
+        data={paginatedCourses}
         isLoading={isLoading}
         columns={columns}
         actions={actions}
@@ -461,6 +516,19 @@ const Courses = () => {
         onSearchChange={setSearchInput}
         searchPlaceholder="Search courses by name..."
       />
+
+      {(canLoadMore || isLoading) && (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            disabled={!canLoadMore || isLoading}
+            className="min-w-[160px]"
+          >
+            {isLoading ? "Loading…" : "Load more"}
+          </Button>
+        </div>
+      )}
 
       <AlertDialog
         open={courseToDelete !== null}
