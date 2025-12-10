@@ -67,28 +67,14 @@ const formatDuration = (minutes: number | undefined) => {
   return `${minutes} min`;
 };
 
-const PAGE_SIZE = 20;
-
 const Courses = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get("category") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
-  const pageParam = parseInt(searchParams.get("page") || "1", 10);
-  const currentPage = Number.isNaN(pageParam) || pageParam < 1 ? 1 : pageParam;
 
-  const courses = useQuery(api.course.listCourses, {
-    categoryId: categoryFilter as Id<"categories"> | undefined,
-    status: statusFilter as "draft" | "published" | "archived" | undefined,
-    search: searchFilter,
-    page: currentPage,
-    pageSize: PAGE_SIZE,
-  });
-  const categories = useQuery(api.category.listCategories);
-  const createCourse = useMutation(api.course.createCourse);
-  const deleteCourse = useMutation(api.course.deleteCourse);
-
+  const PAGE_SIZE = 20;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
@@ -99,6 +85,26 @@ const Courses = () => {
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [paginatedCourses, setPaginatedCourses] = useState<CourseDoc[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [continueCursor, setContinueCursor] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [cursorScope, setCursorScope] = useState<string | null>(null);
+
+  const filterKey = useMemo(
+    () => `${categoryFilter ?? ""}|${statusFilter ?? ""}|${searchFilter ?? ""}`,
+    [categoryFilter, statusFilter, searchFilter]
+  );
+
+  const coursesPage = useQuery(api.course.listCourses, {
+    categoryId: categoryFilter as Id<"categories"> | undefined,
+    status: statusFilter as "draft" | "published" | "archived" | undefined,
+    search: searchFilter,
+    limit: PAGE_SIZE,
+    cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+  });
+  const categories = useQuery(api.category.listCategories);
+  const createCourse = useMutation(api.course.createCourse);
+  const deleteCourse = useMutation(api.course.deleteCourse);
 
   const resetForm = useCallback(() => {
     setFormValues(() => ({ ...initialFormValues }));
@@ -141,55 +147,52 @@ const Courses = () => {
   // Reset pagination when filters/search change
   useEffect(() => {
     setPaginatedCourses([]);
-    setSearchParams(
-      (prev) => {
-        const next = new URLSearchParams(prev);
-        next.set("page", "1");
-        return next;
-      },
-      { replace: true }
-    );
+    setCursor(null);
+    setContinueCursor(null);
+    setIsDone(false);
+    setCursorScope(null);
+    setIsLoadingMore(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [categoryFilter, statusFilter, searchFilter]);
 
   // Append new page results
   useEffect(() => {
-    if (!courses) return;
+    if (!coursesPage) return;
+
+    const {
+      page,
+      continueCursor: nextCursor,
+      isDone: nextIsDone,
+    } = coursesPage;
+
     setPaginatedCourses((prev) => {
-      if (currentPage === 1) return courses;
+      // If this is the first page, replace. Otherwise append deduped.
+      if (!cursor) return page;
       const existingIds = new Set(prev.map((c) => c._id));
       const merged = [...prev];
-      courses.forEach((c) => {
+      page.forEach((c) => {
         if (!existingIds.has(c._id)) merged.push(c);
       });
       return merged;
     });
+    setContinueCursor(nextCursor ?? null);
+    setIsDone(Boolean(nextIsDone) || !nextCursor);
     setIsLoadingMore(false);
-  }, [courses, currentPage]);
+  }, [coursesPage, cursor]);
 
-  const canLoadMore = (courses?.length ?? 0) === PAGE_SIZE;
-  const isLoading = courses === undefined || isLoadingMore;
+  const canLoadMore = !isDone && Boolean(continueCursor);
+  const isLoading = coursesPage === undefined || isLoadingMore;
 
   const categoryList = useMemo<CategoryDoc[]>(
     () => categories ?? [],
     [categories]
   );
   const handleLoadMore = useCallback(() => {
-    if (!canLoadMore) return;
+    if (!canLoadMore || isLoadingMore) return;
     setIsLoadingMore(true);
-    setSearchParams(
-      (prev) => {
-        const newParams = new URLSearchParams(prev);
-        newParams.set("page", String(currentPage + 1));
-        return newParams;
-      },
-      { replace: true }
-    );
-  }, [canLoadMore, currentPage, setSearchParams]);
-
-  useEffect(() => {
-    setIsLoadingMore(false);
-  }, [courses]);
+    setCursorScope(filterKey);
+    setCursor(continueCursor);
+  }, [canLoadMore, continueCursor, filterKey, isLoadingMore]);
 
   const categoryNameById = useMemo(() => {
     return categoryList.reduce<Record<string, string>>((acc, category) => {
