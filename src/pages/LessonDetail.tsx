@@ -94,7 +94,11 @@ const LessonDetail = () => {
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false);
   const [videoUrlServerError, setVideoUrlServerError] = useState<string | null>(null);
 
-  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  const courseList = useMemo<CourseDoc[]>(() => {
+    if (!courses) return [];
+    // Extract page from paginated result
+    return courses.page ?? [];
+  }, [courses]);
   const isLoading = lesson === undefined || courses === undefined;
 
   useEffect(() => {

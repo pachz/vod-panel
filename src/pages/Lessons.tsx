@@ -73,7 +73,11 @@ const Lessons = () => {
     duration: "",
   });
 
-  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  const courseList = useMemo<CourseDoc[]>(() => {
+    if (!courses) return [];
+    // Extract page from paginated result
+    return courses.page ?? [];
+  }, [courses]);
   const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
   const isLoading = lessons === undefined || courses === undefined;
 
