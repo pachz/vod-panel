@@ -90,15 +90,19 @@ export const listLessons = query({
       v.literal("archived"),
     )),
     search: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
   },
-  handler: async (ctx, { courseId, status, search }) => {
+  handler: async (ctx, { courseId, status, search, limit = 12, cursor }) => {
     await requireUser(ctx);
+
+    const numItems = Math.min(Math.max(limit, 1), 100);
 
     // If search is provided, use full-text search index on title field
     if (search && search.trim().length > 0) {
       const searchTerm = search.trim();
       
-      const lessons = await ctx.db
+      const queryWithSearch = ctx.db
         .query("lessons")
         .withSearchIndex("search_title", (q) => {
           let query = q.search("title", searchTerm).eq("deletedAt", undefined);
@@ -109,38 +113,52 @@ export const listLessons = query({
             query = query.eq("status", status);
           }
           return query;
-        })
-        .collect();
+        });
 
-      // Return results sorted by createdAt (most recent first)
-      return lessons.sort((a, b) => b.createdAt - a.createdAt);
+      // Paginate search results (returned in relevance order)
+      return await queryWithSearch.paginate({
+        cursor: cursor ?? null,
+        numItems,
+      });
     }
 
     // No search - use regular index queries
     let lessons;
 
     if (courseId && status) {
-      lessons = await ctx.db
+      // Case 3: Both filters - use all 3 fields
+      lessons = ctx.db
         .query("lessons")
         .withIndex("deletedAt_course_status", (q) =>
           q.eq("deletedAt", undefined).eq("course_id", courseId).eq("status", status)
-        )
-        .collect();
+        );
     } else if (courseId) {
-      lessons = await ctx.db
+      // Case 2: Course only - use first 2 fields
+      lessons = ctx.db
         .query("lessons")
-        .withIndex("course_id", (q) =>
-          q.eq("course_id", courseId).eq("deletedAt", undefined)
-        )
-        .collect();
+        .withIndex("deletedAt_course_status", (q) =>
+          q.eq("deletedAt", undefined).eq("course_id", courseId)
+        );
+    } else if (status) {
+      // Status only - use deletedAt_status index
+      lessons = ctx.db
+        .query("lessons")
+        .withIndex("deletedAt_status", (q) =>
+          q.eq("deletedAt", undefined).eq("status", status)
+        );
     } else {
-      lessons = await ctx.db
+      // Case 1: No filters - use only deletedAt
+      lessons = ctx.db
         .query("lessons")
-        .filter((q) => q.eq(q.field("deletedAt"), undefined))
-        .collect();
+        .withIndex("deletedAt", (q) =>
+          q.eq("deletedAt", undefined)
+        );
     }
 
-    return lessons.sort((a, b) => b.createdAt - a.createdAt);
+    return await lessons.order("desc").paginate({
+      cursor: cursor ?? null,
+      numItems,
+    });
   },
 });
 

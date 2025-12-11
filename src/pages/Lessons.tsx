@@ -50,21 +50,35 @@ const Lessons = () => {
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
 
-  const lessons = useQuery(api.lesson.listLessons, {
-    courseId: courseFilter as Id<"courses"> | undefined,
-    status: statusFilter as "draft" | "published" | "archived" | undefined,
-    search: searchFilter,
-  });
-  const courses = useQuery(api.course.listCourses, {});
-  const createLesson = useMutation(api.lesson.createLesson);
-  const deleteLesson = useMutation(api.lesson.deleteLesson);
-
+  const PAGE_SIZE = 12;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<LessonDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
   const [searchInput, setSearchInput] = useState(searchFilter || "");
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [paginatedLessons, setPaginatedLessons] = useState<LessonDoc[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [continueCursor, setContinueCursor] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [cursorScope, setCursorScope] = useState<string | null>(null);
+
+  const filterKey = useMemo(
+    () => `${courseFilter ?? ""}|${statusFilter ?? ""}|${searchFilter ?? ""}`,
+    [courseFilter, statusFilter, searchFilter]
+  );
+
+  const lessonsPage = useQuery(api.lesson.listLessons, {
+    courseId: courseFilter as Id<"courses"> | undefined,
+    status: statusFilter as "draft" | "published" | "archived" | undefined,
+    search: searchFilter,
+    limit: PAGE_SIZE,
+    cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+  });
+  const courses = useQuery(api.course.listCourses, {});
+  const createLesson = useMutation(api.lesson.createLesson);
+  const deleteLesson = useMutation(api.lesson.deleteLesson);
 
   const [formValues, setFormValues] = useState({
     title: "",
@@ -78,8 +92,53 @@ const Lessons = () => {
     // Extract page from paginated result
     return courses.page ?? [];
   }, [courses]);
-  const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
-  const isLoading = lessons === undefined || courses === undefined;
+
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setPaginatedLessons([]);
+    setCursor(null);
+    setContinueCursor(null);
+    setIsDone(false);
+    setCursorScope(null);
+    setIsLoadingMore(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [courseFilter, statusFilter, searchFilter]);
+
+  // Append new page results
+  useEffect(() => {
+    if (!lessonsPage) return;
+
+    const {
+      page,
+      continueCursor: nextCursor,
+      isDone: nextIsDone,
+    } = lessonsPage;
+
+    setPaginatedLessons((prev) => {
+      // If this is the first page, replace. Otherwise append deduped.
+      if (!cursor) return page;
+      const existingIds = new Set(prev.map((l) => l._id));
+      const merged = [...prev];
+      page.forEach((l) => {
+        if (!existingIds.has(l._id)) merged.push(l);
+      });
+      return merged;
+    });
+    setContinueCursor(nextCursor ?? null);
+    setIsDone(Boolean(nextIsDone) || !nextCursor);
+    setIsLoadingMore(false);
+  }, [lessonsPage, cursor]);
+
+  const canLoadMore = !isDone && Boolean(continueCursor);
+  // Only show loading on initial load (when we have no data yet), not when loading more
+  const isLoading = lessonsPage === undefined && paginatedLessons.length === 0;
+
+  const handleLoadMore = useCallback(() => {
+    if (!canLoadMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setCursorScope(filterKey);
+    setCursor(continueCursor);
+  }, [canLoadMore, continueCursor, filterKey, isLoadingMore]);
 
   // Sync courseId with courseFilter when filter changes
   useEffect(() => {
@@ -468,7 +527,7 @@ const Lessons = () => {
       </div>
 
       <DataTable
-        data={lessonList}
+        data={paginatedLessons}
         isLoading={isLoading}
         columns={columns}
         actions={actions}
@@ -485,6 +544,19 @@ const Lessons = () => {
         onSearchChange={setSearchInput}
         searchPlaceholder="Search lessons by title..."
       />
+
+      {(canLoadMore || isLoading) && (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            disabled={!canLoadMore || isLoadingMore}
+            className="min-w-[160px]"
+          >
+            {isLoadingMore ? "Loading…" : "Load more"}
+          </Button>
+        </div>
+      )}
 
       <AlertDialog
         open={lessonToDelete !== null}

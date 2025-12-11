@@ -92,6 +92,8 @@ export default defineSchema({
   })
     .index("course_id", ["course_id", "deletedAt"])
     .index("deletedAt_course_status", ["deletedAt", "course_id", "status"])
+    .index("deletedAt_status", ["deletedAt", "status"])
+    .index("deletedAt", ["deletedAt"])
     .searchIndex("search_title", {
       searchField: "title",
       filterFields: ["deletedAt", "course_id", "status"],
