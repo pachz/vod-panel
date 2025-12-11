@@ -86,7 +86,11 @@ const CourseCards = () => {
     };
   }, [searchInput, setSearchParams]);
 
-  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  const courseList = useMemo<CourseDoc[]>(() => {
+    if (!courses) return [];
+    // Extract page from paginated result
+    return courses.page ?? [];
+  }, [courses]);
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
   const isLoading = courses === undefined;
 

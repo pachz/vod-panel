@@ -62,6 +62,7 @@ export default defineSchema({
     .index("slug", ["slug"])
     .index("deletedAt_category_status", ["deletedAt", "category_id", "status"])
     .index("deletedAt_status", ["deletedAt", "status"])
+    .index("deletedAt", ["deletedAt"])
     .searchIndex("search_name", {
       searchField: "name",
       filterFields: ["deletedAt", "category_id", "status"],

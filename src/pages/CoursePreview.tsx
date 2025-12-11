@@ -602,7 +602,7 @@ const CoursePreview = () => {
             <TabsContent value="overview">
               <Card className="border-none bg-card/70 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold">{t("lessonOverview")}</CardTitle>
+                  <CardTitle className={cn("text-lg font-semibold", isRTL ? "text-right" : "text-left")}>{t("lessonOverview")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {renderMarkdown(
@@ -619,7 +619,7 @@ const CoursePreview = () => {
             <TabsContent value="objectives">
               <Card className="border-none bg-card/70 shadow-sm">
                 <CardHeader>
-                  <CardTitle className="text-lg font-semibold">{t("learningObjectives")}</CardTitle>
+                  <CardTitle className={cn("text-lg font-semibold", isRTL ? "text-right" : "text-left")}>{t("learningObjectives")}</CardTitle>
                 </CardHeader>
                 <CardContent>
                   {renderMarkdown(
@@ -641,8 +641,8 @@ const CoursePreview = () => {
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>
-                  <p className="text-sm font-semibold text-muted-foreground">{t("courseLessons")}</p>
-                  <CardTitle className="text-xl">{t("lessonPlaylist")}</CardTitle>
+                  <p className={cn("text-sm font-semibold text-muted-foreground", isRTL ? "text-right" : "text-left")}>{t("courseLessons")}</p>
+                  <CardTitle className={cn("text-xl", isRTL ? "text-right" : "text-left")}>{t("lessonPlaylist")}</CardTitle>
                 </div>
                 <Badge variant="outline">
                   {progressData.completedCount}/{totalLessons} {t("done")}
@@ -699,7 +699,7 @@ const CoursePreview = () => {
 
           <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
             <CardHeader>
-              <CardTitle className="text-lg font-semibold">{t("aboutThisCourse")}</CardTitle>
+              <CardTitle className={cn("text-lg font-semibold", isRTL ? "text-right" : "text-left")}>{t("aboutThisCourse")}</CardTitle>
             </CardHeader>
             <CardContent className="space-y-3 text-sm text-muted-foreground">
               {renderMarkdown(courseShortDescription, isRTL)}

@@ -43,21 +43,23 @@ const validateCourseUpdateInput = (input: CourseUpdateInput) => {
 export const listCourses = query({
   args: {
     categoryId: v.optional(v.id("categories")),
-    status: v.optional(v.union(
-      v.literal("draft"),
-      v.literal("published"),
-      v.literal("archived"),
-    )),
+    status: v.optional(
+      v.union(v.literal("draft"), v.literal("published"), v.literal("archived"))
+    ),
     search: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, status, search }) => {
+  handler: async (ctx, { categoryId, status, search, limit = 12, cursor }) => {
     await requireUser(ctx);
+
+    const numItems = Math.min(Math.max(limit, 1), 100);
 
     // If search is provided, use full-text search index on name field
     if (search && search.trim().length > 0) {
       const searchTerm = search.trim();
-      
-      const courses = await ctx.db
+
+      const queryWithSearch = ctx.db
         .query("courses")
         .withSearchIndex("search_name", (q) => {
           let query = q.search("name", searchTerm).eq("deletedAt", undefined);
@@ -68,15 +70,14 @@ export const listCourses = query({
             query = query.eq("status", status);
           }
           return query;
-        })
-        .collect();
+        });
 
-      // Return results sorted by creation time (newest first)
-      // Note: Search results are already in relevance order, but we're sorting by createdAt
-      // to maintain consistency with non-search queries
-      return courses.sort((a, b) => b.createdAt - a.createdAt);
+      // Paginate search results (returned in relevance order)
+      return await queryWithSearch.paginate({
+        cursor: cursor ?? null,
+        numItems,
+      });
     }
-
     // No search - use regular index queries
     let courses;
 
@@ -87,7 +88,6 @@ export const listCourses = query({
         .withIndex("deletedAt_category_status", (q) =>
           q.eq("deletedAt", undefined).eq("category_id", categoryId).eq("status", status)
         )
-        .collect();
     } else if (categoryId) {
       // Case 2: Category only - use first 2 fields
       courses = await ctx.db
@@ -95,7 +95,6 @@ export const listCourses = query({
         .withIndex("deletedAt_category_status", (q) =>
           q.eq("deletedAt", undefined).eq("category_id", categoryId)
         )
-        .collect();
     } else if (status) {
       // Status only - use deletedAt_status index
       courses = await ctx.db
@@ -103,18 +102,19 @@ export const listCourses = query({
         .withIndex("deletedAt_status", (q) =>
           q.eq("deletedAt", undefined).eq("status", status)
         )
-        .collect();
     } else {
       // Case 1: No filters - use only deletedAt
       courses = await ctx.db
         .query("courses")
-        .withIndex("deletedAt_category_status", (q) =>
+        .withIndex("deletedAt", (q) =>
           q.eq("deletedAt", undefined)
         )
-        .collect();
     }
 
-    return courses.sort((a, b) => b.createdAt - a.createdAt);
+    return await courses.order('desc').paginate({
+      cursor: cursor ?? null,
+      numItems,
+    });
   },
 });
 
@@ -128,7 +128,7 @@ export const createCourse = mutation({
   },
   handler: async (
     ctx,
-    { name, nameAr, shortDescription, shortDescriptionAr, categoryId },
+    { name, nameAr, shortDescription, shortDescriptionAr, categoryId }
   ) => {
     await requireUser(ctx);
 
@@ -155,7 +155,7 @@ export const createCourse = mutation({
       .collect();
 
     const hasDuplicate = duplicates.some(
-      (item) => item.deletedAt === undefined,
+      (item) => item.deletedAt === undefined
     );
 
     if (hasDuplicate) {
@@ -237,7 +237,7 @@ export const updateCourse = mutation({
     status: v.union(
       v.literal("draft"),
       v.literal("published"),
-      v.literal("archived"),
+      v.literal("archived")
     ),
     trialVideoUrl: v.optional(v.string()),
     instructor: v.optional(v.string()),
@@ -256,7 +256,7 @@ export const updateCourse = mutation({
       status,
       trialVideoUrl,
       instructor,
-    },
+    }
   ) => {
     await requireUser(ctx);
 
@@ -297,7 +297,7 @@ export const updateCourse = mutation({
       .collect();
 
     const hasDuplicate = duplicates.some(
-      (item) => item._id !== id && item.deletedAt === undefined,
+      (item) => item._id !== id && item.deletedAt === undefined
     );
 
     if (hasDuplicate) {
@@ -472,7 +472,8 @@ export const deleteCourse = mutation({
     if (lessons.length > 0) {
       throw new ConvexError({
         code: "COURSE_HAS_LESSONS",
-        message: "Cannot delete course that has lessons. Please delete or move all lessons first.",
+        message:
+          "Cannot delete course that has lessons. Please delete or move all lessons first.",
       });
     }
 
@@ -499,4 +500,3 @@ export const deleteCourse = mutation({
     });
   },
 });
-

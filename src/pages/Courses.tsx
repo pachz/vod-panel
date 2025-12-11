@@ -1,10 +1,4 @@
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { Plus, Eye, Trash2 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
@@ -12,7 +6,12 @@ import { useMutation, useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { DataTable, type TableColumn, type TableAction, getPreviewText } from "@/components/DataTable";
+import {
+  DataTable,
+  type TableColumn,
+  type TableAction,
+  getPreviewText,
+} from "@/components/DataTable";
 import { type TableFilter } from "@/components/TableFilters";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -74,16 +73,8 @@ const Courses = () => {
   const categoryFilter = searchParams.get("category") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
-  
-  const courses = useQuery(api.course.listCourses, {
-    categoryId: categoryFilter as Id<"categories"> | undefined,
-    status: statusFilter as "draft" | "published" | "archived" | undefined,
-    search: searchFilter,
-  });
-  const categories = useQuery(api.category.listCategories);
-  const createCourse = useMutation(api.course.createCourse);
-  const deleteCourse = useMutation(api.course.deleteCourse);
 
+  const PAGE_SIZE = 12;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
@@ -92,6 +83,28 @@ const Courses = () => {
   const [searchInput, setSearchInput] = useState(searchFilter || "");
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [paginatedCourses, setPaginatedCourses] = useState<CourseDoc[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [continueCursor, setContinueCursor] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [cursorScope, setCursorScope] = useState<string | null>(null);
+
+  const filterKey = useMemo(
+    () => `${categoryFilter ?? ""}|${statusFilter ?? ""}|${searchFilter ?? ""}`,
+    [categoryFilter, statusFilter, searchFilter]
+  );
+
+  const coursesPage = useQuery(api.course.listCourses, {
+    categoryId: categoryFilter as Id<"categories"> | undefined,
+    status: statusFilter as "draft" | "published" | "archived" | undefined,
+    search: searchFilter,
+    limit: PAGE_SIZE,
+    cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+  });
+  const categories = useQuery(api.category.listCategories);
+  const createCourse = useMutation(api.course.createCourse);
+  const deleteCourse = useMutation(api.course.deleteCourse);
 
   const resetForm = useCallback(() => {
     setFormValues(() => ({ ...initialFormValues }));
@@ -109,16 +122,19 @@ const Courses = () => {
     }
 
     searchTimeoutRef.current = setTimeout(() => {
-      setSearchParams((prev) => {
-        const newParams = new URLSearchParams(prev);
-        const value = searchInput.trim();
-        if (value) {
-          newParams.set("search", value);
-        } else {
-          newParams.delete("search");
-        }
-        return newParams;
-      }, { replace: true });
+      setSearchParams(
+        (prev) => {
+          const newParams = new URLSearchParams(prev);
+          const value = searchInput.trim();
+          if (value) {
+            newParams.set("search", value);
+          } else {
+            newParams.delete("search");
+          }
+          return newParams;
+        },
+        { replace: true }
+      );
     }, 300);
 
     return () => {
@@ -128,10 +144,56 @@ const Courses = () => {
     };
   }, [searchInput, setSearchParams]);
 
-  const courseList = useMemo<CourseDoc[]>(() => courses ?? [], [courses]);
+  // Reset pagination when filters/search change
+  useEffect(() => {
+    setPaginatedCourses([]);
+    setCursor(null);
+    setContinueCursor(null);
+    setIsDone(false);
+    setCursorScope(null);
+    setIsLoadingMore(false);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [categoryFilter, statusFilter, searchFilter]);
 
-  const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
-  const isLoading = courses === undefined;
+  // Append new page results
+  useEffect(() => {
+    if (!coursesPage) return;
+
+    const {
+      page,
+      continueCursor: nextCursor,
+      isDone: nextIsDone,
+    } = coursesPage;
+
+    setPaginatedCourses((prev) => {
+      // If this is the first page, replace. Otherwise append deduped.
+      if (!cursor) return page;
+      const existingIds = new Set(prev.map((c) => c._id));
+      const merged = [...prev];
+      page.forEach((c) => {
+        if (!existingIds.has(c._id)) merged.push(c);
+      });
+      return merged;
+    });
+    setContinueCursor(nextCursor ?? null);
+    setIsDone(Boolean(nextIsDone) || !nextCursor);
+    setIsLoadingMore(false);
+  }, [coursesPage, cursor]);
+
+  const canLoadMore = !isDone && Boolean(continueCursor);
+  // Only show loading on initial load (when we have no data yet), not when loading more
+  const isLoading = coursesPage === undefined && paginatedCourses.length === 0;
+
+  const categoryList = useMemo<CategoryDoc[]>(
+    () => categories ?? [],
+    [categories]
+  );
+  const handleLoadMore = useCallback(() => {
+    if (!canLoadMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setCursorScope(filterKey);
+    setCursor(continueCursor);
+  }, [canLoadMore, continueCursor, filterKey, isLoadingMore]);
 
   const categoryNameById = useMemo(() => {
     return categoryList.reduce<Record<string, string>>((acc, category) => {
@@ -161,9 +223,7 @@ const Courses = () => {
       },
       {
         header: "Name",
-        render: (course) => (
-          <span className="font-medium">{course.name}</span>
-        ),
+        render: (course) => <span className="font-medium">{course.name}</span>,
       },
       {
         header: "Category",
@@ -291,7 +351,6 @@ const Courses = () => {
     return "Something went wrong. Please try again.";
   };
 
-
   const handleSubmit = async (event: React.FormEvent<HTMLFormElement>) => {
     event.preventDefault();
 
@@ -301,12 +360,12 @@ const Courses = () => {
       // Prioritize required field errors over optional field errors
       const requiredFieldPaths = ["name", "nameAr", "categoryId"];
       const errors = validation.error.errors;
-      
+
       // Find first error for a required field, or fall back to first error
-      const requiredFieldError = errors.find(err => 
-        err.path && requiredFieldPaths.includes(String(err.path[0]))
+      const requiredFieldError = errors.find(
+        (err) => err.path && requiredFieldPaths.includes(String(err.path[0]))
       );
-      
+
       const issue = requiredFieldError ?? errors[0];
       toast.error(issue?.message ?? "Please check the form and try again.");
       return;
@@ -444,7 +503,7 @@ const Courses = () => {
       </div>
 
       <DataTable
-        data={courseList}
+        data={paginatedCourses}
         isLoading={isLoading}
         columns={columns}
         actions={actions}
@@ -461,6 +520,19 @@ const Courses = () => {
         onSearchChange={setSearchInput}
         searchPlaceholder="Search courses by name..."
       />
+
+      {(canLoadMore || isLoading) && (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            disabled={!canLoadMore || isLoadingMore}
+            className="min-w-[160px]"
+          >
+            {isLoadingMore ? "Loading…" : "Load more"}
+          </Button>
+        </div>
+      )}
 
       <AlertDialog
         open={courseToDelete !== null}

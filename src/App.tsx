@@ -1,6 +1,7 @@
 import { Navigate, Outlet, Route, Routes, useLocation } from "react-router-dom";
 import { useConvexAuth, useQuery } from "convex/react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { useEffect } from "react";
 
 import LoginPage from "./LoginPage";
 import Dashboard from "@/pages/Dashboard";
@@ -32,6 +33,7 @@ import { UserProfile } from "@/components/UserProfile";
 import UserLayout from "@/components/UserLayout";
 import { api } from "../convex/_generated/api";
 import AnalyticsListener from "@/components/AnalyticsListener";
+import { useLanguage } from "@/hooks/use-language";
 
 type LocationState = {
   from?: {
@@ -178,8 +180,21 @@ const RootRedirect = () => {
   return <Navigate to="/user-dashboard" replace />;
 };
 
+const LanguageDirectionEffect = () => {
+  const { language, isRTL } = useLanguage();
+
+  useEffect(() => {
+    const html = document.documentElement;
+    html.setAttribute("lang", language);
+    html.setAttribute("dir", isRTL ? "rtl" : "ltr");
+  }, [language, isRTL]);
+
+  return null;
+};
+
 const App = () => (
   <>
+    <LanguageDirectionEffect />
     <AnalyticsListener />
     <Routes>
       <Route element={<PublicRoute />}>
