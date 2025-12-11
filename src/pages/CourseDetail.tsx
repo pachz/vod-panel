@@ -668,8 +668,8 @@ const CourseDetail = () => {
       const savedValues: FormValues = {
         name,
         nameAr,
-        shortDescription,
-        shortDescriptionAr,
+        shortDescription: shortDescription ?? "",
+        shortDescriptionAr: shortDescriptionAr ?? "",
         description: description ?? "",
         descriptionAr: descriptionAr ?? "",
         categoryId,

@@ -435,7 +435,7 @@ const Courses = () => {
             <form onSubmit={handleSubmit} className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div className="space-y-2">
-                  <Label htmlFor="name">Name</Label>
+                  <Label htmlFor="name">Title (EN)</Label>
                   <Input
                     id="name"
                     name="name"
@@ -450,7 +450,7 @@ const Courses = () => {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="nameAr">Arabic Name</Label>
+                  <Label htmlFor="nameAr">Title (AR)</Label>
                   <Input
                     id="nameAr"
                     name="nameAr"

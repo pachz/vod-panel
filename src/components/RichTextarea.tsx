@@ -221,7 +221,8 @@ export const RichTextarea = ({
   }, []);
 
   const previewContent = useMemo(() => {
-    if (!value.trim()) {
+    const safeValue = value ?? "";
+    if (!safeValue.trim()) {
       return (
         <span className="text-sm text-muted-foreground">
           Add some content…
@@ -230,7 +231,7 @@ export const RichTextarea = ({
     }
 
     const elements: ReactNode[] = [];
-    const lines = value.split(/\r?\n/);
+    const lines = safeValue.split(/\r?\n/);
     let currentList: string[] = [];
 
     const flushList = () => {
@@ -340,7 +341,7 @@ export const RichTextarea = ({
               <Textarea
                 ref={dialogTextareaRef}
                 id={`${id}-expanded`}
-                value={value}
+                value={value ?? ""}
                 onChange={(event) => onChange(event.target.value)}
                 placeholder={placeholder}
                 maxLength={maxLength}
