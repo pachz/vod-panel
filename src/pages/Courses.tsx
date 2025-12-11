@@ -74,7 +74,7 @@ const Courses = () => {
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
 
-  const PAGE_SIZE = 20;
+  const PAGE_SIZE = 12;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
@@ -181,7 +181,8 @@ const Courses = () => {
   }, [coursesPage, cursor]);
 
   const canLoadMore = !isDone && Boolean(continueCursor);
-  const isLoading = coursesPage === undefined || isLoadingMore;
+  // Only show loading on initial load (when we have no data yet), not when loading more
+  const isLoading = coursesPage === undefined && paginatedCourses.length === 0;
 
   const categoryList = useMemo<CategoryDoc[]>(
     () => categories ?? [],
@@ -525,10 +526,10 @@ const Courses = () => {
           <Button
             variant="outline"
             onClick={handleLoadMore}
-            disabled={!canLoadMore || isLoading}
+            disabled={!canLoadMore || isLoadingMore}
             className="min-w-[160px]"
           >
-            {isLoading ? "Loading…" : "Load more"}
+            {isLoadingMore ? "Loading…" : "Load more"}
           </Button>
         </div>
       )}
