@@ -78,26 +78,40 @@ export const listCourses = query({
         numItems,
       });
     }
+    // No search - use regular index queries
+    let courses;
 
-    // No search - regular query with filters and cursor pagination
-    const queryWithoutSearch = ctx.db
-      .query("courses")
-      .filter((q) => {
-        let expr = q.eq(q.field("deletedAt"), undefined);
+    if (categoryId && status) {
+      // Case 3: Both filters - use all 3 fields
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_category_status", (q) =>
+          q.eq("deletedAt", undefined).eq("category_id", categoryId).eq("status", status)
+        )
+    } else if (categoryId) {
+      // Case 2: Category only - use first 2 fields
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_category_status", (q) =>
+          q.eq("deletedAt", undefined).eq("category_id", categoryId)
+        )
+    } else if (status) {
+      // Status only - use deletedAt_status index
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt_status", (q) =>
+          q.eq("deletedAt", undefined).eq("status", status)
+        )
+    } else {
+      // Case 1: No filters - use only deletedAt
+      courses = await ctx.db
+        .query("courses")
+        .withIndex("deletedAt", (q) =>
+          q.eq("deletedAt", undefined)
+        )
+    }
 
-        if (categoryId) {
-          expr = q.and(expr, q.eq(q.field("category_id"), categoryId));
-        }
-
-        if (status) {
-          expr = q.and(expr, q.eq(q.field("status"), status));
-        }
-
-        return expr;
-      })
-      .order("desc");
-
-    return await queryWithoutSearch.paginate({
+    return await courses.order('desc').paginate({
       cursor: cursor ?? null,
       numItems,
     });
