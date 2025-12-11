@@ -156,7 +156,9 @@ const CoursePreview = () => {
       return [];
     }
 
-    return [...lessons].sort((a, b) => a.priority - b.priority);
+    // Extract page from paginated result
+    const lessonsArray = lessons.page ?? [];
+    return [...lessonsArray].sort((a, b) => a.priority - b.priority);
   }, [lessons]);
 
   const searchLessonId = searchParams.get("lesson");

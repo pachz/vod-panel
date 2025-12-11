@@ -215,7 +215,11 @@ const CourseDetail = () => {
   const previousCourseIdRef = useRef<Id<"courses"> | undefined>(undefined);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
-  const lessonList = useMemo<LessonDoc[]>(() => lessons ?? [], [lessons]);
+  const lessonList = useMemo<LessonDoc[]>(() => {
+    if (!lessons) return [];
+    // Extract page from paginated result
+    return lessons.page ?? [];
+  }, [lessons]);
   const isLoading = course === undefined || categories === undefined;
 
   const sensors = useSensors(
