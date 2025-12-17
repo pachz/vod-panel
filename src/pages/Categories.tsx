@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { Plus, Eye, Trash2 } from "lucide-react";
+import { Plus, Eye, Trash2, RotateCcw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
+import { useSearchParams } from "react-router-dom";
+import { ViewDeletedToggle } from "@/components/ViewDeletedToggle";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc } from "../../convex/_generated/dataModel";
@@ -39,16 +41,24 @@ type FormValues = {
 };
 
 const Categories = () => {
-  const categories = useQuery(api.category.listCategories);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const viewDeleted = searchParams.get("deleted") === "true";
+
+  const categories = useQuery(
+    viewDeleted ? api.category.listDeletedCategories : api.category.listCategories
+  );
   const createCategory = useMutation(api.category.createCategory);
   const updateCategory = useMutation(api.category.updateCategory);
   const deleteCategory = useMutation(api.category.deleteCategory);
+  const restoreCategory = useMutation(api.category.restoreCategory);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingCategory, setEditingCategory] = useState<CategoryDoc | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [categoryToDelete, setCategoryToDelete] = useState<CategoryDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [categoryToRestore, setCategoryToRestore] = useState<CategoryDoc | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [formValues, setFormValues] = useState<FormValues>({
     name: "",
     nameAr: "",
@@ -161,24 +171,44 @@ const Categories = () => {
   );
 
   const actions = useMemo<TableAction<CategoryDoc>[]>(
-    () => [
-      {
-        icon: Eye,
-        label: "Edit category",
-        onClick: (category) => {
-          setEditingCategory(category);
-          setIsDialogOpen(true);
-        },
-      },
-      {
-        icon: Trash2,
-        label: "Delete category",
-        onClick: setCategoryToDelete,
-        className: "text-destructive",
-      },
-    ],
-    []
+    () =>
+      viewDeleted
+        ? [
+            {
+              icon: RotateCcw,
+              label: "Restore category",
+              onClick: setCategoryToRestore,
+              className: "text-primary",
+            },
+          ]
+        : [
+            {
+              icon: Eye,
+              label: "Edit category",
+              onClick: (category) => {
+                setEditingCategory(category);
+                setIsDialogOpen(true);
+              },
+            },
+            {
+              icon: Trash2,
+              label: "Delete category",
+              onClick: setCategoryToDelete,
+              className: "text-destructive",
+            },
+          ],
+    [viewDeleted]
   );
+
+  const toggleViewDeleted = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (viewDeleted) {
+      newParams.delete("deleted");
+    } else {
+      newParams.set("deleted", "true");
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [viewDeleted, searchParams, setSearchParams]);
 
   const getErrorMessage = (error: unknown) => {
     if (error && typeof error === "object" && "data" in error) {
@@ -273,12 +303,24 @@ const Categories = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Categories</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {viewDeleted ? "Deleted Categories" : "Categories"}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Organize your courses into categories
+            {viewDeleted
+              ? "View and restore deleted categories"
+              : "Organize your courses into categories"}
           </p>
         </div>
-        <Dialog
+        <div className="flex items-center gap-2">
+          <ViewDeletedToggle
+            viewDeleted={viewDeleted}
+            onToggle={toggleViewDeleted}
+            activeLabel="View Active Categories"
+            deletedLabel="View Deleted"
+          />
+          {!viewDeleted && (
+            <Dialog
           open={isDialogOpen}
           onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -365,6 +407,8 @@ const Categories = () => {
             </form>
           </DialogContent>
         </Dialog>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -374,7 +418,11 @@ const Categories = () => {
         actions={actions}
         getItemId={(category) => category._id}
         loadingMessage="Loading categories…"
-        emptyMessage="No categories yet. Create your first category to get started."
+        emptyMessage={
+          viewDeleted
+            ? "No deleted categories."
+            : "No categories yet. Create your first category to get started."
+        }
       />
 
       <AlertDialog
@@ -401,6 +449,53 @@ const Categories = () => {
               disabled={isDeleting}
             >
               {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={categoryToRestore !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCategoryToRestore(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore category?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to restore{" "}
+              <span className="font-medium text-foreground">
+                {categoryToRestore?.name ?? "this category"}
+              </span>
+              ? The category will be available again in the categories list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRestoring}
+              onClick={async () => {
+                if (!categoryToRestore) {
+                  return;
+                }
+                setIsRestoring(true);
+
+                try {
+                  await restoreCategory({ id: categoryToRestore._id });
+                  toast.success("Category restored successfully");
+                  setCategoryToRestore(null);
+                } catch (error) {
+                  console.error(error);
+                  toast.error(getErrorMessage(error));
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+            >
+              {isRestoring ? "Restoring…" : "Restore"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

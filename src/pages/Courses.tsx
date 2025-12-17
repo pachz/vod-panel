@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Eye, Trash2 } from "lucide-react";
+import { Plus, Eye, Trash2, RotateCcw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
+import { ViewDeletedToggle } from "@/components/ViewDeletedToggle";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -73,6 +74,7 @@ const Courses = () => {
   const categoryFilter = searchParams.get("category") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
+  const viewDeleted = searchParams.get("deleted") === "true";
 
   const PAGE_SIZE = 12;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -80,6 +82,8 @@ const Courses = () => {
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [courseToDelete, setCourseToDelete] = useState<CourseDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [courseToRestore, setCourseToRestore] = useState<CourseDoc | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [searchInput, setSearchInput] = useState(searchFilter || "");
 
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -95,16 +99,35 @@ const Courses = () => {
     [categoryFilter, statusFilter, searchFilter]
   );
 
-  const coursesPage = useQuery(api.course.listCourses, {
-    categoryId: categoryFilter as Id<"categories"> | undefined,
-    status: statusFilter as "draft" | "published" | "archived" | undefined,
-    search: searchFilter,
-    limit: PAGE_SIZE,
-    cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
-  });
+  const coursesPage = useQuery(
+    api.course.listCourses,
+    !viewDeleted
+      ? {
+          categoryId: categoryFilter as Id<"categories"> | undefined,
+          status: statusFilter as "draft" | "published" | "archived" | undefined,
+          search: searchFilter,
+          limit: PAGE_SIZE,
+          cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+        }
+      : "skip"
+  );
   const categories = useQuery(api.category.listCategories);
   const createCourse = useMutation(api.course.createCourse);
   const deleteCourse = useMutation(api.course.deleteCourse);
+  const restoreCourse = useMutation(api.course.restoreCourse);
+
+  const deletedCoursesPage = useQuery(
+    api.course.listDeletedCourses,
+    viewDeleted
+      ? {
+          categoryId: categoryFilter as Id<"categories"> | undefined,
+          status: statusFilter as "draft" | "published" | "archived" | undefined,
+          search: searchFilter,
+          limit: PAGE_SIZE,
+          cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+        }
+      : "skip"
+  );
 
   const resetForm = useCallback(() => {
     setFormValues(() => ({ ...initialFormValues }));
@@ -144,7 +167,7 @@ const Courses = () => {
     };
   }, [searchInput, setSearchParams]);
 
-  // Reset pagination when filters/search change
+  // Reset pagination when filters/search change or view mode changes
   useEffect(() => {
     setPaginatedCourses([]);
     setCursor(null);
@@ -153,17 +176,18 @@ const Courses = () => {
     setCursorScope(null);
     setIsLoadingMore(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [categoryFilter, statusFilter, searchFilter]);
+  }, [categoryFilter, statusFilter, searchFilter, viewDeleted]);
 
   // Append new page results
   useEffect(() => {
-    if (!coursesPage) return;
+    const dataPage = viewDeleted ? deletedCoursesPage : coursesPage;
+    if (!dataPage) return;
 
     const {
       page,
       continueCursor: nextCursor,
       isDone: nextIsDone,
-    } = coursesPage;
+    } = dataPage;
 
     setPaginatedCourses((prev) => {
       // If this is the first page, replace. Otherwise append deduped.
@@ -178,11 +202,12 @@ const Courses = () => {
     setContinueCursor(nextCursor ?? null);
     setIsDone(Boolean(nextIsDone) || !nextCursor);
     setIsLoadingMore(false);
-  }, [coursesPage, cursor]);
+  }, [coursesPage, deletedCoursesPage, cursor, viewDeleted]);
 
   const canLoadMore = !isDone && Boolean(continueCursor);
   // Only show loading on initial load (when we have no data yet), not when loading more
-  const isLoading = coursesPage === undefined && paginatedCourses.length === 0;
+  const dataPage = viewDeleted ? deletedCoursesPage : coursesPage;
+  const isLoading = dataPage === undefined && paginatedCourses.length === 0;
 
   const categoryList = useMemo<CategoryDoc[]>(
     () => categories ?? [],
@@ -267,20 +292,30 @@ const Courses = () => {
   );
 
   const actions = useMemo<TableAction<CourseDoc>[]>(
-    () => [
-      {
-        icon: Eye,
-        label: "View course",
-        onClick: (course) => navigate(`/courses/${course._id}`),
-      },
-      {
-        icon: Trash2,
-        label: "Delete course",
-        onClick: setCourseToDelete,
-        className: "text-destructive",
-      },
-    ],
-    [navigate]
+    () =>
+      viewDeleted
+        ? [
+            {
+              icon: RotateCcw,
+              label: "Restore course",
+              onClick: setCourseToRestore,
+              className: "text-primary",
+            },
+          ]
+        : [
+            {
+              icon: Eye,
+              label: "View course",
+              onClick: (course) => navigate(`/courses/${course._id}`),
+            },
+            {
+              icon: Trash2,
+              label: "Delete course",
+              onClick: setCourseToDelete,
+              className: "text-destructive",
+            },
+          ],
+    [navigate, viewDeleted]
   );
 
   const handleClearAll = useCallback(() => {
@@ -397,16 +432,38 @@ const Courses = () => {
     }
   };
 
+  const toggleViewDeleted = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (viewDeleted) {
+      newParams.delete("deleted");
+    } else {
+      newParams.set("deleted", "true");
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [viewDeleted, searchParams, setSearchParams]);
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Courses</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {viewDeleted ? "Deleted Courses" : "Courses"}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Manage your course catalog
+            {viewDeleted
+              ? "View and restore deleted courses"
+              : "Manage your course catalog"}
           </p>
         </div>
-        <Dialog
+        <div className="flex items-center gap-2">
+          <ViewDeletedToggle
+            viewDeleted={viewDeleted}
+            onToggle={toggleViewDeleted}
+            activeLabel="View Active Courses"
+            deletedLabel="View Deleted"
+          />
+          {!viewDeleted && (
+            <Dialog
           open={isDialogOpen}
           onOpenChange={(open) => {
             setIsDialogOpen(open);
@@ -500,6 +557,8 @@ const Courses = () => {
             </form>
           </DialogContent>
         </Dialog>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -510,9 +569,13 @@ const Courses = () => {
         getItemId={(course) => course._id}
         loadingMessage="Loading courses…"
         emptyMessage={
-          categoryFilter || statusFilter || searchFilter
-            ? "No courses found with the selected filters."
-            : "No courses yet. Create your first course to get started."
+          viewDeleted
+            ? categoryFilter || statusFilter || searchFilter
+              ? "No deleted courses found with the selected filters."
+              : "No deleted courses."
+            : categoryFilter || statusFilter || searchFilter
+              ? "No courses found with the selected filters."
+              : "No courses yet. Create your first course to get started."
         }
         filters={filters}
         onClearAllFilters={handleClearAll}
@@ -577,6 +640,58 @@ const Courses = () => {
               }}
             >
               {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={courseToRestore !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setCourseToRestore(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore course?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to restore{" "}
+              <span className="font-medium text-foreground">
+                {courseToRestore?.name ?? "this course"}
+              </span>
+              ? The course will be available again in the courses list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRestoring}
+              onClick={async () => {
+                if (!courseToRestore) {
+                  return;
+                }
+                setIsRestoring(true);
+
+                try {
+                  await restoreCourse({ id: courseToRestore._id });
+                  toast.success("Course restored successfully");
+                  setCourseToRestore(null);
+                  // Reset pagination to refresh the list
+                  setPaginatedCourses([]);
+                  setCursor(null);
+                  setContinueCursor(null);
+                  setIsDone(false);
+                } catch (error) {
+                  console.error(error);
+                  toast.error(getErrorMessage(error));
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+            >
+              {isRestoring ? "Restoring…" : "Restore"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

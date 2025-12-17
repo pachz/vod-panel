@@ -118,6 +118,67 @@ export const listCourses = query({
   },
 });
 
+export const listDeletedCourses = query({
+  args: {
+    categoryId: v.optional(v.id("categories")),
+    status: v.optional(
+      v.union(v.literal("draft"), v.literal("published"), v.literal("archived"))
+    ),
+    search: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, { categoryId, status, search, limit = 12, cursor }) => {
+    await requireUser(ctx);
+
+    const numItems = Math.min(Math.max(limit, 1), 100);
+
+    // Use deletedAt index with gt(0) to efficiently get all deleted courses
+    // Then filter in memory for additional criteria (category, status, search)
+    const deletedCourses = await ctx.db
+      .query("courses")
+      .withIndex("deletedAt", (q) => q.gt("deletedAt", 0))
+      .collect();
+
+    // Apply category filter
+    let filtered = deletedCourses;
+    if (categoryId) {
+      filtered = filtered.filter((course) => course.category_id === categoryId);
+    }
+
+    // Apply status filter
+    if (status) {
+      filtered = filtered.filter((course) => course.status === status);
+    }
+
+    // Apply search filter
+    if (search && search.trim().length > 0) {
+      const searchTerm = search.trim().toLowerCase();
+      filtered = filtered.filter(
+        (course) =>
+          course.name.toLowerCase().includes(searchTerm) ||
+          (course.name_ar && course.name_ar.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // Sort by deletedAt descending (most recently deleted first)
+    filtered.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+
+    // Manual pagination
+    const startIndex = cursor ? parseInt(cursor, 10) : 0;
+    const endIndex = startIndex + numItems;
+    const page = filtered.slice(startIndex, endIndex);
+    const nextCursor = endIndex < filtered.length ? endIndex.toString() : null;
+    const isDone = nextCursor === null;
+
+    return {
+      page,
+      continueCursor: nextCursor,
+      isDone,
+    };
+  },
+});
+
 export const createCourse = mutation({
   args: {
     name: v.string(),
@@ -495,6 +556,70 @@ export const deleteCourse = mutation({
       ctx,
       entityType: "course",
       action: "deleted",
+      entityId: id,
+      entityName: course.name,
+    });
+  },
+});
+
+export const restoreCourse = mutation({
+  args: {
+    id: v.id("courses"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || !course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Deleted course not found.",
+      });
+    }
+
+    // Check for duplicate name
+    const duplicates = await ctx.db
+      .query("courses")
+      .withIndex("name", (q) => q.eq("name", course.name))
+      .collect();
+
+    const hasDuplicate = duplicates.some(
+      (item) => item._id !== id && item.deletedAt === undefined
+    );
+
+    if (hasDuplicate) {
+      throw new ConvexError({
+        code: "COURSE_EXISTS",
+        message: "A course with this name already exists. Cannot restore.",
+      });
+    }
+
+    // Check if category still exists and is not deleted
+    const category = await ctx.db.get(course.category_id);
+    if (!category || category.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_CATEGORY",
+        message: "The category for this course no longer exists. Cannot restore.",
+      });
+    }
+
+    // Restore the course by removing deletedAt
+    const now = Date.now();
+    await ctx.db.patch(id, {
+      deletedAt: undefined,
+      updatedAt: now,
+    });
+
+    // Update category count
+    await ctx.db.patch(course.category_id, {
+      course_count: category.course_count + 1,
+    });
+
+    await logActivity({
+      ctx,
+      entityType: "course",
+      action: "updated",
       entityId: id,
       entityName: course.name,
     });

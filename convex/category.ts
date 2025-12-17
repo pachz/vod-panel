@@ -37,6 +37,16 @@ export const listCategories = query(async (ctx) => {
     .sort((a, b) => b.createdAt - a.createdAt);
 });
 
+export const listDeletedCategories = query(async (ctx) => {
+  await requireUser(ctx);
+
+  const categories = await ctx.db.query("categories").collect();
+
+  return categories
+    .filter((category) => category.deletedAt !== undefined)
+    .sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+});
+
 export const createCategory = mutation({
   args: {
     name: v.string(),
@@ -221,6 +231,63 @@ export const deleteCategory = mutation({
       ctx,
       entityType: "category",
       action: "deleted",
+      entityId: id,
+      entityName: category.name,
+    });
+  },
+});
+
+export const restoreCategory = mutation({
+  args: {
+    id: v.id("categories"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const category = await ctx.db.get(id);
+
+    if (!category || !category.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Deleted category not found.",
+      });
+    }
+
+    // Check for duplicate name
+    const duplicates = await ctx.db
+      .query("categories")
+      .withIndex("name", (q) => q.eq("name", category.name))
+      .collect();
+
+    const hasDuplicate = duplicates.some(
+      (item) => item._id !== id && item.deletedAt === undefined
+    );
+
+    if (hasDuplicate) {
+      throw new ConvexError({
+        code: "CATEGORY_EXISTS",
+        message: "A category with this name already exists. Cannot restore.",
+      });
+    }
+
+    // Restore the category by removing deletedAt
+    await ctx.db.patch(id, {
+      deletedAt: undefined,
+    });
+
+    // Get the updated document
+    const updatedCategory = await ctx.db.get(id);
+    if (updatedCategory) {
+      // Delete using old document state (category has deletedAt set)
+      // Insert using new document state (updatedCategory has deletedAt undefined)
+      await categoryAggregate.delete(ctx, category);
+      await categoryAggregate.insert(ctx, updatedCategory);
+    }
+
+    await logActivity({
+      ctx,
+      entityType: "category",
+      action: "updated",
       entityId: id,
       entityName: category.name,
     });

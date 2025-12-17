@@ -1,7 +1,8 @@
 import { useState, useMemo, useCallback, useEffect, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Trash2, Eye } from "lucide-react";
+import { Plus, Trash2, Eye, RotateCcw } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
+import { ViewDeletedToggle } from "@/components/ViewDeletedToggle";
 
 import { api } from "../../convex/_generated/api";
 import type { Doc, Id } from "../../convex/_generated/dataModel";
@@ -49,12 +50,15 @@ const Lessons = () => {
   const courseFilter = searchParams.get("course") || undefined;
   const statusFilter = searchParams.get("status") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
+  const viewDeleted = searchParams.get("deleted") === "true";
 
   const PAGE_SIZE = 12;
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<LessonDoc | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [lessonToRestore, setLessonToRestore] = useState<LessonDoc | null>(null);
+  const [isRestoring, setIsRestoring] = useState(false);
   const [searchInput, setSearchInput] = useState(searchFilter || "");
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
@@ -69,16 +73,36 @@ const Lessons = () => {
     [courseFilter, statusFilter, searchFilter]
   );
 
-  const lessonsPage = useQuery(api.lesson.listLessons, {
-    courseId: courseFilter as Id<"courses"> | undefined,
-    status: statusFilter as "draft" | "published" | "archived" | undefined,
-    search: searchFilter,
-    limit: PAGE_SIZE,
-    cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
-  });
+  const lessonsPage = useQuery(
+    api.lesson.listLessons,
+    !viewDeleted
+      ? {
+          courseId: courseFilter as Id<"courses"> | undefined,
+          status: statusFilter as "draft" | "published" | "archived" | undefined,
+          search: searchFilter,
+          limit: PAGE_SIZE,
+          cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+        }
+      : "skip"
+  );
+
+  const deletedLessonsPage = useQuery(
+    api.lesson.listDeletedLessons,
+    viewDeleted
+      ? {
+          courseId: courseFilter as Id<"courses"> | undefined,
+          status: statusFilter as "draft" | "published" | "archived" | undefined,
+          search: searchFilter,
+          limit: PAGE_SIZE,
+          cursor: cursor !== null && cursorScope === filterKey ? cursor : undefined,
+        }
+      : "skip"
+  );
+
   const courses = useQuery(api.course.listCourses, {});
   const createLesson = useMutation(api.lesson.createLesson);
   const deleteLesson = useMutation(api.lesson.deleteLesson);
+  const restoreLesson = useMutation(api.lesson.restoreLesson);
 
   const [formValues, setFormValues] = useState({
     title: "",
@@ -93,7 +117,7 @@ const Lessons = () => {
     return courses.page ?? [];
   }, [courses]);
 
-  // Reset pagination when filters/search change
+  // Reset pagination when filters/search change or view mode changes
   useEffect(() => {
     setPaginatedLessons([]);
     setCursor(null);
@@ -102,17 +126,18 @@ const Lessons = () => {
     setCursorScope(null);
     setIsLoadingMore(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [courseFilter, statusFilter, searchFilter]);
+  }, [courseFilter, statusFilter, searchFilter, viewDeleted]);
 
   // Append new page results
   useEffect(() => {
-    if (!lessonsPage) return;
+    const dataPage = viewDeleted ? deletedLessonsPage : lessonsPage;
+    if (!dataPage) return;
 
     const {
       page,
       continueCursor: nextCursor,
       isDone: nextIsDone,
-    } = lessonsPage;
+    } = dataPage;
 
     setPaginatedLessons((prev) => {
       // If this is the first page, replace. Otherwise append deduped.
@@ -127,11 +152,12 @@ const Lessons = () => {
     setContinueCursor(nextCursor ?? null);
     setIsDone(Boolean(nextIsDone) || !nextCursor);
     setIsLoadingMore(false);
-  }, [lessonsPage, cursor]);
+  }, [lessonsPage, deletedLessonsPage, cursor, viewDeleted]);
 
   const canLoadMore = !isDone && Boolean(continueCursor);
   // Only show loading on initial load (when we have no data yet), not when loading more
-  const isLoading = lessonsPage === undefined && paginatedLessons.length === 0;
+  const dataPage = viewDeleted ? deletedLessonsPage : lessonsPage;
+  const isLoading = dataPage === undefined && paginatedLessons.length === 0;
 
   const handleLoadMore = useCallback(() => {
     if (!canLoadMore || isLoadingMore) return;
@@ -401,32 +427,64 @@ const Lessons = () => {
   );
 
   const actions = useMemo<TableAction<LessonDoc>[]>(
-    () => [
-      {
-        icon: Eye,
-        label: "View lesson",
-        onClick: (lesson) => navigate(`/lessons/${lesson._id}`),
-      },
-      {
-        icon: Trash2,
-        label: "Delete lesson",
-        onClick: setLessonToDelete,
-        className: "text-destructive",
-      },
-    ],
-    [navigate]
+    () =>
+      viewDeleted
+        ? [
+            {
+              icon: RotateCcw,
+              label: "Restore lesson",
+              onClick: setLessonToRestore,
+              className: "text-primary",
+            },
+          ]
+        : [
+            {
+              icon: Eye,
+              label: "View lesson",
+              onClick: (lesson) => navigate(`/lessons/${lesson._id}`),
+            },
+            {
+              icon: Trash2,
+              label: "Delete lesson",
+              onClick: setLessonToDelete,
+              className: "text-destructive",
+            },
+          ],
+    [navigate, viewDeleted]
   );
+
+  const toggleViewDeleted = useCallback(() => {
+    const newParams = new URLSearchParams(searchParams);
+    if (viewDeleted) {
+      newParams.delete("deleted");
+    } else {
+      newParams.set("deleted", "true");
+    }
+    setSearchParams(newParams, { replace: true });
+  }, [viewDeleted, searchParams, setSearchParams]);
 
   return (
     <div className="space-y-6">
       <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold tracking-tight">Lessons</h1>
+          <h1 className="text-3xl font-bold tracking-tight">
+            {viewDeleted ? "Deleted Lessons" : "Lessons"}
+          </h1>
           <p className="text-muted-foreground mt-2">
-            Manage individual lessons for your courses
+            {viewDeleted
+              ? "View and restore deleted lessons"
+              : "Manage individual lessons for your courses"}
           </p>
         </div>
-        <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
+        <div className="flex items-center gap-2">
+          <ViewDeletedToggle
+            viewDeleted={viewDeleted}
+            onToggle={toggleViewDeleted}
+            activeLabel="View Active Lessons"
+            deletedLabel="View Deleted"
+          />
+          {!viewDeleted && (
+            <Dialog open={isDialogOpen} onOpenChange={setIsDialogOpen}>
           <DialogTrigger asChild>
             <Button
               onClick={() => {
@@ -524,6 +582,8 @@ const Lessons = () => {
             </form>
           </DialogContent>
         </Dialog>
+          )}
+        </div>
       </div>
 
       <DataTable
@@ -534,9 +594,13 @@ const Lessons = () => {
         getItemId={(lesson) => lesson._id}
         loadingMessage="Loading lessons…"
         emptyMessage={
-          courseFilter || statusFilter || searchFilter
-            ? "No lessons found with the selected filters."
-            : "No lessons yet. Create your first lesson to get started."
+          viewDeleted
+            ? courseFilter || statusFilter || searchFilter
+              ? "No deleted lessons found with the selected filters."
+              : "No deleted lessons."
+            : courseFilter || statusFilter || searchFilter
+              ? "No lessons found with the selected filters."
+              : "No lessons yet. Create your first lesson to get started."
         }
         filters={filters}
         onClearAllFilters={handleClearAllFilters}
@@ -601,6 +665,58 @@ const Lessons = () => {
               }}
             >
               {isDeleting ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog
+        open={lessonToRestore !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setLessonToRestore(null);
+          }
+        }}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Restore lesson?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to restore{" "}
+              <span className="font-medium text-foreground">
+                {lessonToRestore?.title ?? "this lesson"}
+              </span>
+              ? The lesson will be available again in the lessons list.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isRestoring}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={isRestoring}
+              onClick={async () => {
+                if (!lessonToRestore) {
+                  return;
+                }
+                setIsRestoring(true);
+
+                try {
+                  await restoreLesson({ id: lessonToRestore._id });
+                  toast.success("Lesson restored successfully");
+                  setLessonToRestore(null);
+                  // Reset pagination to refresh the list
+                  setPaginatedLessons([]);
+                  setCursor(null);
+                  setContinueCursor(null);
+                  setIsDone(false);
+                } catch (error) {
+                  console.error(error);
+                  toast.error(getErrorMessage(error));
+                } finally {
+                  setIsRestoring(false);
+                }
+              }}
+            >
+              {isRestoring ? "Restoring…" : "Restore"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

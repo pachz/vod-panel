@@ -162,6 +162,69 @@ export const listLessons = query({
   },
 });
 
+export const listDeletedLessons = query({
+  args: {
+    courseId: v.optional(v.id("courses")),
+    status: v.optional(v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    )),
+    search: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
+  },
+  handler: async (ctx, { courseId, status, search, limit = 12, cursor }) => {
+    await requireUser(ctx);
+
+    const numItems = Math.min(Math.max(limit, 1), 100);
+
+    // Use deletedAt index with gt(0) to efficiently get all deleted lessons
+    // Then filter in memory for additional criteria (course, status, search)
+    const deletedLessons = await ctx.db
+      .query("lessons")
+      .withIndex("deletedAt", (q) => q.gt("deletedAt", 0))
+      .collect();
+
+    // Apply course filter
+    let filtered = deletedLessons;
+    if (courseId) {
+      filtered = filtered.filter((lesson) => lesson.course_id === courseId);
+    }
+
+    // Apply status filter
+    if (status) {
+      filtered = filtered.filter((lesson) => lesson.status === status);
+    }
+
+    // Apply search filter
+    if (search && search.trim().length > 0) {
+      const searchTerm = search.trim().toLowerCase();
+      filtered = filtered.filter(
+        (lesson) =>
+          lesson.title.toLowerCase().includes(searchTerm) ||
+          (lesson.title_ar && lesson.title_ar.toLowerCase().includes(searchTerm))
+      );
+    }
+
+    // Sort by deletedAt descending (most recently deleted first)
+    filtered.sort((a, b) => (b.deletedAt ?? 0) - (a.deletedAt ?? 0));
+
+    // Manual pagination
+    const startIndex = cursor ? parseInt(cursor, 10) : 0;
+    const endIndex = startIndex + numItems;
+    const page = filtered.slice(startIndex, endIndex);
+    const nextCursor = endIndex < filtered.length ? endIndex.toString() : null;
+    const isDone = nextCursor === null;
+
+    return {
+      page,
+      continueCursor: nextCursor,
+      isDone,
+    };
+  },
+});
+
 export const createLesson = mutation({
   args: {
     title: v.string(),
@@ -524,6 +587,49 @@ export const deleteLesson = mutation({
       ctx,
       entityType: "lesson",
       action: "deleted",
+      entityId: id,
+      entityName: lesson.title,
+    });
+  },
+});
+
+export const restoreLesson = mutation({
+  args: {
+    id: v.id("lessons"),
+  },
+  handler: async (ctx, { id }) => {
+    await requireUser(ctx);
+
+    const lesson = await ctx.db.get(id);
+
+    if (!lesson || !lesson.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Deleted lesson not found.",
+      });
+    }
+
+    // Check if course still exists and is not deleted
+    const course = await ctx.db.get(lesson.course_id);
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_COURSE",
+        message: "The course for this lesson no longer exists. Cannot restore.",
+      });
+    }
+
+    // Restore the lesson by removing deletedAt
+    await ctx.db.patch(id, {
+      deletedAt: undefined,
+    });
+
+    // Recalculate lesson count to ensure accuracy
+    await recalculateLessonCount(ctx, lesson.course_id);
+
+    await logActivity({
+      ctx,
+      entityType: "lesson",
+      action: "updated",
       entityId: id,
       entityName: lesson.title,
     });
