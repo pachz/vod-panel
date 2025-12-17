@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Eye, Trash2, RotateCcw } from "lucide-react";
+import { Plus, Eye, Trash2, RotateCcw, PlayCircle } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { ViewDeletedToggle } from "@/components/ViewDeletedToggle";
 
@@ -303,6 +303,11 @@ const Courses = () => {
             },
           ]
         : [
+            {
+              icon: PlayCircle,
+              label: "Preview course",
+              onClick: (course) => navigate(`/courses/preview/${course._id}`),
+            },
             {
               icon: Eye,
               label: "View course",
