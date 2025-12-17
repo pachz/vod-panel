@@ -91,7 +91,13 @@ const CourseCards = () => {
     // Extract page from paginated result
     return courses.page ?? [];
   }, [courses]);
+
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
+
+  const filterableCategories = useMemo<CategoryDoc[]>(
+    () => categoryList.filter((category) => (category.course_count ?? 0) > 0),
+    [categoryList],
+  );
   const isLoading = courses === undefined;
 
   const categoryNameById = useMemo(() => {
@@ -137,7 +143,7 @@ const CourseCards = () => {
         >
           {t("allCategories")}
         </button>
-        {categoryList.map((category) => {
+        {filterableCategories.map((category) => {
           const isActive = categoryFilter === category._id;
           const categoryName = language === "ar" ? category.name_ar : category.name;
           return (
