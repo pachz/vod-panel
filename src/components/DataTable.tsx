@@ -10,6 +10,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { TableFilters, type TableFilter } from "@/components/TableFilters";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 
 export interface TableColumn<T> {
   header: string;
@@ -145,16 +150,22 @@ export function DataTable<T>({
                       {actions.map((action, index) => {
                         const Icon = action.icon;
                         return (
-                          <Button
-                            key={index}
-                            variant={action.variant || "ghost"}
-                            size="icon"
-                            onClick={() => action.onClick(item)}
-                            className={action.className}
-                            aria-label={action.label}
-                          >
-                            <Icon className="h-4 w-4" />
-                          </Button>
+                          <Tooltip key={index}>
+                            <TooltipTrigger asChild>
+                              <Button
+                                variant={action.variant || "ghost"}
+                                size="icon"
+                                onClick={() => action.onClick(item)}
+                                className={action.className}
+                                aria-label={action.label}
+                              >
+                                <Icon className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <span>{action.label}</span>
+                            </TooltipContent>
+                          </Tooltip>
                         );
                       })}
                     </div>
