@@ -407,6 +407,11 @@ export const updateLesson = mutation({
     // If course changed, recalculate lesson counts for both courses
     const courseChanged = lesson.course_id !== courseId;
     const durationChanged = (lesson.duration ?? null) !== (validated.duration ?? null);
+    const statusChanged = lesson.status !== validated.status;
+    // Recalculate duration if status changes to/from "published" since only published lessons count
+    const publishedStatusChanged = statusChanged && (
+      lesson.status === "published" || validated.status === "published"
+    );
 
     // Validate type-specific fields
     if (validated.type === "video" && !validated.videoUrl) {
@@ -460,7 +465,7 @@ export const updateLesson = mutation({
       }
 
       await recalculateLessonCount(ctx, courseId);
-    } else if (durationChanged) {
+    } else if (durationChanged || publishedStatusChanged) {
       await recalculateLessonCount(ctx, courseId);
     } else {
       await touchCourseUpdatedAt(ctx, courseId, targetCourse);
