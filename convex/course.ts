@@ -11,6 +11,7 @@ import {
 import { generateUniqueSlug, slugify } from "./utils/slug";
 import { requireUser } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
+import { recalculateLessonCount } from "./lesson";
 
 const validateCourseInput = (input: CourseInput) => {
   const result = courseInputSchema.safeParse(input);
@@ -396,6 +397,12 @@ export const updateCourse = mutation({
       }
     }
 
+    // Check if status changed to/from "published" - recalculate duration if so
+    const statusChanged = course.status !== validated.status;
+    const publishedStatusChanged = statusChanged && (
+      course.status === "published" || validated.status === "published"
+    );
+
     if (course.category_id !== categoryId) {
       const currentCategory = await ctx.db.get(course.category_id);
 
@@ -424,6 +431,11 @@ export const updateCourse = mutation({
       slug,
       updatedAt: Date.now(),
     });
+
+    // Recalculate course duration when status changes to/from "published"
+    if (publishedStatusChanged) {
+      await recalculateLessonCount(ctx, id);
+    }
 
     await logActivity({
       ctx,

@@ -28,7 +28,7 @@ const touchCourseUpdatedAt = async (
   });
 };
 
-const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">) => {
+export const recalculateLessonCount = async (ctx: MutationCtx, courseId: Id<"courses">) => {
   const lessons = await ctx.db
     .query("lessons")
     .withIndex("course_id", (q) =>

@@ -1,7 +1,7 @@
 {
   "name": "vod-panel",
   "private": true,
-  "version": "0.3.93",
+  "version": "0.3.94",
   "type": "module",
   "scripts": {
     "dev": "npm-run-all --parallel dev:frontend dev:backend https",
