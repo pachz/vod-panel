@@ -135,6 +135,11 @@ const CoursePreview = () => {
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
   const playlistScrollRef = useRef<HTMLDivElement>(null);
   const activeLessonRef = useRef<HTMLButtonElement | null>(null);
+  const videoSectionRef = useRef<HTMLDivElement>(null);
+  const buttonsSectionRef = useRef<HTMLDivElement>(null);
+  const playlistCardRef = useRef<HTMLDivElement>(null);
+  const [playlistMaxHeight, setPlaylistMaxHeight] = useState<string | undefined>(undefined);
+  const [playlistCardHeight, setPlaylistCardHeight] = useState<string | undefined>(undefined);
 
   const priceSummary = useMemo(() => {
     if (!paymentSettings) {
@@ -236,6 +241,53 @@ const CoursePreview = () => {
       });
     }
   }, [activeLessonId, lessonList]);
+
+  // Match playlist height to video + buttons section
+  useEffect(() => {
+    const updatePlaylistHeight = () => {
+      if (buttonsSectionRef.current && playlistCardRef.current && playlistScrollRef.current) {
+        // Get the bottom position of the buttons section (this is our target)
+        const buttonsRect = buttonsSectionRef.current.getBoundingClientRect();
+        const buttonsBottom = buttonsRect.bottom;
+        
+        // Get the top position of the playlist card
+        const cardRect = playlistCardRef.current.getBoundingClientRect();
+        const cardTop = cardRect.top;
+        
+        // Calculate the total card height needed to align bottom with buttons
+        const totalCardHeight = buttonsBottom - cardTop;
+        
+        // Set the card height to ensure it aligns with buttons bottom
+        setPlaylistCardHeight(`${totalCardHeight}px`);
+        
+        // Get the card header height
+        const cardHeader = playlistCardRef.current.querySelector('header, [class*="CardHeader"]') as HTMLElement;
+        const headerHeight = cardHeader?.offsetHeight || 0;
+        
+        // CardContent has p-6 pt-0 padding (1.5rem = 24px on bottom, left, right, 0 on top)
+        // So we only need to account for bottom padding (24px)
+        const cardContentBottomPadding = 24;
+        
+        // Calculate the available height for the scrollable content
+        const availableHeight = totalCardHeight - headerHeight - cardContentBottomPadding;
+        
+        if (availableHeight > 0) {
+          setPlaylistMaxHeight(`${availableHeight}px`);
+        }
+      }
+    };
+
+    // Use requestAnimationFrame to ensure DOM is ready and layout is complete
+    const rafId = requestAnimationFrame(() => {
+      setTimeout(updatePlaylistHeight, 10);
+    });
+    
+    window.addEventListener('resize', updatePlaylistHeight);
+    return () => {
+      cancelAnimationFrame(rafId);
+      window.removeEventListener('resize', updatePlaylistHeight);
+    };
+  }, [lessonList, activeLessonId]);
 
   const progressData: CourseProgress = progress ?? DEFAULT_PROGRESS;
 
@@ -513,7 +565,7 @@ const CoursePreview = () => {
       </div>
 
       <div className="grid gap-6 lg:grid-cols-[2fr_1fr]">
-        <div className="space-y-6">
+        <div className="space-y-6" ref={videoSectionRef}>
           <Card className="overflow-hidden border-none bg-card/80 shadow-lg">
             <CardContent className="p-0">
               {videoEmbedUrl ? (
@@ -540,7 +592,7 @@ const CoursePreview = () => {
             </CardContent>
           </Card>
 
-          <div className="grid gap-4 rounded-3xl border border-border/60 dark:border-transparent bg-background/60 p-4 shadow-sm md:grid-cols-3">
+          <div ref={buttonsSectionRef} className="grid gap-4 rounded-3xl border border-border/60 dark:border-transparent bg-background/60 p-4 shadow-sm md:grid-cols-3">
             {isRTL ? (
               <>
                 <Button
@@ -665,8 +717,12 @@ const CoursePreview = () => {
         </div>
 
         <div className="space-y-4">
-          <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
-            <CardHeader>
+          <Card 
+            ref={playlistCardRef} 
+            className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm flex flex-col"
+            style={{ height: playlistCardHeight }}
+          >
+            <CardHeader className="flex-shrink-0">
               <div className="flex items-center justify-between">
                 <div>
                   <p className={cn("text-sm font-semibold text-muted-foreground", isRTL ? "text-right" : "text-left")}>{t("courseLessons")}</p>
@@ -679,10 +735,9 @@ const CoursePreview = () => {
             </CardHeader>
             <CardContent 
               ref={playlistScrollRef}
-              className="space-y-3 overflow-y-auto"
+              className="space-y-3 overflow-y-auto flex-1 min-h-0"
               style={{ 
                 scrollBehavior: 'smooth',
-                maxHeight: 'calc((min(1152px, 100vw - 4rem) * 0.666 * 0.5625) + 6rem)',
               }}
             >
               {lessonList.length === 0 ? (
