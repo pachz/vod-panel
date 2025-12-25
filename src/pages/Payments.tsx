@@ -406,13 +406,31 @@ const Payments = () => {
                   <XCircle className="h-5 w-5" />
                   <p>{t("noActiveSubscription")}</p>
                 </div>
+                {paymentSettings && (
+                  <div className="p-3 rounded-lg bg-muted/50 border">
+                    <p className="text-sm font-medium mb-1">{t("subscribe")}</p>
+                    <p className="text-sm text-muted-foreground">
+                      {paymentSettings 
+                        ? t("subscribeToProduct")
+                            .replace("{productName}", paymentSettings.productName)
+                            .replace("{price}", formatPrice(paymentSettings.priceAmount, paymentSettings.priceCurrency))
+                            .replace("{interval}", translateInterval(paymentSettings.priceInterval))
+                        : t("testStripePaymentFlow")}
+                    </p>
+                  </div>
+                )}
+                {!paymentSettings && (
+                  <p className="text-sm text-muted-foreground">
+                    {t("noProductConfigured")}
+                  </p>
+                )}
                 <Button
                   variant="cta"
                   onClick={handleTestSubscribe}
-                  disabled={isLoading}
+                  disabled={isLoading || !paymentSettings}
                   className="w-full sm:w-auto"
                 >
-                  {isLoading ? t("creatingCheckoutSession") : t("subscribeNow")}
+                  {isLoading ? t("creatingCheckoutSession") : paymentSettings ? t("subscribe") : t("subscribeNow")}
                 </Button>
               </div>
             ) : (
@@ -732,8 +750,8 @@ const Payments = () => {
         </Card>
       )}
 
-      {/* Subscribe Card */}
-      {(!subscription || subscription.status === "canceled") && (
+      {/* Subscribe Card - Only show for canceled subscriptions, not for null (no subscription) */}
+      {subscription && subscription.status === "canceled" && (
         <Card className="card-elevated">
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
