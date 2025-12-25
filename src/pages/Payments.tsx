@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
-import { CreditCard, CheckCircle2, XCircle, Calendar, Ban, ExternalLink, RefreshCw, Settings, Loader2 } from "lucide-react";
+import { CreditCard, CheckCircle2, XCircle, Calendar, ExternalLink, RefreshCw, Settings, Loader2 } from "lucide-react";
 import { useAction, useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -10,16 +10,6 @@ import { toast } from "sonner";
 import { format } from "date-fns";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -35,7 +25,6 @@ const Payments = () => {
   const { t, isRTL, translateInterval } = useLanguage();
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
   const syncSubscriptionStatus = useAction(api.payment.syncSubscriptionStatus);
-  const cancelSubscription = useAction(api.payment.cancelSubscription);
   const reactivateSubscription = useAction(api.payment.reactivateSubscription);
   const createCustomerPortalSession = useAction(api.payment.createCustomerPortalSession);
   const fetchStripeProducts = useAction(api.payment.fetchStripeProducts);
@@ -46,11 +35,9 @@ const Payments = () => {
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
-  const [isCanceling, setIsCanceling] = useState(false);
   const [isReactivating, setIsReactivating] = useState(false);
   const [isOpeningPortal, setIsOpeningPortal] = useState(false);
   const [isReSyncing, setIsReSyncing] = useState(false);
-  const [showCancelDialog, setShowCancelDialog] = useState(false);
   
   // Admin product management state
   const [stripeProducts, setStripeProducts] = useState<any[] | null>(null);
@@ -174,24 +161,6 @@ const Payments = () => {
         return <Badge variant="secondary">{t("canceled")}</Badge>;
       default:
         return <Badge variant="outline">{status}</Badge>;
-    }
-  };
-
-  const handleCancelSubscription = async () => {
-    setIsCanceling(true);
-    try {
-      const result = await cancelSubscription({});
-      toast.success(result.message);
-      setShowCancelDialog(false);
-    } catch (error) {
-      console.error("Error canceling subscription:", error);
-      toast.error(
-        error instanceof Error 
-          ? error.message 
-          : t("failedToCancelSubscription")
-      );
-    } finally {
-      setIsCanceling(false);
     }
   };
 
@@ -572,7 +541,7 @@ const Payments = () => {
 
                 {/* Action Buttons */}
                 <div className="flex flex-col sm:flex-row gap-3">
-                  {subscription.cancelAtPeriodEnd ? (
+                  {subscription.cancelAtPeriodEnd && (
                     <Button
                       variant="outline"
                       onClick={handleReactivateSubscription}
@@ -581,16 +550,6 @@ const Payments = () => {
                     >
                       <RefreshCw className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2", isReactivating && "animate-spin")} />
                       {isReactivating ? t("reactivating") : t("reactivateSubscription")}
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="destructive"
-                      onClick={() => setShowCancelDialog(true)}
-                      disabled={isCanceling}
-                      className="flex-1"
-                    >
-                      <Ban className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
-                      {t("cancelSubscription")}
                     </Button>
                   )}
                   
@@ -616,38 +575,6 @@ const Payments = () => {
           </CardContent>
         </Card>
       )}
-
-      {/* Cancel Subscription Confirmation Dialog */}
-      <AlertDialog open={showCancelDialog} onOpenChange={setShowCancelDialog}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{t("cancelSubscriptionTitle")}</AlertDialogTitle>
-            <AlertDialogDescription>
-              {t("subscriptionRemainsActive")}
-              {subscription?.currentPeriodEnd && (
-                <>
-                  {" "}
-                  {t("continueAccessUntil")}{" "}
-                  <span className="font-medium">{formatDate(subscription.currentPeriodEnd)}</span>.
-                </>
-              )}
-              <br />
-              <br />
-              {t("canReactivateBeforePeriod")}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={isCanceling}>{t("keepSubscription")}</AlertDialogCancel>
-            <AlertDialogAction
-              onClick={handleCancelSubscription}
-              disabled={isCanceling}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              {isCanceling ? t("canceling") : t("cancelSubscription")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
 
       {/* Admin Product Management Section */}
       {isAdmin && (

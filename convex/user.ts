@@ -757,3 +757,50 @@ export const getUserInfo = query({
   },
 });
 
+// Internal query to get all users for export
+export const getAllUsersForExport = internalQuery({
+  handler: async (ctx): Promise<Array<{ name: string; email: string }>> => {
+    const users = await ctx.db.query("users").collect();
+    
+    // Filter out deleted users, admins, and return only name and email
+    return users
+      .filter((user) => user.deletedAt === undefined && !user.isGod) // Only normal users, not admins
+      .map((user) => ({
+        name: user.name ?? "",
+        email: user.email ?? "",
+      }))
+      .filter((user) => user.email); // Only include users with email
+  },
+});
+
+// Action to export user emails for email marketing
+export const exportUserEmails = action({
+  handler: async (ctx): Promise<string> => {
+    // Check auth and admin status
+    await requireUserAction(ctx);
+    await ctx.runQuery(internal.user.requireAdminQuery);
+
+    // Get all non-deleted users
+    const users = await ctx.runQuery(internal.user.getAllUsersForExport);
+
+    // Format as CSV
+    const csvHeader = "Name,Email\n";
+    const csvRows = users
+      .map((user) => {
+        // Escape commas and quotes in CSV values
+        const escapeCsv = (value: string | undefined) => {
+          if (!value) return "";
+          // If value contains comma, quote, or newline, wrap in quotes and escape quotes
+          if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+            return `"${value.replace(/"/g, '""')}"`;
+          }
+          return value;
+        };
+        return `${escapeCsv(user.name)},${escapeCsv(user.email)}`;
+      })
+      .join("\n");
+
+    return csvHeader + csvRows;
+  },
+});
+

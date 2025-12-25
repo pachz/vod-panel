@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Lock, Eye } from "lucide-react";
+import { Plus, Pencil, Trash2, Lock, Eye, Download } from "lucide-react";
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -70,6 +70,7 @@ const Users = () => {
   const updateUserRole = useMutation(api.user.updateUserRole);
   const updateUserPassword = useAction(api.user.updateUserPassword);
   const deleteUser = useMutation(api.user.deleteUser);
+  const exportUserEmails = useAction(api.user.exportUserEmails);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -84,6 +85,7 @@ const Users = () => {
     password: "",
   });
   const [roleUpdating, setRoleUpdating] = useState<Record<string, boolean>>({});
+  const [isExporting, setIsExporting] = useState(false);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -293,6 +295,32 @@ const Users = () => {
     }
   };
 
+  const handleExportEmails = async () => {
+    setIsExporting(true);
+    try {
+      const csvContent = await exportUserEmails();
+      
+      // Create a blob and download it
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+      
+      link.setAttribute("href", url);
+      link.setAttribute("download", `user-emails-${new Date().toISOString().split("T")[0]}.csv`);
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      
+      toast.success("User emails exported successfully");
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsExporting(false);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -302,28 +330,37 @@ const Users = () => {
             Manage system users and administrators
           </p>
         </div>
-        <Dialog
-          open={isDialogOpen}
-          onOpenChange={(open) => {
-            setIsDialogOpen(open);
-            if (!open) {
-              setEditingUser(null);
-              setFormValues(initialFormValues);
-            }
-          }}
-        >
-          <DialogTrigger asChild>
-            <Button
-              variant="cta"
-              onClick={() => {
+        <div className="flex gap-2">
+          <Button
+            variant="outline"
+            onClick={handleExportEmails}
+            disabled={isExporting}
+          >
+            <Download className="mr-2 h-4 w-4" />
+            {isExporting ? "Exporting…" : "Export Emails"}
+          </Button>
+          <Dialog
+            open={isDialogOpen}
+            onOpenChange={(open) => {
+              setIsDialogOpen(open);
+              if (!open) {
                 setEditingUser(null);
-                setIsDialogOpen(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Add User
-            </Button>
-          </DialogTrigger>
+                setFormValues(initialFormValues);
+              }
+            }}
+          >
+            <DialogTrigger asChild>
+              <Button
+                variant="cta"
+                onClick={() => {
+                  setEditingUser(null);
+                  setIsDialogOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add User
+              </Button>
+            </DialogTrigger>
           <DialogContent className="max-w-2xl">
             <DialogHeader>
               <DialogTitle>{editingUser ? "Edit" : "Create"} User</DialogTitle>
@@ -425,6 +462,7 @@ const Users = () => {
             </form>
           </DialogContent>
         </Dialog>
+        </div>
       </div>
 
       <Tabs defaultValue="users" className="space-y-4">
