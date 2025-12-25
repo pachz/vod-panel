@@ -679,8 +679,11 @@ const CoursePreview = () => {
             </CardHeader>
             <CardContent 
               ref={playlistScrollRef}
-              className="space-y-3 overflow-y-auto max-h-[calc(100vh-28rem)]"
-              style={{ scrollBehavior: 'smooth' }}
+              className="space-y-3 overflow-y-auto"
+              style={{ 
+                scrollBehavior: 'smooth',
+                maxHeight: 'calc((min(1152px, 100vw - 4rem) * 0.666 * 0.5625) + 6rem)',
+              }}
             >
               {lessonList.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
