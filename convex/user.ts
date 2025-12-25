@@ -759,17 +759,34 @@ export const getUserInfo = query({
 
 // Internal query to get all users for export
 export const getAllUsersForExport = internalQuery({
-  handler: async (ctx): Promise<Array<{ name: string; email: string }>> => {
+  handler: async (ctx): Promise<Array<{ name: string; email: string; subscriptionStatus: string }>> => {
     const users = await ctx.db.query("users").collect();
     
-    // Filter out deleted users, admins, and return only name and email
-    return users
-      .filter((user) => user.deletedAt === undefined && !user.isGod) // Only normal users, not admins
-      .map((user) => ({
-        name: user.name ?? "",
-        email: user.email ?? "",
-      }))
-      .filter((user) => user.email); // Only include users with email
+    // Filter out deleted users and admins
+    const normalUsers = users.filter((user) => user.deletedAt === undefined && !user.isGod);
+    
+    // Get subscription status for each user
+    const usersWithSubscription = await Promise.all(
+      normalUsers.map(async (user) => {
+        // Get the most recent subscription for this user
+        const subscription = await ctx.db
+          .query("subscriptions")
+          .withIndex("userId", (q) => q.eq("userId", user._id))
+          .order("desc")
+          .first();
+        
+        const subscriptionStatus = subscription?.status === "active" ? "Active" : "Not Active";
+        
+        return {
+          name: user.name ?? "",
+          email: user.email ?? "",
+          subscriptionStatus,
+        };
+      })
+    );
+    
+    // Only include users with email
+    return usersWithSubscription.filter((user) => user.email);
   },
 });
 
@@ -784,7 +801,7 @@ export const exportUserEmails = action({
     const users = await ctx.runQuery(internal.user.getAllUsersForExport);
 
     // Format as CSV
-    const csvHeader = "Name,Email\n";
+    const csvHeader = "Name,Email,Subscription Status\n";
     const csvRows = users
       .map((user) => {
         // Escape commas and quotes in CSV values
@@ -796,7 +813,7 @@ export const exportUserEmails = action({
           }
           return value;
         };
-        return `${escapeCsv(user.name)},${escapeCsv(user.email)}`;
+        return `${escapeCsv(user.name)},${escapeCsv(user.email)},${escapeCsv(user.subscriptionStatus)}`;
       })
       .join("\n");
 
