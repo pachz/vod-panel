@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
 import {
   CheckCircle2,
@@ -133,6 +133,8 @@ const CoursePreview = () => {
   const [activeLessonId, setActiveLessonId] = useState<Id<"lessons"> | null>(null);
   const [isTogglingCompletion, setIsTogglingCompletion] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const playlistScrollRef = useRef<HTMLDivElement>(null);
+  const activeLessonRef = useRef<HTMLButtonElement | null>(null);
 
   const priceSummary = useMemo(() => {
     if (!paymentSettings) {
@@ -210,6 +212,30 @@ const CoursePreview = () => {
     nextParams.set("lesson", activeLessonId);
     setSearchParams(nextParams, { replace: true });
   }, [activeLessonId, lessonList.length, searchLessonId, searchParams, setSearchParams]);
+
+  // Scroll to active lesson in playlist
+  useEffect(() => {
+    if (activeLessonRef.current && playlistScrollRef.current) {
+      const scrollContainer = playlistScrollRef.current;
+      const activeButton = activeLessonRef.current;
+      
+      const containerRect = scrollContainer.getBoundingClientRect();
+      const buttonRect = activeButton.getBoundingClientRect();
+      
+      const scrollTop = scrollContainer.scrollTop;
+      const buttonTop = buttonRect.top - containerRect.top + scrollTop;
+      const buttonBottom = buttonTop + buttonRect.height;
+      const containerHeight = scrollContainer.clientHeight;
+      
+      // Scroll to center the active lesson in the viewport
+      const targetScroll = buttonTop - (containerHeight / 2) + (buttonRect.height / 2);
+      
+      scrollContainer.scrollTo({
+        top: Math.max(0, targetScroll),
+        behavior: 'smooth',
+      });
+    }
+  }, [activeLessonId, lessonList]);
 
   const progressData: CourseProgress = progress ?? DEFAULT_PROGRESS;
 
@@ -651,7 +677,11 @@ const CoursePreview = () => {
                 </Badge>
               </div>
             </CardHeader>
-            <CardContent className="space-y-3">
+            <CardContent 
+              ref={playlistScrollRef}
+              className="space-y-3 overflow-y-auto max-h-[calc(100vh-28rem)]"
+              style={{ scrollBehavior: 'smooth' }}
+            >
               {lessonList.length === 0 ? (
                 <div className="rounded-2xl border border-dashed p-6 text-center text-sm text-muted-foreground">
                   {t("publishLessons")}
@@ -664,7 +694,8 @@ const CoursePreview = () => {
 
                   return (
                     <button
-                      key={lesson._id}
+                      key={`${lesson._id}-${index}`}
+                      ref={isActive ? activeLessonRef : null}
                       type="button"
                       onClick={() => setActiveLessonId(lesson._id)}
                       className={cn(
