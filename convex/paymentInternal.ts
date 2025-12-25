@@ -533,3 +533,60 @@ export const getMySubscription = query({
   },
 });
 
+/**
+ * Internal mutation to reset subscription status when Stripe customer is not found
+ * Clears the stripeCustomerId from user and marks subscription as canceled
+ */
+export const resetSubscriptionStatus = internalMutation({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.object({
+    clearedCustomerId: v.boolean(),
+    canceledSubscription: v.boolean(),
+  }),
+  handler: async (ctx, args) => {
+    // Clear stripeCustomerId from user
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+
+    let clearedCustomerId = false;
+    if (user.stripeCustomerId) {
+      await ctx.db.patch(args.userId, {
+        stripeCustomerId: undefined,
+      });
+      clearedCustomerId = true;
+    }
+
+    // Mark all active subscriptions as canceled
+    const subscriptions = await ctx.db
+      .query("subscriptions")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .filter((q) =>
+        q.or(
+          q.eq(q.field("status"), "active"),
+          q.eq(q.field("status"), "trialing")
+        )
+      )
+      .collect();
+
+    let canceledSubscription = false;
+    for (const subscription of subscriptions) {
+      await ctx.db.patch(subscription._id, {
+        status: "canceled" as const,
+        cancelAtPeriodEnd: false,
+        canceledAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+      canceledSubscription = true;
+    }
+
+    return {
+      clearedCustomerId,
+      canceledSubscription,
+    };
+  },
+});
+

@@ -758,7 +758,26 @@ export const createCustomerPortalSession = action({
       try {
         await stripe.customers.retrieve(customerId);
       } catch (error) {
-        throw new Error(`Customer ${customerId} not found in Stripe. Please contact support.`);
+        // Check if this is a "not found" error (customer doesn't exist in Stripe)
+        // This can happen when Stripe account/token changed
+        const errorMessage = error instanceof Error ? error.message : String(error);
+        const isNotFoundError = 
+          (error instanceof Stripe.errors.StripeInvalidRequestError && 
+           (error as any).code === 'resource_missing') ||
+          errorMessage.includes('not found') ||
+          errorMessage.includes('No such customer');
+        
+        if (isNotFoundError) {
+          // Customer not found - likely Stripe account/token changed
+          // Reset subscription status and clear customer ID
+          console.log(`Customer ${customerId} not found in Stripe. Resetting subscription status.`);
+          await ctx.runMutation((internal as any).paymentInternal.resetSubscriptionStatus, {
+            userId: userId as any,
+          });
+          throw new Error("Your subscription has been reset because the payment account was changed. Please subscribe again.");
+        }
+        // Re-throw other errors (network issues, etc.)
+        throw error;
       }
 
       // Create customer portal session
