@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { useLanguage } from "@/hooks/use-language";
+import { markdownToPlainText } from "@/lib/utils";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
@@ -212,9 +213,11 @@ const CourseCards = () => {
                   {language === "ar" ? course.name_ar : course.name}
                 </CardTitle>
                 <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {language === "ar" 
-                    ? (course.short_description_ar ?? course.short_description ?? t("noDescription"))
-                    : (course.short_description ?? t("noDescription"))}
+                  {markdownToPlainText(
+                    language === "ar" 
+                      ? (course.short_description_ar ?? course.short_description ?? t("noDescription"))
+                      : (course.short_description ?? t("noDescription"))
+                  )}
                 </p>
                 <div className="flex items-center gap-2 text-xs text-muted-foreground">
                   <span>{formatLessonCount(course.lesson_count, t)}</span>
