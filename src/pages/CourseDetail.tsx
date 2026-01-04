@@ -885,6 +885,7 @@ const CourseDetail = () => {
                   type="number"
                   min="0"
                   max="10000"
+                  step="1"
                   value={formValues.displayOrder}
                   onChange={(event) =>
                     setFormValues((prev) => ({ ...prev, displayOrder: event.target.value }))
