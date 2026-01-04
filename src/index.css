@@ -191,3 +191,18 @@ All colors MUST be HSL.
     @apply rounded-full flex items-center justify-center shadow-lg;
   }
 }
+
+/* Sonner toast error styling */
+[data-sonner-toast][data-type="error"] {
+  background-color: hsl(var(--destructive)) !important;
+  color: hsl(var(--destructive-foreground)) !important;
+  border-color: hsl(var(--destructive)) !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-description] {
+  color: hsl(var(--destructive-foreground)) !important;
+}
+
+[data-sonner-toast][data-type="error"] [data-title] {
+  color: hsl(var(--destructive-foreground)) !important;
+}
