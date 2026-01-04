@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { ComponentType, ReactNode } from "react";
-import { Bold, Italic, List, Maximize2, Quote, Type } from "lucide-react";
+import { Bold, Italic, List, Maximize2, Quote, Type, Edit, Eye } from "lucide-react";
+import ReactMarkdown from "react-markdown";
 
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,8 @@ import {
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 
 type FormattingAction = "bold" | "italic" | "list" | "quote" | "heading";
 
@@ -63,11 +66,40 @@ export const RichTextarea = ({
   modalTitle,
 }: RichTextareaProps) => {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
+  const [editingValue, setEditingValue] = useState(value ?? "");
+  const [previousValue, setPreviousValue] = useState(value ?? "");
+  const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const dialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
   const handleDialogOpen = useCallback((open: boolean) => {
+    if (open) {
+      // Save the current value as previous when opening
+      setPreviousValue(value ?? "");
+      setEditingValue(value ?? "");
+      setActiveTab("edit");
+    }
     setIsDialogOpen(open);
-  }, []);
+  }, [value]);
+
+  const handleSave = useCallback(() => {
+    onChange(editingValue);
+    setIsDialogOpen(false);
+  }, [editingValue, onChange]);
+
+  const handleCancel = useCallback(() => {
+    // Revert to previous value
+    setEditingValue(previousValue);
+    setIsDialogOpen(false);
+  }, [previousValue]);
+
+  const handleDialogClose = useCallback((open: boolean) => {
+    if (!open) {
+      // If closing without explicit save/cancel, revert
+      handleCancel();
+    } else {
+      setIsDialogOpen(open);
+    }
+  }, [handleCancel]);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -85,6 +117,13 @@ export const RichTextarea = ({
       textarea.selectionEnd = textarea.value.length;
     });
   }, [isDialogOpen]);
+
+  // Sync editing value when value prop changes (but not when dialog is open)
+  useEffect(() => {
+    if (!isDialogOpen) {
+      setEditingValue(value ?? "");
+    }
+  }, [value, isDialogOpen]);
 
   const applyFormatting = useCallback(
     (action: FormattingAction) => {
@@ -109,7 +148,7 @@ export const RichTextarea = ({
           after +
           currentValue.slice(selectionEnd);
 
-        onChange(newValue);
+        setEditingValue(newValue);
 
         const nextSelectionStart = selectionStart + before.length;
         const nextSelectionEnd = nextSelectionStart + content.length;
@@ -167,7 +206,7 @@ export const RichTextarea = ({
           break;
       }
     },
-    [onChange],
+    [],
   );
 
   const formattingButtons = useMemo(() => FORMATTING_BUTTONS, []);
@@ -306,7 +345,7 @@ export const RichTextarea = ({
         <Label htmlFor={id} className={labelClassName}>
           {label}
         </Label>
-        <Dialog open={isDialogOpen} onOpenChange={handleDialogOpen}>
+        <Dialog open={isDialogOpen} onOpenChange={handleDialogClose}>
           <DialogTrigger asChild>
             <Button
               type="button"
@@ -318,40 +357,116 @@ export const RichTextarea = ({
               <Maximize2 className="h-4 w-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-3xl">
+          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
             <DialogHeader>
               <DialogTitle>{modalTitle ?? label}</DialogTitle>
             </DialogHeader>
-            <div className="space-y-4">
-              <div className="flex flex-wrap gap-2">
-                {formattingButtons.map(({ action, icon: Icon, label: text }) => (
-                  <Button
-                    key={action}
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    onClick={() => applyFormatting(action)}
-                    className="gap-1"
-                  >
-                    <Icon className="h-4 w-4" />
-                    <span className="hidden sm:inline">{text}</span>
-                  </Button>
-                ))}
+            <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex flex-wrap gap-2">
+                  {formattingButtons.map(({ action, icon: Icon, label: text }) => (
+                    <Button
+                      key={action}
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => applyFormatting(action)}
+                      className="gap-1"
+                    >
+                      <Icon className="h-4 w-4" />
+                      <span className="hidden sm:inline">{text}</span>
+                    </Button>
+                  ))}
+                </div>
+                <TooltipProvider>
+                  <div className="flex items-center gap-1 rounded-md border border-border bg-muted/50 p-1">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveTab("edit")}
+                          className={cn(
+                            "h-7 w-7 p-0",
+                            activeTab === "edit" && "bg-background text-foreground shadow-sm border border-border"
+                          )}
+                        >
+                          <Edit className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Edit</p>
+                      </TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setActiveTab("preview")}
+                          className={cn(
+                            "h-7 w-7 p-0",
+                            activeTab === "preview" && "bg-background text-foreground shadow-sm border border-border"
+                          )}
+                        >
+                          <Eye className="h-3.5 w-3.5" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        <p>Preview</p>
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                </TooltipProvider>
               </div>
-              <Textarea
-                ref={dialogTextareaRef}
-                id={`${id}-expanded`}
-                value={value ?? ""}
-                onChange={(event) => onChange(event.target.value)}
-                placeholder={placeholder}
-                maxLength={maxLength}
-                required={required}
-                dir={dir}
-                className={cn(
-                  "min-h-[18rem] resize-none text-base leading-6",
-                  dir === "rtl" && "text-right",
-                )}
-              />
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "preview")} className="flex-1 flex flex-col overflow-hidden">
+                <TabsContent value="edit" className="flex-1 overflow-auto mt-0">
+                  <Textarea
+                    ref={dialogTextareaRef}
+                    id={`${id}-expanded`}
+                    value={editingValue}
+                    onChange={(event) => setEditingValue(event.target.value)}
+                    placeholder={placeholder}
+                    maxLength={maxLength}
+                    required={required}
+                    dir={dir}
+                    className={cn(
+                      "min-h-[18rem] resize-none text-base leading-6",
+                      dir === "rtl" && "text-right",
+                    )}
+                  />
+                </TabsContent>
+                <TabsContent value="preview" className="flex-1 overflow-auto mt-0">
+                  <div className={cn(
+                    "prose prose-sm max-w-none dark:prose-invert min-h-[18rem] p-4 border rounded-md",
+                    dir === "rtl" && "prose-rtl"
+                  )} dir={dir}>
+                    {editingValue.trim() ? (
+                      <ReactMarkdown
+                        components={{
+                          p: ({ children }) => <p className="text-sm leading-6 text-muted-foreground mb-3 last:mb-0">{children}</p>,
+                          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ul>,
+                          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ol>,
+                          li: ({ children }) => <li className="text-sm leading-6 text-muted-foreground">{children}</li>,
+                          h1: ({ children }) => <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>,
+                          h2: ({ children }) => <h2 className="text-xl font-semibold mb-2 mt-3 first:mt-0">{children}</h2>,
+                          h3: ({ children }) => <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>,
+                          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
+                          em: ({ children }) => <em className="italic">{children}</em>,
+                          code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
+                          blockquote: ({ children }) => <blockquote className="border-l-4 border-primary pl-4 italic my-3">{children}</blockquote>,
+                        }}
+                      >
+                        {editingValue}
+                      </ReactMarkdown>
+                    ) : (
+                      <p className="text-sm text-muted-foreground">Add some content to see the preview...</p>
+                    )}
+                  </div>
+                </TabsContent>
+              </Tabs>
               {description ? (
                 <p className="text-sm text-muted-foreground">{description}</p>
               ) : null}
@@ -359,10 +474,17 @@ export const RichTextarea = ({
             <DialogFooter>
               <Button
                 type="button"
-                variant="cta"
-                onClick={() => handleDialogOpen(false)}
+                variant="outline"
+                onClick={handleCancel}
               >
-                Done
+                Cancel
+              </Button>
+              <Button
+                type="button"
+                variant="cta"
+                onClick={handleSave}
+              >
+                Save
               </Button>
             </DialogFooter>
           </DialogContent>
