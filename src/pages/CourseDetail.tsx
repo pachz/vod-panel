@@ -76,6 +76,7 @@ type FormValues = {
   categoryId: string;
   status: CourseDoc["status"];
   trialVideoUrl: string;
+  displayOrder: string;
 };
 
 const initialFormValues: FormValues = {
@@ -88,6 +89,7 @@ const initialFormValues: FormValues = {
   categoryId: "",
   status: "draft",
   trialVideoUrl: "",
+  displayOrder: "",
 };
 
 const statusLabels: Record<CourseDoc["status"], string> = {
@@ -295,6 +297,7 @@ const CourseDetail = () => {
       categoryId: course.category_id,
       status: course.status,
       trialVideoUrl: course.trial_video_url ?? "",
+      displayOrder: course.displayOrder?.toString() ?? "",
     };
 
     setFormValues((previous) => {
@@ -604,6 +607,7 @@ const CourseDetail = () => {
       categoryId: formValues.categoryId,
       status: formValues.status,
       trialVideoUrl: formValues.trialVideoUrl,
+      displayOrder: formValues.displayOrder,
     });
 
     if (!validation.success) {
@@ -632,6 +636,7 @@ const CourseDetail = () => {
       status,
       trialVideoUrl,
       instructor,
+      displayOrder,
     } = validation.data;
 
     setIsSaving(true);
@@ -666,6 +671,7 @@ const CourseDetail = () => {
         categoryId: categoryId as Id<"categories">,
         status,
         trialVideoUrl,
+        displayOrder,
       });
 
       toast.success("Course updated successfully");
@@ -679,6 +685,7 @@ const CourseDetail = () => {
         categoryId,
         status,
         trialVideoUrl: trialVideoUrl ?? "",
+        displayOrder: displayOrder?.toString() ?? "",
       };
       setInitialValues(savedValues);
       setFormValues(savedValues);
@@ -867,6 +874,26 @@ const CourseDetail = () => {
                     <SelectItem value="archived">Archived</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="displayOrder">Display Order</Label>
+                <Input
+                  id="displayOrder"
+                  type="number"
+                  min="0"
+                  max="10000"
+                  value={formValues.displayOrder}
+                  onChange={(event) =>
+                    setFormValues((prev) => ({ ...prev, displayOrder: event.target.value }))
+                  }
+                  placeholder="50"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Controls the order courses appear. Default is 50 if empty. Maximum is 10000.
+                </p>
               </div>
             </div>
 

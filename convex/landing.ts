@@ -76,8 +76,16 @@ export const listLandingCourses = internalQuery({
       .withIndex("deletedAt_status", (q) =>
         q.eq("deletedAt", undefined).eq("status", "published"),
       )
-      .order("desc")
-      .take(normalizedLimit);
+      .collect();
+
+    // Sort by displayOrder (default 50 if null), then take the limit
+    courses.sort((a, b) => {
+      const orderA = a.displayOrder ?? 50;
+      const orderB = b.displayOrder ?? 50;
+      return orderA - orderB;
+    });
+
+    const sortedCourses = courses.slice(0, normalizedLimit);
 
     const categoryIds = Array.from(
       new Set<Id<"categories">>(courses.map((course) => course.category_id)),
@@ -100,7 +108,7 @@ export const listLandingCourses = internalQuery({
       }
     }
 
-    return courses.map((course) => {
+    return sortedCourses.map((course) => {
       const category = categoryMap.get(course.category_id);
 
       return {

@@ -303,6 +303,7 @@ export const updateCourse = mutation({
     ),
     trialVideoUrl: v.optional(v.string()),
     instructor: v.optional(v.string()),
+    displayOrder: v.optional(v.number()),
   },
   handler: async (
     ctx,
@@ -318,6 +319,7 @@ export const updateCourse = mutation({
       status,
       trialVideoUrl,
       instructor,
+      displayOrder,
     }
   ) => {
     await requireUser(ctx);
@@ -342,6 +344,7 @@ export const updateCourse = mutation({
       status,
       trialVideoUrl,
       instructor,
+      displayOrder,
     });
 
     const targetCategory = await ctx.db.get(categoryId);
@@ -428,6 +431,7 @@ export const updateCourse = mutation({
       status: validated.status,
       trial_video_url: validated.trialVideoUrl,
       instructor: validated.instructor,
+      displayOrder: validated.displayOrder,
       slug,
       updatedAt: Date.now(),
     });

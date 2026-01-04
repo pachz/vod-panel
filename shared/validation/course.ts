@@ -63,6 +63,19 @@ export const courseUpdateSchema = courseInputSchema.extend({
     128,
     "Instructor name must be 128 characters or less.",
   ),
+  displayOrder: z.preprocess(
+    (value) => {
+      if (value === null || value === undefined || value === "") {
+        return undefined;
+      }
+      if (typeof value === "string") {
+        const parsed = parseInt(value, 10);
+        return isNaN(parsed) ? undefined : parsed;
+      }
+      return value;
+    },
+    z.number().int().min(0).max(10000, "Display order must be 10000 or less.").optional(),
+  ),
 });
 
 export type CourseInput = z.infer<typeof courseInputSchema>;

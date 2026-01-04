@@ -54,6 +54,7 @@ export default defineSchema({
     thumbnail_image_url: v.optional(v.string()),
     instructor: v.optional(v.string()),
     lesson_count: v.number(),
+    displayOrder: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
