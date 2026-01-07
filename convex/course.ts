@@ -51,7 +51,7 @@ export const listCourses = query({
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, status, search, limit = 12, cursor }) => {
+  handler: async (ctx, { categoryId, status, search, limit = 72, cursor }) => {
     await requireUser(ctx);
 
     const numItems = Math.min(Math.max(limit, 1), 100);
