@@ -78,11 +78,23 @@ export const listLandingCourses = internalQuery({
       )
       .collect();
 
-    // Sort by displayOrder (default 50 if null), then take the limit
+    // Sort by displayOrder (default 50 if null), then by createdAt and _id for consistency
     courses.sort((a, b) => {
       const orderA = a.displayOrder ?? 50;
       const orderB = b.displayOrder ?? 50;
-      return orderA - orderB;
+
+      if (orderA !== orderB) {
+        return orderA - orderB;
+      }
+
+      const createdA = a.createdAt ?? 0;
+      const createdB = b.createdAt ?? 0;
+
+      if (createdA !== createdB) {
+        return createdA - createdB;
+      }
+
+      return a._id.localeCompare(b._id);
     });
 
     const sortedCourses = courses.slice(0, normalizedLimit);

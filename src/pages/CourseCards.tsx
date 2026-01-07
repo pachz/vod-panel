@@ -92,11 +92,26 @@ const CourseCards = () => {
   const courseList = useMemo<CourseDoc[]>(() => {
     if (!courses) return [];
     // Extract page from paginated result
-    return courses.page.sort((a, b) => {
-      const orderA = a.displayOrder ?? 50;
-      const orderB = b.displayOrder ?? 50;
-      return orderA - orderB;
-    }) ?? [];
+    return (
+      courses.page.sort((a, b) => {
+        const orderA = a.displayOrder ?? 50;
+        const orderB = b.displayOrder ?? 50;
+
+        if (orderA !== orderB) {
+          return orderA - orderB;
+        }
+
+        const createdA = a.createdAt ?? 0;
+        const createdB = b.createdAt ?? 0;
+
+        if (createdA !== createdB) {
+          return createdA - createdB;
+        }
+
+        // Final stable tie-breaker
+        return a._id.localeCompare(b._id);
+      }) ?? []
+    );
   }, [courses]);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
