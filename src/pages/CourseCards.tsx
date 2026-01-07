@@ -52,7 +52,9 @@ const CourseCards = () => {
     categoryId: categoryFilter as Id<"categories"> | undefined,
     status: "published",
     search: searchFilter,
+    limit: 72,
   });
+
   const categories = useQuery(api.category.listCategories);
 
   const [searchInput, setSearchInput] = useState(searchFilter || "");
@@ -90,7 +92,11 @@ const CourseCards = () => {
   const courseList = useMemo<CourseDoc[]>(() => {
     if (!courses) return [];
     // Extract page from paginated result
-    return courses.page ?? [];
+    return courses.page.sort((a, b) => {
+      const orderA = a.displayOrder ?? 50;
+      const orderB = b.displayOrder ?? 50;
+      return orderA - orderB;
+    }) ?? [];
   }, [courses]);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
