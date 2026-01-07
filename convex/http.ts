@@ -153,7 +153,7 @@ http.route({
       const courses = await ctx.runQuery(
         internal.landing.listLandingCourses,
         {
-          limit: 50,
+          limit: 150,
         },
       );
 

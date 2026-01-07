@@ -69,7 +69,7 @@ export const listLandingCourses = internalQuery({
     }),
   ),
   handler: async (ctx, args): Promise<Array<LandingCourse>> => {
-    const normalizedLimit = Math.min(Math.max(Math.floor(args.limit), 5), 50);
+    const normalizedLimit = Math.min(Math.max(Math.floor(args.limit), 5), 200);
 
     const courses = await ctx.db
       .query("courses")
