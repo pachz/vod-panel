@@ -226,6 +226,8 @@ export const fetchVimeoThumbnailAndUpdateLesson = internalAction({
         });
       }
 
+      console.log("vimeo oembed data", data);
+
       // If the thumbnail width and height are provided, resize the thumbnail to max
       let target_thumbnail_url = data.thumbnail_url;
       if(data.thumbnail_width && data.thumbnail_height) {
