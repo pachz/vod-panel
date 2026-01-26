@@ -189,7 +189,7 @@ const CourseDetail = () => {
   const categories = useQuery(api.category.listCategories);
   const lessons = useQuery(
     api.lesson.listLessons,
-    courseId ? { courseId, limit: 50 } : undefined,
+    courseId ? { courseId, limit: 100 } : undefined,
   );
 
   const updateCourse = useMutation(api.course.updateCourse);
