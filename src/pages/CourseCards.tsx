@@ -15,21 +15,19 @@ import { markdownToPlainText } from "@/lib/utils";
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
 
-/** Duration is stored in seconds; format for display. */
-const formatDuration = (seconds: number | undefined) => {
+/** Duration is stored in seconds; format as time (0:10 or 01:10:10). */
+const formatDurationTime = (seconds: number | undefined | null) => {
   if (seconds === undefined || seconds === null) {
-    return "0m";
+    return "0:00";
   }
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  if (totalMinutes < 60) {
-    return `${totalMinutes}m`;
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
+  const h = Math.floor(seconds / 3600);
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
-  const hours = Math.floor(totalMinutes / 60);
-  const remainder = totalMinutes % 60;
-  if (remainder === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${remainder}m`;
+  return `${m}:${pad(s)}`;
 };
 
 const formatLessonCount = (count: number | undefined, t: (key: string) => string) => {
@@ -260,7 +258,7 @@ const CourseCards = () => {
                   <span aria-hidden="true">•</span>
                   <span className="flex items-center gap-1">
                     <Clock className="h-3.5 w-3.5" />
-                    <span>{formatDuration(course.duration)}</span>
+                    <span>{formatDurationTime(course.duration)}</span>
                   </span>
                 </div>
               </CardHeader>

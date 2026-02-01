@@ -63,18 +63,19 @@ const initialFormValues: FormValues = {
   coachId: "",
 };
 
-/** Duration is stored in seconds; format for display. */
-const formatDuration = (seconds: number | undefined) => {
+/** Duration is stored in seconds; format as time for table (0:10 or 01:10:10). */
+const formatDurationTime = (seconds: number | undefined | null) => {
   if (seconds === undefined || seconds === null) {
     return "—";
   }
-  if (seconds < 3600) {
-    const minutes = Math.max(1, Math.round(seconds / 60));
-    return `${minutes} min`;
-  }
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
   const h = Math.floor(seconds / 3600);
-  const m = Math.round((seconds % 3600) / 60);
-  return m > 0 ? `${h}h ${m}m` : `${h}h`;
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  return `${m}:${pad(s)}`;
 };
 
 const Courses = () => {
@@ -286,7 +287,7 @@ const Courses = () => {
         header: "Duration",
         render: (course) => (
           <span className="text-muted-foreground">
-            {formatDuration(course.duration)}
+            {formatDurationTime(course.duration)}
           </span>
         ),
         cellClassName: "text-muted-foreground",

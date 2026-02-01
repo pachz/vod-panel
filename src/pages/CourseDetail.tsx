@@ -61,7 +61,22 @@ type CategoryDoc = Doc<"categories">;
 type CoachDoc = Doc<"coaches">;
 type LessonDoc = Doc<"lessons">;
 
-/** Duration is stored in seconds; format for display. */
+/** Duration is stored in seconds; format as time for course display (0:10 or 01:10:10). */
+const formatDurationTime = (seconds: number | undefined | null) => {
+  if (seconds === undefined || seconds === null) {
+    return "—";
+  }
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
+  const h = Math.floor(seconds / 3600);
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  return `${m}:${pad(s)}`;
+};
+
+/** Duration is stored in seconds; format for lesson list (X min). */
 const formatDuration = (seconds: number | undefined) => {
   if (seconds === undefined || seconds === null) {
     return "—";
@@ -1159,7 +1174,7 @@ const CourseDetail = () => {
                 <Label>Duration</Label>
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   {course.duration !== undefined && course.duration !== null
-                    ? formatDuration(course.duration)
+                    ? formatDurationTime(course.duration)
                     : "Calculated automatically from lessons"}
                 </div>
                 <p className="text-xs text-muted-foreground">

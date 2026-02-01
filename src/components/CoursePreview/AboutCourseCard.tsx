@@ -12,7 +12,7 @@ type AboutCourseCardProps = {
   courseShortDescription: string;
   isRTL: boolean;
   t: (key: string) => string;
-  formatDuration: (minutes: number | undefined | null, t: (key: string) => string) => string;
+  formatDuration: (seconds: number | undefined | null) => string;
   pdfMaterialUrl?: string | null;
   pdfMaterialName?: string | null;
 };
@@ -44,7 +44,7 @@ export const AboutCourseCard = ({
           <span>
             {t("duration")}:{" "}
             <span className="font-semibold text-foreground">
-              {formatDuration(course.duration, t)}
+              {formatDuration(course.duration)}
             </span>
           </span>
         </div>

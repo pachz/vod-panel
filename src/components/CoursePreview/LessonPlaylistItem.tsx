@@ -15,7 +15,7 @@ type LessonPlaylistItemProps = {
   onClick: () => void;
   isRTL: boolean;
   t: (key: string) => string;
-  formatDuration: (minutes: number | undefined | null, t: (key: string) => string) => string;
+  formatDuration: (seconds: number | undefined | null) => string;
 };
 
 export const LessonPlaylistItem = forwardRef<HTMLButtonElement, LessonPlaylistItemProps>(({
@@ -68,7 +68,7 @@ export const LessonPlaylistItem = forwardRef<HTMLButtonElement, LessonPlaylistIt
             dir={isRTL ? "rtl" : "ltr"}
           >
             <Clock className="h-3.5 w-3.5 flex-shrink-0" />
-            <span className={isRTL ? "text-right" : "text-left"}>{formatDuration(duration, t)}</span>
+            <span className={isRTL ? "text-right" : "text-left"}>{formatDuration(duration)}</span>
           </span>
           <span
             className={cn("inline-flex items-center gap-1", isRTL && "flex-row-reverse")}

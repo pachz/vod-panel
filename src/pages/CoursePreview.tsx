@@ -32,21 +32,19 @@ const DEFAULT_PROGRESS: CourseProgress = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-/** Duration is stored in seconds; format for display. */
-const formatDuration = (seconds: number | undefined | null, t: (key: string) => string) => {
+/** Duration is stored in seconds; format as time for course/lesson display (0:10 or 01:10:10). */
+const formatDurationTime = (seconds: number | undefined | null) => {
   if (seconds === undefined || seconds === null) {
     return "—";
   }
-  const totalMinutes = Math.max(1, Math.round(seconds / 60));
-  if (totalMinutes < 60) {
-    return `${totalMinutes}m`;
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
+  const h = Math.floor(seconds / 3600);
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
   }
-  const hours = Math.floor(totalMinutes / 60);
-  const remainder = totalMinutes % 60;
-  if (remainder === 0) {
-    return `${hours}h`;
-  }
-  return `${hours}h ${remainder}m`;
+  return `${m}:${pad(s)}`;
 };
 
 const CoursePreview = () => {
@@ -378,7 +376,7 @@ const CoursePreview = () => {
             language={language}
             isRTL={isRTL}
             t={t}
-            formatDuration={formatDuration}
+            formatDuration={formatDurationTime}
             onLessonClick={(lessonId) => setActiveLessonId(lessonId as Id<"lessons">)}
             buttonsSectionRef={buttonsSectionRef}
             activeLessonRef={activeLessonRef}
@@ -389,7 +387,7 @@ const CoursePreview = () => {
             courseShortDescription={courseShortDescription}
             isRTL={isRTL}
             t={t}
-            formatDuration={formatDuration}
+            formatDuration={formatDurationTime}
             pdfMaterialUrl={"pdfMaterialUrl" in course ? (course as { pdfMaterialUrl: string | null }).pdfMaterialUrl : undefined}
             pdfMaterialName={course.pdf_material_name}
           />

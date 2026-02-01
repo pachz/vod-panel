@@ -22,7 +22,7 @@ type LessonPlaylistProps = {
   language: string;
   isRTL: boolean;
   t: (key: string) => string;
-  formatDuration: (minutes: number | undefined | null, t: (key: string) => string) => string;
+  formatDuration: (seconds: number | undefined | null) => string;
   onLessonClick: (lessonId: string) => void;
   buttonsSectionRef: React.RefObject<HTMLDivElement>;
   activeLessonRef: React.RefObject<HTMLButtonElement>;
