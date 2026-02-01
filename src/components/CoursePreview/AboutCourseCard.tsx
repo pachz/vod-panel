@@ -29,13 +29,13 @@ export const AboutCourseCard = ({
   const hasPdfMaterial = !!pdfMaterialUrl && !!pdfMaterialName;
 
   return (
-    <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
+    <Card className="min-w-0 border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
       <CardHeader>
         <CardTitle className={cn("text-lg font-semibold", isRTL ? "text-right" : "text-left")}>
           {t("aboutThisCourse")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-4 text-sm text-muted-foreground">
+      <CardContent className="min-w-0 overflow-hidden space-y-4 text-sm text-muted-foreground">
         {renderMarkdown(courseShortDescription, isRTL)}
         <div className="flex flex-wrap gap-4 text-xs uppercase tracking-wide text-muted-foreground/80">
           <span>
@@ -61,7 +61,7 @@ export const AboutCourseCard = ({
             <Button
               variant="outline"
               size="sm"
-              className="w-full gap-2 font-medium"
+              className="w-full min-w-0 gap-2 font-medium"
               asChild
             >
               <a
@@ -69,9 +69,12 @@ export const AboutCourseCard = ({
                 download={pdfMaterialName}
                 target="_blank"
                 rel="noopener noreferrer"
+                className="flex min-w-0 items-center gap-2 overflow-hidden"
               >
                 <FileText className="h-4 w-4 shrink-0" />
-                <span className="truncate">{pdfMaterialName}</span>
+                <span className="min-w-0 truncate" title={pdfMaterialName ?? undefined}>
+                  {pdfMaterialName}
+                </span>
                 <Download className="h-4 w-4 shrink-0" />
               </a>
             </Button>

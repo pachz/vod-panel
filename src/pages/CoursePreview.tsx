@@ -366,7 +366,7 @@ const CoursePreview = () => {
           />
         </div>
 
-        <div className="space-y-4">
+        <div className="min-w-0 space-y-4">
           <LessonPlaylist
             lessons={lessonList}
             activeLessonId={activeLessonId}
