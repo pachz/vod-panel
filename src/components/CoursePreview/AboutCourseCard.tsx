@@ -51,7 +51,7 @@ export const AboutCourseCard = ({
         {hasPdfMaterial && (
           <div
             className={cn(
-              "rounded-lg border border-border/60 bg-muted/30 p-3",
+              "min-w-0 overflow-hidden rounded-lg border border-border/60 bg-muted/30 p-3",
               isRTL ? "text-right" : "text-left",
             )}
           >
