@@ -407,13 +407,15 @@ export const updateLesson = mutation({
 
     let courseRevertedToDraft: { courseName: string } | null = null;
 
-    // If course changed, recalculate lesson counts for both courses
-    const courseChanged = lesson.course_id !== courseId;
-    const statusChanged = lesson.status !== validated.status;
-    // Recalculate duration if status changes to/from "published" since only published lessons count
-    const publishedStatusChanged = statusChanged && (
-      lesson.status === "published" || validated.status === "published"
-    );
+    // For video lessons missing duration: revert to draft but still allow the update
+    // (Vimeo fetch will run and set duration when it completes)
+    let effectiveStatus = validated.status;
+    if (validated.type === "video") {
+      const hasDuration = lesson.duration != null && lesson.duration >= 0;
+      if (!hasDuration) {
+        effectiveStatus = "draft";
+      }
+    }
 
     // Validate type-specific fields
     if (validated.type === "video" && !validated.videoUrl) {
@@ -421,17 +423,6 @@ export const updateLesson = mutation({
         throw new ConvexError({
           code: "LESSON_INCOMPLETE",
           message: "Published video lessons must include a video URL.",
-        });
-      }
-    }
-
-    if (validated.type === "video" && validated.status === "published") {
-      const hasDuration = lesson.duration != null && lesson.duration >= 0;
-      if (!hasDuration) {
-        throw new ConvexError({
-          code: "LESSON_INCOMPLETE",
-          message:
-            "Cannot publish: video duration is not set yet. Save the lesson and wait a moment for the duration to be fetched from Vimeo, then try publishing again.",
         });
       }
     }
@@ -445,14 +436,23 @@ export const updateLesson = mutation({
       }
     }
 
+    // If course changed, recalculate lesson counts for both courses
+    const courseChanged = lesson.course_id !== courseId;
+    const statusChanged = lesson.status !== effectiveStatus;
+    // Recalculate duration if status changes to/from "published" since only published lessons count
+    const publishedStatusChanged = statusChanged && (
+      lesson.status === "published" || effectiveStatus === "published"
+    );
+
     // Check if video URL changed and is from Vimeo
-    const videoUrlChanged = lesson.video_url !== validated.videoUrl;
     const isVimeoUrl = validated.videoUrl && (
       validated.videoUrl.includes("vimeo.com") || 
       validated.videoUrl.includes("player.vimeo.com")
     );
 
-    await ctx.db.patch(id, {
+    // Clear duration when video URL changes (old duration is for old video; Vimeo fetch will set new one)
+    const videoUrlChanged = lesson.video_url !== validated.videoUrl;
+    const patch: Record<string, unknown> = {
       title: validated.title,
       title_ar: validated.titleAr,
       short_review: validated.shortReview,
@@ -463,11 +463,15 @@ export const updateLesson = mutation({
       learning_objectives_ar: validated.learningObjectivesAr,
       course_id: courseId,
       type: validated.type,
-      status: validated.status,
+      status: effectiveStatus,
       video_url: validated.type === "video" ? validated.videoUrl : undefined,
       body: validated.type === "article" ? validated.body : undefined,
       body_ar: validated.type === "article" ? validated.bodyAr : undefined,
-    });
+    };
+    if (validated.type === "video" && videoUrlChanged) {
+      patch.duration = undefined;
+    }
+    await ctx.db.patch(id, patch);
 
     if (courseChanged) {
       const currentCourse = await ctx.db.get(lesson.course_id);
@@ -482,7 +486,7 @@ export const updateLesson = mutation({
 
       // If a lesson was moved from published to draft/archived, check whether the
       // course (if published) now has zero published lessons and auto-revert to draft.
-      if (lesson.status === "published" && validated.status !== "published") {
+      if (lesson.status === "published" && effectiveStatus !== "published") {
         const courseAfterUpdate = await ctx.db.get(courseId);
         if (
           courseAfterUpdate &&
@@ -512,11 +516,16 @@ export const updateLesson = mutation({
       await touchCourseUpdatedAt(ctx, courseId, targetCourse);
     }
 
-    // Schedule thumbnail fetch if video URL changed and is from Vimeo
-    if (videoUrlChanged && isVimeoUrl && validated.videoUrl) {
+    // Schedule Vimeo fetch when URL changed or duration is missing (retry) - gets thumbnail and duration
+    const videoUrlToFetch = validated.videoUrl;
+    const shouldFetchFromVimeo =
+      isVimeoUrl &&
+      videoUrlToFetch &&
+      (videoUrlChanged || !(lesson.duration != null && lesson.duration >= 0));
+    if (shouldFetchFromVimeo && videoUrlToFetch) {
       await ctx.scheduler.runAfter(0, internal.image.fetchVimeoThumbnailAndUpdateLesson, {
         lessonId: id,
-        videoUrl: validated.videoUrl,
+        videoUrl: videoUrlToFetch,
       });
     }
 
