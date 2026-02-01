@@ -47,7 +47,6 @@ type FormValues = {
   learningObjectives: string;
   learningObjectivesAr: string;
   courseId: string;
-  duration: string;
   status: LessonDoc["status"];
   videoUrl: string;
 };
@@ -60,7 +59,6 @@ const initialFormValues: FormValues = {
   learningObjectives: "",
   learningObjectivesAr: "",
   courseId: "",
-  duration: "",
   status: "draft",
   videoUrl: "",
 };
@@ -70,6 +68,21 @@ const statusLabels: Record<LessonDoc["status"], string> = {
   draft: "Draft",
   published: "Published",
   archived: "Archived",
+};
+
+/** Duration is stored in seconds; format as time for form display (0:10 or 01:10:10). */
+const formatDurationTime = (seconds: number | undefined | null) => {
+  if (seconds === undefined || seconds === null) {
+    return "—";
+  }
+  const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+  const s = Math.floor(seconds % 60);
+  const m = Math.floor((seconds / 60) % 60);
+  const h = Math.floor(seconds / 3600);
+  if (h > 0) {
+    return `${pad(h)}:${pad(m)}:${pad(s)}`;
+  }
+  return `${m}:${pad(s)}`;
 };
 
 const LessonDetail = () => {
@@ -114,10 +127,6 @@ const LessonDetail = () => {
       learningObjectives: lesson.learning_objectives ?? "",
       learningObjectivesAr: lesson.learning_objectives_ar ?? "",
       courseId: lesson.course_id,
-      duration:
-        lesson.duration !== undefined && lesson.duration !== null
-          ? String(lesson.duration)
-          : "",
       status: lesson.status,
       videoUrl: lesson.video_url ?? "",
     };
@@ -186,7 +195,6 @@ const LessonDetail = () => {
       learningObjectives: formValues.learningObjectives,
       learningObjectivesAr: formValues.learningObjectivesAr,
       courseId: formValues.courseId,
-      duration: formValues.duration,
       type: "video",
       status: formValues.status,
       videoUrl: formValues.videoUrl,
@@ -208,7 +216,6 @@ const LessonDetail = () => {
       learningObjectives,
       learningObjectivesAr,
       courseId,
-      duration,
       status,
       videoUrl,
     } = validation.data;
@@ -234,7 +241,7 @@ const LessonDetail = () => {
     }
 
     try {
-      await updateLesson({
+      const result = await updateLesson({
         id: lessonId,
         title,
         titleAr,
@@ -245,7 +252,6 @@ const LessonDetail = () => {
         learningObjectives,
         learningObjectivesAr,
         courseId: courseId as Id<"courses">,
-        duration,
         type: "video",
         status,
         videoUrl,
@@ -254,6 +260,12 @@ const LessonDetail = () => {
       });
 
       toast.success("Lesson updated successfully");
+      if (result?.courseRevertedToDraft) {
+        toast.warning(
+          `"${result.courseRevertedToDraft.courseName}" was set back to Draft because all its lessons are now in Draft.`,
+          { duration: 6000 }
+        );
+      }
       const savedValues: FormValues = {
         title,
         titleAr,
@@ -262,10 +274,6 @@ const LessonDetail = () => {
         learningObjectives: learningObjectives ?? "",
         learningObjectivesAr: learningObjectivesAr ?? "",
         courseId,
-        duration:
-          duration !== undefined && duration !== null
-            ? String(duration)
-            : "",
         status,
         videoUrl: videoUrl ?? "",
       };
@@ -440,30 +448,19 @@ const LessonDetail = () => {
                   </SelectContent>
                 </Select>
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <Label htmlFor="duration">Duration (minutes)</Label>
-              <Input
-                id="duration"
-                value={formValues.duration}
-                onChange={(event) => {
-                  const rawValue = event.target.value;
-                  const sanitizedValue = rawValue.replace(/\D/g, "");
-                  const maxValue = 99999;
-                  const clampedValue = sanitizedValue === "" 
-                    ? "" 
-                    : Math.min(Number(sanitizedValue), maxValue).toString();
-                  setFormValues((prev) => ({
-                    ...prev,
-                    duration: clampedValue,
-                  }));
-                }}
-                inputMode="numeric"
-                pattern="^[0-9]*$"
-                placeholder="e.g., 15"
-                max={99999}
-              />
+              <div className="space-y-2">
+                <Label htmlFor="duration">Duration</Label>
+                <Input
+                  id="duration"
+                  value={lesson ? formatDurationTime(lesson.duration) : "—"}
+                  disabled
+                  className="bg-muted"
+                  aria-describedby="duration-hint"
+                />
+                <p id="duration-hint" className="text-xs text-muted-foreground">
+                  Fetched from Vimeo when you save a video URL.
+                </p>
+              </div>
             </div>
 
             <Separator />

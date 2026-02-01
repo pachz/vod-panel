@@ -226,6 +226,12 @@ export const fetchVimeoThumbnailAndUpdateLesson = internalAction({
         });
       }
 
+      // Duration from Vimeo oEmbed is in seconds
+      const durationSeconds =
+        typeof data.duration === "number" && Number.isFinite(data.duration)
+          ? Math.round(data.duration)
+          : undefined;
+
       console.log("vimeo oembed data", data);
 
       // If the thumbnail width and height are provided, resize the thumbnail to max
@@ -331,14 +337,15 @@ export const fetchVimeoThumbnailAndUpdateLesson = internalAction({
         });
       }
 
-      // Update the lesson with both cover and thumbnail URLs
+      // Update the lesson with cover, thumbnail, and duration (seconds from Vimeo)
       await ctx.runMutation(internal.lesson.updateLessonImageUrls, {
         lessonId,
         coverImageUrl,
         thumbnailImageUrl,
+        duration: durationSeconds,
       });
 
-      return { coverImageUrl, thumbnailImageUrl };
+      return { coverImageUrl, thumbnailImageUrl, duration: durationSeconds };
     } catch (error) {
       console.error("Error fetching Vimeo thumbnail:", error);
       // Don't throw - just log the error so the mutation doesn't fail

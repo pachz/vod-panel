@@ -46,6 +46,16 @@ export const courseInputSchema = z.object({
     })
     .trim()
     .min(1, "Category is required."),
+  coachId: z
+    .string({
+      required_error: "Coach is required.",
+    })
+    .trim()
+    .min(1, "Coach is required."),
+  additionalCategoryIds: z
+    .array(z.string().trim().min(1))
+    .optional()
+    .default([]),
 });
 
 export const courseUpdateSchema = courseInputSchema.extend({
@@ -76,6 +86,16 @@ export const courseUpdateSchema = courseInputSchema.extend({
     },
     z.number().int().min(0).max(10000, "Display order must be 10000 or less.").optional(),
   ),
+  additionalCategoryIds: z
+    .array(z.string().trim().min(1))
+    .optional()
+    .default([]),
+  coachId: z
+    .string({
+      required_error: "Coach is required.",
+    })
+    .trim()
+    .min(1, "Coach is required."),
 });
 
 export type CourseInput = z.infer<typeof courseInputSchema>;

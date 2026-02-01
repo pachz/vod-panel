@@ -232,12 +232,11 @@ export const createLesson = mutation({
     shortReview: v.string(),
     shortReviewAr: v.string(),
     courseId: v.id("courses"),
-    duration: v.optional(v.number()),
     type: v.union(v.literal("video"), v.literal("article")),
   },
   handler: async (
     ctx,
-    { title, titleAr, shortReview, shortReviewAr, courseId, duration, type },
+    { title, titleAr, shortReview, shortReviewAr, courseId, type },
   ) => {
     await requireUser(ctx);
 
@@ -247,7 +246,6 @@ export const createLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
-      duration,
       type,
     });
 
@@ -280,7 +278,7 @@ export const createLesson = mutation({
       short_review: validated.shortReview,
       short_review_ar: validated.shortReviewAr,
       course_id: courseId,
-      duration: validated.duration,
+      duration: undefined,
       type: validated.type,
       status: "draft",
       priority: maxPriority + 1,
@@ -330,7 +328,6 @@ export const updateLesson = mutation({
     shortReview: v.string(),
     shortReviewAr: v.string(),
     courseId: v.id("courses"),
-    duration: v.optional(v.number()),
     type: v.union(v.literal("video"), v.literal("article")),
     status: v.union(
       v.literal("draft"),
@@ -345,6 +342,12 @@ export const updateLesson = mutation({
     body: v.optional(v.string()),
     bodyAr: v.optional(v.string()),
   },
+  returns: v.union(
+    v.null(),
+    v.object({
+      courseRevertedToDraft: v.object({ courseName: v.string() }),
+    })
+  ),
   handler: async (
     ctx,
     {
@@ -354,7 +357,6 @@ export const updateLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
-      duration,
       type,
       status,
       videoUrl,
@@ -383,7 +385,6 @@ export const updateLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
-      duration,
       type,
       status,
       videoUrl,
@@ -404,9 +405,10 @@ export const updateLesson = mutation({
       });
     }
 
+    let courseRevertedToDraft: { courseName: string } | null = null;
+
     // If course changed, recalculate lesson counts for both courses
     const courseChanged = lesson.course_id !== courseId;
-    const durationChanged = (lesson.duration ?? null) !== (validated.duration ?? null);
     const statusChanged = lesson.status !== validated.status;
     // Recalculate duration if status changes to/from "published" since only published lessons count
     const publishedStatusChanged = statusChanged && (
@@ -419,6 +421,17 @@ export const updateLesson = mutation({
         throw new ConvexError({
           code: "LESSON_INCOMPLETE",
           message: "Published video lessons must include a video URL.",
+        });
+      }
+    }
+
+    if (validated.type === "video" && validated.status === "published") {
+      const hasDuration = lesson.duration != null && lesson.duration >= 0;
+      if (!hasDuration) {
+        throw new ConvexError({
+          code: "LESSON_INCOMPLETE",
+          message:
+            "Cannot publish: video duration is not set yet. Save the lesson and wait a moment for the duration to be fetched from Vimeo, then try publishing again.",
         });
       }
     }
@@ -449,7 +462,6 @@ export const updateLesson = mutation({
       learning_objectives: validated.learningObjectives,
       learning_objectives_ar: validated.learningObjectivesAr,
       course_id: courseId,
-      duration: validated.duration,
       type: validated.type,
       status: validated.status,
       video_url: validated.type === "video" ? validated.videoUrl : undefined,
@@ -465,8 +477,37 @@ export const updateLesson = mutation({
       }
 
       await recalculateLessonCount(ctx, courseId);
-    } else if (durationChanged || publishedStatusChanged) {
+    } else if (publishedStatusChanged) {
       await recalculateLessonCount(ctx, courseId);
+
+      // If a lesson was moved from published to draft/archived, check whether the
+      // course (if published) now has zero published lessons and auto-revert to draft.
+      if (lesson.status === "published" && validated.status !== "published") {
+        const courseAfterUpdate = await ctx.db.get(courseId);
+        if (
+          courseAfterUpdate &&
+          courseAfterUpdate.deletedAt === undefined &&
+          courseAfterUpdate.status === "published"
+        ) {
+          const publishedLessonsNow = await ctx.db
+            .query("lessons")
+            .withIndex("deletedAt_course_status", (q) =>
+              q
+                .eq("deletedAt", undefined)
+                .eq("course_id", courseId)
+                .eq("status", "published")
+            )
+            .collect();
+
+          if (publishedLessonsNow.length === 0) {
+            await ctx.db.patch(courseId, {
+              status: "draft",
+              updatedAt: Date.now(),
+            });
+            courseRevertedToDraft = { courseName: courseAfterUpdate.name };
+          }
+        }
+      }
     } else {
       await touchCourseUpdatedAt(ctx, courseId, targetCourse);
     }
@@ -486,6 +527,10 @@ export const updateLesson = mutation({
       entityId: id,
       entityName: validated.title,
     });
+
+    return courseRevertedToDraft !== null
+      ? { courseRevertedToDraft }
+      : null;
   },
 });
 
@@ -692,16 +737,17 @@ export const reorderLessons = mutation({
 });
 
 /**
- * Internal mutation to update lesson cover and thumbnail image URLs
- * Called by the scheduled action after fetching Vimeo thumbnail
+ * Internal mutation to update lesson cover, thumbnail, and optionally duration (seconds)
+ * Called by the scheduled action after fetching Vimeo thumbnail and duration
  */
 export const updateLessonImageUrls = internalMutation({
   args: {
     lessonId: v.id("lessons"),
     coverImageUrl: v.string(),
     thumbnailImageUrl: v.string(),
+    duration: v.optional(v.number()),
   },
-  handler: async (ctx, { lessonId, coverImageUrl, thumbnailImageUrl }) => {
+  handler: async (ctx, { lessonId, coverImageUrl, thumbnailImageUrl, duration }) => {
     const lesson = await ctx.db.get(lessonId);
 
     if (!lesson || lesson.deletedAt) {
@@ -709,12 +755,21 @@ export const updateLessonImageUrls = internalMutation({
       return;
     }
 
-    await ctx.db.patch(lessonId, {
+    const patch: { cover_image_url: string; thumbnail_image_url: string; duration?: number } = {
       cover_image_url: coverImageUrl,
       thumbnail_image_url: thumbnailImageUrl,
-    });
+    };
+    if (duration !== undefined) {
+      patch.duration = duration;
+    }
 
-    await touchCourseUpdatedAt(ctx, lesson.course_id);
+    await ctx.db.patch(lessonId, patch);
+
+    if (duration !== undefined) {
+      await recalculateLessonCount(ctx, lesson.course_id);
+    } else {
+      await touchCourseUpdatedAt(ctx, lesson.course_id);
+    }
   },
 });
 

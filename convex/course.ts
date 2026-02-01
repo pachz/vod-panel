@@ -1,6 +1,7 @@
 import { mutation, query } from "./_generated/server";
-import type { MutationCtx, QueryCtx } from "./_generated/server";
+import type { MutationCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 
 import {
   courseInputSchema,
@@ -41,6 +42,28 @@ const validateCourseUpdateInput = (input: CourseUpdateInput) => {
   return result.data;
 };
 
+async function validateAdditionalCategoryIds(
+  ctx: MutationCtx,
+  mainCategoryId: Id<"categories">,
+  rawIds: Array<Id<"categories"> | string>,
+): Promise<Array<Id<"categories">>> {
+  const deduped = Array.from(
+    new Set(
+      rawIds
+        .map((id) => (typeof id === "string" ? id : id) as Id<"categories">)
+        .filter((id) => id !== mainCategoryId),
+    ),
+  );
+  const result: Array<Id<"categories">> = [];
+  for (const categoryId of deduped) {
+    const category = await ctx.db.get(categoryId);
+    if (category && category.deletedAt === undefined) {
+      result.push(categoryId);
+    }
+  }
+  return result;
+}
+
 export const listCourses = query({
   args: {
     categoryId: v.optional(v.id("categories")),
@@ -79,32 +102,54 @@ export const listCourses = query({
         numItems,
       });
     }
-    // No search - use regular index queries
+    // When filtering by category, include courses where category is main OR in additional_category_ids
+    if (categoryId !== undefined) {
+      const baseQuery =
+        status !== undefined
+          ? ctx.db
+              .query("courses")
+              .withIndex("deletedAt_status", (q) =>
+                q.eq("deletedAt", undefined).eq("status", status)
+              )
+          : ctx.db
+              .query("courses")
+              .withIndex("deletedAt", (q) => q.eq("deletedAt", undefined));
+      const allMatching = await baseQuery.collect();
+      const filtered = allMatching.filter(
+        (course) =>
+          course.category_id === categoryId ||
+          (course.additional_category_ids ?? []).includes(categoryId)
+      );
+      const sorted = filtered.sort((a, b) => {
+        const orderA = a.displayOrder ?? 50;
+        const orderB = b.displayOrder ?? 50;
+        if (orderA !== orderB) return orderA - orderB;
+        const createdA = a._creationTime ?? 0;
+        const createdB = b._creationTime ?? 0;
+        if (createdA !== createdB) return createdA - createdB;
+        return a._id.localeCompare(b._id);
+      });
+      const offset = Math.max(0, parseInt(cursor ?? "0", 10) || 0);
+      const page = sorted.slice(offset, offset + numItems);
+      const nextOffset = offset + page.length;
+      return {
+        page,
+        isDone: nextOffset >= sorted.length,
+        continueCursor:
+          nextOffset < sorted.length ? String(nextOffset) : null,
+      };
+    }
+
+    // No category filter - use regular index queries
     let courses;
 
-    if (categoryId && status) {
-      // Case 3: Both filters - use all 3 fields
-      courses = await ctx.db
-        .query("courses")
-        .withIndex("deletedAt_category_status", (q) =>
-          q.eq("deletedAt", undefined).eq("category_id", categoryId).eq("status", status)
-        )
-    } else if (categoryId) {
-      // Case 2: Category only - use first 2 fields
-      courses = await ctx.db
-        .query("courses")
-        .withIndex("deletedAt_category_status", (q) =>
-          q.eq("deletedAt", undefined).eq("category_id", categoryId)
-        )
-    } else if (status) {
-      // Status only - use deletedAt_status index
+    if (status) {
       courses = await ctx.db
         .query("courses")
         .withIndex("deletedAt_status", (q) =>
           q.eq("deletedAt", undefined).eq("status", status)
         )
     } else {
-      // Case 1: No filters - use only deletedAt
       courses = await ctx.db
         .query("courses")
         .withIndex("deletedAt", (q) =>
@@ -112,10 +157,32 @@ export const listCourses = query({
         )
     }
 
-    return await courses.order('desc').paginate({
+    return await courses.order("desc").paginate({
       cursor: cursor ?? null,
       numItems,
     });
+  },
+});
+
+/** Category IDs that have at least one published course (main or additional). Used for filter chips. */
+export const getCategoryIdsWithPublishedCourses = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const published = await ctx.db
+      .query("courses")
+      .withIndex("deletedAt_status", (q) =>
+        q.eq("deletedAt", undefined).eq("status", "published")
+      )
+      .collect();
+    const ids = new Set<Id<"categories">>();
+    for (const course of published) {
+      ids.add(course.category_id);
+      for (const id of course.additional_category_ids ?? []) {
+        ids.add(id);
+      }
+    }
+    return Array.from(ids);
   },
 });
 
@@ -187,10 +254,12 @@ export const createCourse = mutation({
     shortDescription: v.optional(v.string()),
     shortDescriptionAr: v.optional(v.string()),
     categoryId: v.id("categories"),
+    coachId: v.id("coaches"),
+    additionalCategoryIds: v.optional(v.array(v.id("categories"))),
   },
   handler: async (
     ctx,
-    { name, nameAr, shortDescription, shortDescriptionAr, categoryId }
+    { name, nameAr, shortDescription, shortDescriptionAr, categoryId, coachId, additionalCategoryIds: rawAdditionalIds }
   ) => {
     await requireUser(ctx);
 
@@ -200,6 +269,8 @@ export const createCourse = mutation({
       shortDescription,
       shortDescriptionAr,
       categoryId,
+      coachId,
+      additionalCategoryIds: rawAdditionalIds?.map(String) ?? [],
     });
 
     const category = await ctx.db.get(categoryId);
@@ -210,6 +281,21 @@ export const createCourse = mutation({
         message: "Selected category does not exist.",
       });
     }
+
+    // Validate coach exists and is not deleted
+    const coach = await ctx.db.get(coachId);
+    if (!coach || coach.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_COACH",
+        message: "Selected coach does not exist.",
+      });
+    }
+
+    const additionalCategoryIds = await validateAdditionalCategoryIds(
+      ctx,
+      categoryId,
+      rawAdditionalIds ?? [],
+    );
 
     const duplicates = await ctx.db
       .query("courses")
@@ -240,6 +326,9 @@ export const createCourse = mutation({
       short_description_ar: validated.shortDescriptionAr,
       slug,
       category_id: categoryId,
+      coach_id: coachId,
+      additional_category_ids:
+        additionalCategoryIds.length > 0 ? additionalCategoryIds : undefined,
       status: "draft",
       createdAt: now,
       lesson_count: 0,
@@ -253,8 +342,15 @@ export const createCourse = mutation({
       updatedAt: now,
     });
 
+    // Update category course count
     await ctx.db.patch(categoryId, {
       course_count: category.course_count + 1,
+    });
+
+    // Update coach course count
+    await ctx.db.patch(coachId, {
+      course_count: (coach.course_count ?? 0) + 1,
+      updatedAt: now,
     });
 
     await logActivity({
@@ -282,7 +378,15 @@ export const getCourse = query({
       return null;
     }
 
-    return course;
+    const pdfMaterialUrl =
+      course.pdf_material_storage_id != null
+        ? await ctx.storage.getUrl(course.pdf_material_storage_id)
+        : null;
+
+    return {
+      ...course,
+      pdfMaterialUrl,
+    };
   },
 });
 
@@ -296,6 +400,7 @@ export const updateCourse = mutation({
     description: v.optional(v.string()),
     descriptionAr: v.optional(v.string()),
     categoryId: v.id("categories"),
+    coachId: v.id("coaches"),
     status: v.union(
       v.literal("draft"),
       v.literal("published"),
@@ -304,6 +409,7 @@ export const updateCourse = mutation({
     trialVideoUrl: v.optional(v.string()),
     instructor: v.optional(v.string()),
     displayOrder: v.optional(v.number()),
+    additionalCategoryIds: v.optional(v.array(v.id("categories"))),
   },
   handler: async (
     ctx,
@@ -316,10 +422,12 @@ export const updateCourse = mutation({
       description,
       descriptionAr,
       categoryId,
+      coachId,
       status,
       trialVideoUrl,
       instructor,
       displayOrder,
+      additionalCategoryIds: rawAdditionalIds,
     }
   ) => {
     await requireUser(ctx);
@@ -341,11 +449,19 @@ export const updateCourse = mutation({
       description,
       descriptionAr,
       categoryId,
+      coachId,
       status,
       trialVideoUrl,
       instructor,
       displayOrder,
+      additionalCategoryIds: rawAdditionalIds?.map(String) ?? [],
     });
+
+    const additionalCategoryIds = await validateAdditionalCategoryIds(
+      ctx,
+      categoryId,
+      rawAdditionalIds ?? [],
+    );
 
     const targetCategory = await ctx.db.get(categoryId);
 
@@ -353,6 +469,15 @@ export const updateCourse = mutation({
       throw new ConvexError({
         code: "INVALID_CATEGORY",
         message: "Selected category does not exist.",
+      });
+    }
+
+    // Validate coach exists and is not deleted
+    const targetCoach = await ctx.db.get(coachId);
+    if (!targetCoach || targetCoach.deletedAt) {
+      throw new ConvexError({
+        code: "INVALID_COACH",
+        message: "Selected coach does not exist.",
       });
     }
 
@@ -398,6 +523,24 @@ export const updateCourse = mutation({
             "Published courses must include English and Arabic descriptions, cover images, and a trial video URL.",
         });
       }
+
+      const publishedLessons = await ctx.db
+        .query("lessons")
+        .withIndex("deletedAt_course_status", (q) =>
+          q
+            .eq("deletedAt", undefined)
+            .eq("course_id", id)
+            .eq("status", "published")
+        )
+        .collect();
+
+      if (publishedLessons.length === 0) {
+        throw new ConvexError({
+          code: "NO_PUBLISHED_LESSONS",
+          message:
+            "A course cannot be published until at least one lesson is published.",
+        });
+      }
     }
 
     // Check if status changed to/from "published" - recalculate duration if so
@@ -406,6 +549,9 @@ export const updateCourse = mutation({
       course.status === "published" || validated.status === "published"
     );
 
+    const now = Date.now();
+
+    // Handle category change
     if (course.category_id !== categoryId) {
       const currentCategory = await ctx.db.get(course.category_id);
 
@@ -420,6 +566,26 @@ export const updateCourse = mutation({
       });
     }
 
+    // Handle coach change
+    if (course.coach_id !== coachId) {
+      // Decrement old coach's course count if there was one
+      if (course.coach_id) {
+        const currentCoach = await ctx.db.get(course.coach_id);
+        if (currentCoach && currentCoach.deletedAt === undefined) {
+          await ctx.db.patch(course.coach_id, {
+            course_count: Math.max((currentCoach.course_count ?? 0) - 1, 0),
+            updatedAt: now,
+          });
+        }
+      }
+
+      // Increment new coach's course count
+      await ctx.db.patch(coachId, {
+        course_count: (targetCoach.course_count ?? 0) + 1,
+        updatedAt: now,
+      });
+    }
+
     await ctx.db.patch(id, {
       name: validated.name,
       name_ar: validated.nameAr,
@@ -428,12 +594,15 @@ export const updateCourse = mutation({
       description: validated.description,
       description_ar: validated.descriptionAr,
       category_id: categoryId,
+      coach_id: coachId,
+      additional_category_ids:
+        additionalCategoryIds.length > 0 ? additionalCategoryIds : undefined,
       status: validated.status,
       trial_video_url: validated.trialVideoUrl,
       instructor: validated.instructor,
       displayOrder: validated.displayOrder,
       slug,
-      updatedAt: Date.now(),
+      updatedAt: now,
     });
 
     // Recalculate course duration when status changes to/from "published"
@@ -457,6 +626,56 @@ export const generateImageUploadUrl = mutation({
     await requireUser(ctx);
 
     return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const updateCoursePdfMaterial = mutation({
+  args: {
+    id: v.id("courses"),
+    pdfStorageId: v.union(v.id("_storage"), v.null()),
+    pdfMaterialName: v.optional(v.string()),
+  },
+  handler: async (ctx, { id, pdfStorageId, pdfMaterialName }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(id);
+
+    if (!course || course.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Course not found.",
+      });
+    }
+
+    const patch: {
+      pdf_material_storage_id?: Id<"_storage">;
+      pdf_material_name?: string;
+      pdf_material_size?: number;
+      updatedAt: number;
+    } = {
+      updatedAt: Date.now(),
+    };
+
+    if (pdfStorageId === null) {
+      patch.pdf_material_storage_id = undefined;
+      patch.pdf_material_name = undefined;
+      patch.pdf_material_size = undefined;
+    } else {
+      patch.pdf_material_storage_id = pdfStorageId;
+      if (pdfMaterialName !== undefined) {
+        patch.pdf_material_name = pdfMaterialName;
+      }
+      const storageMeta = await ctx.db.system.get(pdfStorageId);
+      const size = storageMeta && "size" in storageMeta && typeof (storageMeta as { size: number }).size === "number"
+        ? (storageMeta as { size: number }).size
+        : undefined;
+      if (size !== undefined) {
+        patch.pdf_material_size = size;
+      }
+    }
+
+    await ctx.db.patch(id, patch);
+    return null;
   },
 });
 
@@ -560,12 +779,23 @@ export const deleteCourse = mutation({
       updatedAt: now,
     });
 
+    // Update category course count
     const category = await ctx.db.get(course.category_id);
-
     if (category && category.deletedAt === undefined) {
       await ctx.db.patch(course.category_id, {
         course_count: Math.max(category.course_count - 1, 0),
       });
+    }
+
+    // Update coach course count
+    if (course.coach_id) {
+      const coach = await ctx.db.get(course.coach_id);
+      if (coach && coach.deletedAt === undefined) {
+        await ctx.db.patch(course.coach_id, {
+          course_count: Math.max((coach.course_count ?? 0) - 1, 0),
+          updatedAt: now,
+        });
+      }
     }
 
     await logActivity({
@@ -631,6 +861,17 @@ export const restoreCourse = mutation({
     await ctx.db.patch(course.category_id, {
       course_count: category.course_count + 1,
     });
+
+    // Update coach count if there is a coach
+    if (course.coach_id) {
+      const coach = await ctx.db.get(course.coach_id);
+      if (coach && coach.deletedAt === undefined) {
+        await ctx.db.patch(course.coach_id, {
+          course_count: (coach.course_count ?? 0) + 1,
+          updatedAt: now,
+        });
+      }
+    }
 
     await logActivity({
       ctx,

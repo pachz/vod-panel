@@ -32,22 +32,20 @@ const DEFAULT_PROGRESS: CourseProgress = {
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-const formatDuration = (minutes: number | undefined | null, t: (key: string) => string) => {
-  if (minutes === undefined || minutes === null) {
+/** Duration is stored in seconds; format for display. */
+const formatDuration = (seconds: number | undefined | null, t: (key: string) => string) => {
+  if (seconds === undefined || seconds === null) {
     return "—";
   }
-
-  if (minutes < 60) {
-    return `${minutes}m`;
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
   }
-
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-
+  const hours = Math.floor(totalMinutes / 60);
+  const remainder = totalMinutes % 60;
   if (remainder === 0) {
     return `${hours}h`;
   }
-
   return `${hours}h ${remainder}m`;
 };
 
@@ -392,6 +390,8 @@ const CoursePreview = () => {
             isRTL={isRTL}
             t={t}
             formatDuration={formatDuration}
+            pdfMaterialUrl={"pdfMaterialUrl" in course ? (course as { pdfMaterialUrl: string | null }).pdfMaterialUrl : undefined}
+            pdfMaterialName={course.pdf_material_name}
           />
         </div>
       </div>

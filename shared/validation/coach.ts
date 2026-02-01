@@ -9,6 +9,17 @@ const trimmedString = (label: string, max: number) =>
     .min(1, `${label} is required.`)
     .max(max, `${label} must be ${max} characters or less.`);
 
+// Schema for creating a new coach (minimal fields)
+export const coachCreateSchema = z.object({
+  name: trimmedString("Name", 64),
+  nameAr: trimmedString("Arabic name", 64),
+  description: trimmedString("Description", 1024),
+  descriptionAr: trimmedString("Arabic description", 1024),
+});
+
+export type CoachCreateInput = z.infer<typeof coachCreateSchema>;
+
+// Schema for updating a coach (all fields)
 export const coachInputSchema = z.object({
   name: trimmedString("Name", 64),
   nameAr: trimmedString("Arabic name", 64),

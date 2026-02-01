@@ -47,6 +47,8 @@ export default defineSchema({
     short_description_ar: v.optional(v.string()),
     slug: v.string(),
     category_id: v.id("categories"),
+    additional_category_ids: v.optional(v.array(v.id("categories"))),
+    coach_id: v.optional(v.id("coaches")),
     trial_video_url: v.optional(v.string()),
     duration: v.optional(v.number()),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
@@ -55,6 +57,9 @@ export default defineSchema({
     instructor: v.optional(v.string()),
     lesson_count: v.number(),
     displayOrder: v.optional(v.number()),
+    pdf_material_storage_id: v.optional(v.id("_storage")),
+    pdf_material_name: v.optional(v.string()),
+    pdf_material_size: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.optional(v.number()),
     deletedAt: v.optional(v.number()),
@@ -64,6 +69,7 @@ export default defineSchema({
     .index("deletedAt_category_status", ["deletedAt", "category_id", "status"])
     .index("deletedAt_status", ["deletedAt", "status"])
     .index("deletedAt", ["deletedAt"])
+    .index("coach_id", ["coach_id", "deletedAt"])
     .searchIndex("search_name", {
       searchField: "name",
       filterFields: ["deletedAt", "category_id", "status"],
@@ -115,11 +121,15 @@ export default defineSchema({
     description: v.string(),
     description_ar: v.string(),
     rating: v.number(),
-    profile_image_url: v.string(),
+    profile_image_url: v.optional(v.string()),
     profile_thumbnail_url: v.optional(v.string()),
+    course_count: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
-  }),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("deletedAt", ["deletedAt"])
+    .index("name_deletedAt", ["name", "deletedAt"]),
 
   activityLogs: defineTable({
     entityType: v.union(

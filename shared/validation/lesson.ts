@@ -17,21 +17,6 @@ const optionalUrl = z.preprocess((value) => {
   return trimmed.length === 0 ? undefined : trimmed;
 }, z.string().url("Please enter a valid URL.").max(2048, "URL must be 2048 characters or less.").optional());
 
-const optionalDuration = z.preprocess((value) => {
-  if (typeof value === "number") {
-    return value;
-  }
-  if (typeof value !== "string") {
-    return value;
-  }
-  const trimmed = value.trim();
-  if (trimmed.length === 0) {
-    return undefined;
-  }
-  const parsed = Number(trimmed);
-  return Number.isFinite(parsed) ? parsed : value;
-}, z.number().int().min(0, "Duration must be 0 or greater.").max(99999, "Duration must be 99,999 minutes or less.").optional());
-
 export const lessonInputSchema = z.object({
   title: z
     .string({
@@ -63,14 +48,12 @@ export const lessonInputSchema = z.object({
     })
     .trim()
     .min(1, "Course is required."),
-  duration: optionalDuration,
   type: z.enum(["video", "article"]).default("video"),
 });
 
 export const lessonUpdateSchema = lessonInputSchema.extend({
   status: z.enum(["draft", "published", "archived"]),
   videoUrl: optionalUrl,
-  duration: optionalDuration,
   description: optionalTrimmedString(
     4096,
     "Description must be 4096 characters or less.",
@@ -96,17 +79,6 @@ export const lessonUpdateSchema = lessonInputSchema.extend({
     "Arabic body must be 100000 characters or less.",
   ),
 }).refine(
-  (data) => {
-    if (data.status === "published") {
-      return data.duration !== undefined && data.duration !== null;
-    }
-    return true;
-  },
-  {
-    message: "Duration is required for published lessons.",
-    path: ["duration"],
-  }
-).refine(
   (data) => {
     if (data.status === "published") {
       return data.videoUrl !== undefined && data.videoUrl !== null && data.videoUrl.trim().length > 0;

@@ -1,4 +1,6 @@
+import { FileText, Download } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import { renderMarkdown } from "./MarkdownRenderer";
 import type { Doc } from "../../../convex/_generated/dataModel";
@@ -11,6 +13,8 @@ type AboutCourseCardProps = {
   isRTL: boolean;
   t: (key: string) => string;
   formatDuration: (minutes: number | undefined | null, t: (key: string) => string) => string;
+  pdfMaterialUrl?: string | null;
+  pdfMaterialName?: string | null;
 };
 
 export const AboutCourseCard = ({
@@ -19,7 +23,11 @@ export const AboutCourseCard = ({
   isRTL,
   t,
   formatDuration,
+  pdfMaterialUrl,
+  pdfMaterialName,
 }: AboutCourseCardProps) => {
+  const hasPdfMaterial = !!pdfMaterialUrl && !!pdfMaterialName;
+
   return (
     <Card className="border border-border/60 dark:border-transparent bg-card/70 shadow-sm">
       <CardHeader>
@@ -27,7 +35,7 @@ export const AboutCourseCard = ({
           {t("aboutThisCourse")}
         </CardTitle>
       </CardHeader>
-      <CardContent className="space-y-3 text-sm text-muted-foreground">
+      <CardContent className="space-y-4 text-sm text-muted-foreground">
         {renderMarkdown(courseShortDescription, isRTL)}
         <div className="flex flex-wrap gap-4 text-xs uppercase tracking-wide text-muted-foreground/80">
           <span>
@@ -40,6 +48,35 @@ export const AboutCourseCard = ({
             </span>
           </span>
         </div>
+        {hasPdfMaterial && (
+          <div
+            className={cn(
+              "rounded-lg border border-border/60 bg-muted/30 p-3",
+              isRTL ? "text-right" : "text-left",
+            )}
+          >
+            <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+              {t("courseMaterial")}
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full gap-2 font-medium"
+              asChild
+            >
+              <a
+                href={pdfMaterialUrl}
+                download={pdfMaterialName}
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                <FileText className="h-4 w-4 shrink-0" />
+                <span className="truncate">{pdfMaterialName}</span>
+                <Download className="h-4 w-4 shrink-0" />
+              </a>
+            </Button>
+          </div>
+        )}
       </CardContent>
     </Card>
   );

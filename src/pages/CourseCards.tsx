@@ -15,22 +15,20 @@ import { markdownToPlainText } from "@/lib/utils";
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
 
-const formatDuration = (minutes: number | undefined) => {
-  if (minutes === undefined || minutes === null) {
+/** Duration is stored in seconds; format for display. */
+const formatDuration = (seconds: number | undefined) => {
+  if (seconds === undefined || seconds === null) {
     return "0m";
   }
-
-  if (minutes < 60) {
-    return `${minutes}m`;
+  const totalMinutes = Math.max(1, Math.round(seconds / 60));
+  if (totalMinutes < 60) {
+    return `${totalMinutes}m`;
   }
-
-  const hours = Math.floor(minutes / 60);
-  const remainder = minutes % 60;
-
+  const hours = Math.floor(totalMinutes / 60);
+  const remainder = totalMinutes % 60;
   if (remainder === 0) {
     return `${hours}h`;
   }
-
   return `${hours}h ${remainder}m`;
 };
 
@@ -56,6 +54,9 @@ const CourseCards = () => {
   });
 
   const categories = useQuery(api.category.listCategories);
+  const categoryIdsWithPublishedCourses = useQuery(
+    api.course.getCategoryIdsWithPublishedCourses
+  );
 
   const [searchInput, setSearchInput] = useState(searchFilter || "");
   const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -116,10 +117,13 @@ const CourseCards = () => {
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
 
-  const filterableCategories = useMemo<CategoryDoc[]>(
-    () => categoryList.filter((category) => (category.course_count ?? 0) > 0),
-    [categoryList],
-  );
+  const filterableCategories = useMemo<CategoryDoc[]>(() => {
+    const idsWithCourses = new Set(categoryIdsWithPublishedCourses ?? []);
+    return categoryList.filter(
+      (category) =>
+        idsWithCourses.has(category._id) || category._id === categoryFilter
+    );
+  }, [categoryList, categoryIdsWithPublishedCourses, categoryFilter]);
   const isLoading = courses === undefined;
 
   const categoryNameById = useMemo(() => {
@@ -224,12 +228,23 @@ const CourseCards = () => {
                 </div>
               )}
               <CardHeader className="space-y-3">
-                <Badge 
-                  variant="secondary" 
-                  className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
-                >
-                  {categoryNameById[course.category_id] ?? t("uncategorized")}
-                </Badge>
+                <div className="flex flex-wrap gap-1.5">
+                  <Badge
+                    variant="secondary"
+                    className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
+                  >
+                    {categoryNameById[course.category_id] ?? t("uncategorized")}
+                  </Badge>
+                  {(course.additional_category_ids ?? []).map((id) => (
+                    <Badge
+                      key={id}
+                      variant="outline"
+                      className="w-fit rounded-full border-muted-foreground/30 text-muted-foreground"
+                    >
+                      {categoryNameById[id] ?? t("uncategorized")}
+                    </Badge>
+                  ))}
+                </div>
                 <CardTitle className="text-lg font-bold leading-tight">
                   {language === "ar" ? course.name_ar : course.name}
                 </CardTitle>

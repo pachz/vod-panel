@@ -2,6 +2,12 @@ import { internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 
+type AdditionalCategory = {
+  id: Id<"categories">;
+  nameEn: string;
+  nameAr: string;
+};
+
 type LandingCourse = {
   id: Id<"courses">;
   slug: string;
@@ -13,6 +19,8 @@ type LandingCourse = {
   shortDescriptionAr: string;
   categoryNameEn: string;
   categoryNameAr: string;
+  additionalCategoryIds: Array<Id<"categories">>;
+  additionalCategories: Array<AdditionalCategory>;
   durationMinutes: number;
   coverImageUrl: string;
   updatedAt: number;
@@ -25,7 +33,7 @@ type LandingCourseLesson = {
   durationMinutes: number;
 };
 
-type LandingCourseDetail = LandingCourse & {
+type LandingCourseDetail = Omit<LandingCourse, "shortDescriptionEn" | "shortDescriptionAr"> & {
   shortDescriptionEn: string;
   shortDescriptionAr: string;
   instructor: string;
@@ -42,7 +50,7 @@ type LandingCoachProfile = {
   descriptionEn: string;
   descriptionAr: string;
   rating: number;
-  profileImageUrl: string;
+  profileImageUrl: string | null;
   profileThumbnailUrl: string | null;
   lastUpdatedAt: number;
 };
@@ -63,6 +71,14 @@ export const listLandingCourses = internalQuery({
       shortDescriptionAr: v.string(),
       categoryNameEn: v.string(),
       categoryNameAr: v.string(),
+      additionalCategoryIds: v.array(v.id("categories")),
+      additionalCategories: v.array(
+        v.object({
+          id: v.id("categories"),
+          nameEn: v.string(),
+          nameAr: v.string(),
+        }),
+      ),
       durationMinutes: v.number(),
       coverImageUrl: v.string(),
       updatedAt: v.number(),
@@ -120,8 +136,30 @@ export const listLandingCourses = internalQuery({
       }
     }
 
+    const allAdditionalIds = Array.from(
+      new Set<Id<"categories">>(
+        sortedCourses.flatMap((c) => c.additional_category_ids ?? []),
+      ),
+    );
+    for (const categoryId of allAdditionalIds) {
+      if (!categoryMap.has(categoryId)) {
+        const category = await ctx.db.get(categoryId);
+        if (category && category.deletedAt === undefined) {
+          categoryMap.set(categoryId, category);
+        }
+      }
+    }
+
     return sortedCourses.map((course) => {
       const category = categoryMap.get(course.category_id);
+      const additionalCategoryIds = course.additional_category_ids ?? [];
+      const additionalCategories: Array<AdditionalCategory> = additionalCategoryIds
+        .map((catId) => {
+          const cat = categoryMap.get(catId);
+          if (!cat) return null;
+          return { id: cat._id, nameEn: cat.name, nameAr: cat.name_ar };
+        })
+        .filter((c): c is AdditionalCategory => c !== null);
 
       return {
         id: course._id,
@@ -134,7 +172,9 @@ export const listLandingCourses = internalQuery({
         shortDescriptionAr: course.short_description_ar ?? "",
         categoryNameEn: category?.name ?? "",
         categoryNameAr: category?.name_ar ?? "",
-        durationMinutes: course.duration ?? 0,
+        additionalCategoryIds,
+        additionalCategories,
+        durationMinutes: Math.round((course.duration ?? 0) / 60),
         coverImageUrl:
           course.banner_image_url ??
           course.thumbnail_image_url ??
@@ -162,11 +202,20 @@ export const getLandingCourseBySlug = internalQuery({
       shortDescriptionAr: v.string(),
       categoryNameEn: v.string(),
       categoryNameAr: v.string(),
+      additionalCategoryIds: v.array(v.id("categories")),
+      additionalCategories: v.array(
+        v.object({
+          id: v.id("categories"),
+          nameEn: v.string(),
+          nameAr: v.string(),
+        }),
+      ),
       durationMinutes: v.number(),
       coverImageUrl: v.string(),
       thumbnailImageUrl: v.string(),
       instructor: v.string(),
       trialVideoUrl: v.string(),
+      coachId: v.union(v.id("coaches"), v.null()),
       lessons: v.array(
         v.object({
           id: v.id("lessons"),
@@ -178,7 +227,7 @@ export const getLandingCourseBySlug = internalQuery({
       updatedAt: v.number(),
     }),
   ),
-  handler: async (ctx, args): Promise<LandingCourseDetail | null> => {
+  handler: async (ctx, args): Promise<(LandingCourseDetail & { coachId: Id<"coaches"> | null }) | null> => {
     const courses = await ctx.db
       .query("courses")
       .withIndex("slug", (q) => q.eq("slug", args.slug))
@@ -194,6 +243,16 @@ export const getLandingCourseBySlug = internalQuery({
     }
 
     const category = await ctx.db.get(course.category_id);
+    const additionalCategoryIds = course.additional_category_ids ?? [];
+    const additionalCategories: Array<AdditionalCategory> = await Promise.all(
+      additionalCategoryIds.map(async (catId) => {
+        const cat = await ctx.db.get(catId);
+        if (!cat || cat.deletedAt !== undefined) {
+          return null;
+        }
+        return { id: cat._id, nameEn: cat.name, nameAr: cat.name_ar };
+      }),
+    ).then((arr) => arr.filter((c): c is AdditionalCategory => c !== null));
 
     const lessons = await ctx.db
       .query("lessons")
@@ -218,19 +277,81 @@ export const getLandingCourseBySlug = internalQuery({
       shortDescriptionAr: course.short_description_ar ?? "",
       categoryNameEn: category?.name ?? "",
       categoryNameAr: category?.name_ar ?? "",
-      durationMinutes: course.duration ?? 0,
+      additionalCategoryIds,
+      additionalCategories,
+      durationMinutes: Math.round((course.duration ?? 0) / 60),
       coverImageUrl:
         course.banner_image_url ?? course.thumbnail_image_url ?? "",
       thumbnailImageUrl: course.thumbnail_image_url ?? "",
       instructor: course.instructor ?? "",
       trialVideoUrl: course.trial_video_url ?? "",
+      coachId: course.coach_id ?? null,
       updatedAt: course.updatedAt ?? course.createdAt,
       lessons: lessons.map((lesson) => ({
         id: lesson._id,
         titleEn: lesson.title,
         titleAr: lesson.title_ar,
-        durationMinutes: lesson.duration ?? 0,
+        durationMinutes: Math.round((lesson.duration ?? 0) / 60),
       })),
+    };
+  },
+});
+
+export const getCoachById = internalQuery({
+  args: {
+    coachId: v.id("coaches"),
+  },
+  returns: v.union(
+    v.null(),
+    v.object({
+      _id: v.id("coaches"),
+      _creationTime: v.number(),
+      nameEn: v.string(),
+      nameAr: v.string(),
+      expertiseEn: v.string(),
+      expertiseAr: v.string(),
+      descriptionEn: v.string(),
+      descriptionAr: v.string(),
+      rating: v.number(),
+      profileImageUrl: v.union(v.null(), v.string()),
+      profileThumbnailUrl: v.union(v.null(), v.string()),
+      courseCount: v.union(v.number(), v.null()),
+      lastUpdatedAt: v.number(),
+    }),
+  ),
+  handler: async (ctx, args): Promise<{
+    _id: Id<"coaches">;
+    _creationTime: number;
+    nameEn: string;
+    nameAr: string;
+    expertiseEn: string;
+    expertiseAr: string;
+    descriptionEn: string;
+    descriptionAr: string;
+    rating: number;
+    profileImageUrl: string | null;
+    profileThumbnailUrl: string | null;
+    courseCount: number | null;
+    lastUpdatedAt: number;
+  } | null> => {
+    const coach = await ctx.db.get(args.coachId);
+    if (!coach || coach.deletedAt !== undefined) {
+      return null;
+    }
+    return {
+      _id: coach._id,
+      _creationTime: coach._creationTime,
+      nameEn: coach.name,
+      nameAr: coach.name_ar,
+      expertiseEn: coach.expertise,
+      expertiseAr: coach.expertise_ar,
+      descriptionEn: coach.description,
+      descriptionAr: coach.description_ar,
+      rating: coach.rating,
+      profileImageUrl: coach.profile_image_url ?? null,
+      profileThumbnailUrl: coach.profile_thumbnail_url ?? null,
+      courseCount: coach.course_count ?? null,
+      lastUpdatedAt: coach.updatedAt,
     };
   },
 });
@@ -247,7 +368,7 @@ export const getFeaturedCoach = internalQuery({
       descriptionEn: v.string(),
       descriptionAr: v.string(),
       rating: v.number(),
-      profileImageUrl: v.string(),
+      profileImageUrl: v.union(v.null(), v.string()),
       profileThumbnailUrl: v.union(v.null(), v.string()),
       lastUpdatedAt: v.number(),
     }),
@@ -266,7 +387,7 @@ export const getFeaturedCoach = internalQuery({
       descriptionEn: coach.description,
       descriptionAr: coach.description_ar,
       rating: coach.rating,
-      profileImageUrl: coach.profile_image_url,
+      profileImageUrl: coach.profile_image_url ?? null,
       profileThumbnailUrl: coach.profile_thumbnail_url ?? null,
       lastUpdatedAt: coach.updatedAt,
     };

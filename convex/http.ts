@@ -319,7 +319,11 @@ http.route({
         });
       }
 
-      const coach = await ctx.runQuery(internal.landing.getFeaturedCoach, {});
+      const coach = course.coachId
+        ? await ctx.runQuery(internal.landing.getCoachById, {
+            coachId: course.coachId,
+          })
+        : null;
       const paymentSettings = await ctx.runQuery(internal.paymentInternal.getPaymentSettings, {});
 
       const body = {

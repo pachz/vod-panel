@@ -18,7 +18,8 @@ import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
 import UserInfo from "@/pages/UserInfo";
 import Payments from "@/pages/Payments";
-import Coach from "@/pages/Coach";
+import Coaches from "@/pages/Coaches";
+import CoachDetail from "@/pages/CoachDetail";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -211,7 +212,8 @@ const App = () => (
             <Route path="/lessons" element={<Lessons />} />
             <Route path="/lessons/:id" element={<LessonDetail />} />
             <Route path="/video-panel" element={<VideoPanel />} />
-            <Route path="/coach" element={<Coach />} />
+            <Route path="/coaches" element={<Coaches />} />
+            <Route path="/coaches/:id" element={<CoachDetail />} />
             <Route path="/users" element={<Users />} />
             <Route path="/users/:id/info" element={<UserInfo />} />
           </Route>

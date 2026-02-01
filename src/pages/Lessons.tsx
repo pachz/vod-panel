@@ -108,7 +108,6 @@ const Lessons = () => {
     title: "",
     titleAr: "",
     courseId: courseFilter || "",
-    duration: "",
   });
 
   const courseList = useMemo<CourseDoc[]>(() => {
@@ -187,7 +186,6 @@ const Lessons = () => {
       shortReview: "",
       shortReviewAr: "",
       courseId: formValues.courseId,
-      duration: formValues.duration,
       type: "video",
     });
 
@@ -212,7 +210,6 @@ const Lessons = () => {
       shortReview,
       shortReviewAr,
       courseId,
-      duration,
     } = validation.data;
 
     setIsCreating(true);
@@ -224,7 +221,6 @@ const Lessons = () => {
         shortReview,
         shortReviewAr,
         courseId: courseId as Id<"courses">,
-        duration,
         type: "video",
       });
 
@@ -234,7 +230,6 @@ const Lessons = () => {
         title: "",
         titleAr: "",
         courseId: courseFilter || "",
-        duration: "",
       });
       navigate(`/lessons/${lessonId}`);
     } catch (error) {
@@ -271,9 +266,17 @@ const Lessons = () => {
     return course?.name ?? "Unknown";
   };
 
-  const formatDuration = (minutes: number | undefined) => {
-    if (!minutes) return "—";
-    return `${minutes} min`;
+  /** Duration is stored in seconds; format as time for table (0:10 or 01:10:10). */
+  const formatDurationTime = (seconds: number | undefined | null) => {
+    if (seconds === undefined || seconds === null) return "—";
+    const pad = (n: number) => (n < 10 ? "0" + n : String(n));
+    const s = Math.floor(seconds % 60);
+    const m = Math.floor((seconds / 60) % 60);
+    const h = Math.floor(seconds / 3600);
+    if (h > 0) {
+      return `${pad(h)}:${pad(m)}:${pad(s)}`;
+    }
+    return `${m}:${pad(s)}`;
   };
 
   const courseFilterOptions = useMemo(() => {
@@ -404,7 +407,7 @@ const Lessons = () => {
       },
       {
         header: "Duration",
-        render: (lesson) => formatDuration(lesson.duration),
+        render: (lesson) => formatDurationTime(lesson.duration),
       },
       {
         header: "Status",
@@ -492,7 +495,6 @@ const Lessons = () => {
                   title: "",
                   titleAr: "",
                   courseId: courseFilter || "",
-                  duration: "",
                 });
               }}
               variant="cta"
@@ -546,30 +548,6 @@ const Lessons = () => {
                   />
                 </div>
               )}
-
-              <div className="space-y-2">
-                <Label htmlFor="duration">Duration (minutes)</Label>
-                <Input
-                  id="duration"
-                  value={formValues.duration}
-                  onChange={(e) => {
-                    const rawValue = e.target.value;
-                    const sanitizedValue = rawValue.replace(/\D/g, "");
-                    const maxValue = 99999;
-                    const clampedValue = sanitizedValue === "" 
-                      ? "" 
-                      : Math.min(Number(sanitizedValue), maxValue).toString();
-                    setFormValues((prev) => ({
-                      ...prev,
-                      duration: clampedValue,
-                    }));
-                  }}
-                  inputMode="numeric"
-                  pattern="^[0-9]*$"
-                  placeholder="e.g., 15"
-                  max={99999}
-                />
-              </div>
 
               <Button
                 type="submit"

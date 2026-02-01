@@ -44,6 +44,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
@@ -53,17 +54,25 @@ import { RichTextarea } from "@/components/RichTextarea";
 import { VideoUrlInput } from "@/components/VideoUrlInput";
 import { courseUpdateSchema } from "../../shared/validation/course";
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
+import { PdfDropzone, type PdfUploadState } from "@/components/PdfDropzone";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
+type CoachDoc = Doc<"coaches">;
 type LessonDoc = Doc<"lessons">;
 
-const formatDuration = (minutes: number | undefined) => {
-  if (minutes === undefined || minutes === null) {
+/** Duration is stored in seconds; format for display. */
+const formatDuration = (seconds: number | undefined) => {
+  if (seconds === undefined || seconds === null) {
     return "—";
   }
-
-  return `${minutes} min`;
+  if (seconds < 3600) {
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    return `${minutes} min`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
 type FormValues = {
@@ -74,6 +83,8 @@ type FormValues = {
   description: string;
   descriptionAr: string;
   categoryId: string;
+  coachId: string;
+  additionalCategoryIds: string[];
   status: CourseDoc["status"];
   trialVideoUrl: string;
   displayOrder: string;
@@ -87,6 +98,8 @@ const initialFormValues: FormValues = {
   description: "",
   descriptionAr: "",
   categoryId: "",
+  coachId: "",
+  additionalCategoryIds: [],
   status: "draft",
   trialVideoUrl: "",
   displayOrder: "",
@@ -187,6 +200,7 @@ const CourseDetail = () => {
     courseId ? { id: courseId } : undefined,
   );
   const categories = useQuery(api.category.listCategories);
+  const coaches = useQuery(api.coach.listCoaches);
   const lessons = useQuery(
     api.lesson.listLessons,
     courseId ? { courseId, limit: 100 } : undefined,
@@ -196,6 +210,7 @@ const CourseDetail = () => {
   const deleteCourse = useMutation(api.course.deleteCourse);
   const generateImageUploadUrl = useMutation(api.course.generateImageUploadUrl);
   const updateCourseImages = useMutation(api.course.updateCourseImages);
+  const updateCoursePdfMaterial = useMutation(api.course.updateCoursePdfMaterial);
   const generateThumbnail = useAction(api.image.generateThumbnail);
   const convertToJpeg = useAction(api.image.convertToJpeg);
   const reorderLessons = useMutation(api.lesson.reorderLessons);
@@ -215,14 +230,21 @@ const CourseDetail = () => {
   const coverUploadResetTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const pendingCoverUrlRef = useRef<string | null>(null);
   const previousCourseIdRef = useRef<Id<"courses"> | undefined>(undefined);
+  const [pdfUploadState, setPdfUploadState] = useState<PdfUploadState>({
+    status: "idle",
+    progress: 0,
+  });
+  const [lastUploadedPdfName, setLastUploadedPdfName] = useState<string | null>(null);
+  const pdfUploadPromiseRef = useRef<Promise<void> | null>(null);
 
   const categoryList = useMemo<CategoryDoc[]>(() => categories ?? [], [categories]);
+  const coachList = useMemo<CoachDoc[]>(() => coaches ?? [], [coaches]);
   const lessonList = useMemo<LessonDoc[]>(() => {
     if (!lessons) return [];
     // Extract page from paginated result
     return lessons.page ?? [];
   }, [lessons]);
-  const isLoading = course === undefined || categories === undefined;
+  const isLoading = course === undefined || categories === undefined || coaches === undefined;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -295,6 +317,8 @@ const CourseDetail = () => {
       description: course.description ?? "",
       descriptionAr: course.description_ar ?? "",
       categoryId: course.category_id,
+      coachId: course.coach_id ?? "",
+      additionalCategoryIds: (course.additional_category_ids ?? []).map(String),
       status: course.status,
       trialVideoUrl: course.trial_video_url ?? "",
       displayOrder: course.displayOrder?.toString() ?? "",
@@ -368,6 +392,18 @@ const CourseDetail = () => {
       }
     };
   }, []);
+
+  // Clear PDF "just uploaded" state once course refetches with the new PDF
+  useEffect(() => {
+    if (!lastUploadedPdfName) return;
+    const hasPdfFromServer =
+      course &&
+      (course.pdf_material_name != null || ("pdfMaterialUrl" in course && (course as CourseDoc & { pdfMaterialUrl: string | null }).pdfMaterialUrl != null));
+    if (hasPdfFromServer) {
+      setLastUploadedPdfName(null);
+      setPdfUploadState((s) => (s.status === "success" ? { status: "idle", progress: 0 } : s));
+    }
+  }, [course, lastUploadedPdfName]);
 
   const hasFormChanges = useMemo(() => {
     if (!initialValues) {
@@ -605,6 +641,8 @@ const CourseDetail = () => {
       description: formValues.description,
       descriptionAr: formValues.descriptionAr,
       categoryId: formValues.categoryId,
+      coachId: formValues.coachId,
+      additionalCategoryIds: formValues.additionalCategoryIds,
       status: formValues.status,
       trialVideoUrl: formValues.trialVideoUrl,
       displayOrder: formValues.displayOrder,
@@ -612,7 +650,7 @@ const CourseDetail = () => {
 
     if (!validation.success) {
       // Prioritize required field errors over optional field errors
-      const requiredFieldPaths = ["name", "nameAr", "shortDescription", "shortDescriptionAr", "categoryId"];
+      const requiredFieldPaths = ["name", "nameAr", "shortDescription", "shortDescriptionAr", "categoryId", "coachId"];
       const errors = validation.error.errors;
       
       // Find first error for a required field, or fall back to first error
@@ -633,6 +671,8 @@ const CourseDetail = () => {
       description,
       descriptionAr,
       categoryId,
+      coachId,
+      additionalCategoryIds,
       status,
       trialVideoUrl,
       instructor,
@@ -669,6 +709,10 @@ const CourseDetail = () => {
         description,
         descriptionAr,
         categoryId: categoryId as Id<"categories">,
+        coachId: coachId as Id<"coaches">,
+        additionalCategoryIds: (additionalCategoryIds ?? []).map(
+          (id) => id as Id<"categories">,
+        ),
         status,
         trialVideoUrl,
         displayOrder,
@@ -683,6 +727,8 @@ const CourseDetail = () => {
         description: description ?? "",
         descriptionAr: descriptionAr ?? "",
         categoryId,
+        coachId,
+        additionalCategoryIds: (additionalCategoryIds ?? []).map(String),
         status,
         trialVideoUrl: trialVideoUrl ?? "",
         displayOrder: displayOrder?.toString() ?? "",
@@ -732,6 +778,56 @@ const CourseDetail = () => {
     startImageUpload(file);
   };
 
+  const startPdfUpload = (file: File) => {
+    if (!courseId) {
+      toast.error("Invalid course ID.");
+      return;
+    }
+    setPdfUploadState({ status: "uploading", progress: 0 });
+    const task = (async () => {
+      try {
+        const uploadUrl = await generateImageUploadUrl();
+        const { storageId } = await uploadFileWithProgress(
+          uploadUrl,
+          file,
+          (progress) => setPdfUploadState((s) => ({ ...s, status: "uploading", progress })),
+        );
+        await updateCoursePdfMaterial({
+          id: courseId,
+          pdfStorageId: storageId as Id<"_storage">,
+          pdfMaterialName: file.name,
+        });
+        setLastUploadedPdfName(file.name);
+        setPdfUploadState({ status: "success", progress: 1 });
+        toast.success("PDF material uploaded.");
+      } catch (error) {
+        console.error(error);
+        const message = getErrorMessage(error);
+        setPdfUploadState({ status: "error", progress: 0, errorMessage: message });
+        toast.error(message);
+      } finally {
+        pdfUploadPromiseRef.current = null;
+      }
+    })();
+    pdfUploadPromiseRef.current = task;
+  };
+
+  const handlePdfSelect = (file: File) => {
+    startPdfUpload(file);
+  };
+
+  const handleRemovePdf = async () => {
+    if (!courseId) return;
+    try {
+      setLastUploadedPdfName(null);
+      await updateCoursePdfMaterial({ id: courseId, pdfStorageId: null });
+      toast.success("PDF material removed.");
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error));
+    }
+  };
+
 
   if (!courseId) {
     return (
@@ -743,7 +839,7 @@ const CourseDetail = () => {
     );
   }
 
-  if (course === undefined || categories === undefined) {
+  if (course === undefined || categories === undefined || coaches === undefined) {
     return (
       <div className="flex h-full items-center justify-center">
         <p className="text-sm text-muted-foreground">Loading course…</p>
@@ -842,7 +938,13 @@ const CourseDetail = () => {
                 <Select
                   value={formValues.categoryId}
                   onValueChange={(value) =>
-                    setFormValues((prev) => ({ ...prev, categoryId: value }))
+                    setFormValues((prev) => ({
+                      ...prev,
+                      categoryId: value,
+                      additionalCategoryIds: prev.additionalCategoryIds.filter(
+                        (id) => id !== value,
+                      ),
+                    }))
                   }
                 >
                   <SelectTrigger>
@@ -857,6 +959,29 @@ const CourseDetail = () => {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor="coachId">Coach</Label>
+                <Select
+                  value={formValues.coachId}
+                  onValueChange={(value) =>
+                    setFormValues((prev) => ({ ...prev, coachId: value }))
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select coach" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {coachList.map((coach) => (
+                      <SelectItem key={coach._id} value={coach._id}>
+                        {coach.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>
                 <Select
@@ -876,6 +1001,53 @@ const CourseDetail = () => {
                 </Select>
               </div>
             </div>
+
+            {formValues.categoryId && (
+              <div className="space-y-2">
+                <Label>Additional categories</Label>
+                <p className="text-xs text-muted-foreground">
+                  Assign this course to other categories (excluding the main category).
+                </p>
+                <div className="flex flex-wrap gap-3 rounded-md border bg-muted/30 p-3">
+                  {categoryList
+                    .filter((cat) => cat._id !== formValues.categoryId)
+                    .map((category) => (
+                      <label
+                        key={category._id}
+                        className="flex cursor-pointer items-center gap-2"
+                      >
+                        <Checkbox
+                          checked={formValues.additionalCategoryIds.includes(
+                            category._id,
+                          )}
+                          onCheckedChange={(checked) => {
+                            setFormValues((prev) => {
+                              const ids = prev.additionalCategoryIds.filter(
+                                (id) => id !== category._id,
+                              );
+                              if (checked) {
+                                ids.push(category._id);
+                              }
+                              return {
+                                ...prev,
+                                additionalCategoryIds: ids,
+                              };
+                            });
+                          }}
+                        />
+                        <span className="text-sm">{category.name}</span>
+                      </label>
+                    ))}
+                  {categoryList.filter(
+                    (cat) => cat._id !== formValues.categoryId,
+                  ).length === 0 && (
+                    <span className="text-sm text-muted-foreground">
+                      No other categories available.
+                    </span>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
@@ -984,7 +1156,7 @@ const CourseDetail = () => {
                 maxLength={2048}
               />
               <div className="space-y-2">
-                <Label>Duration (minutes)</Label>
+                <Label>Duration</Label>
                 <div className="rounded-md border bg-muted/30 px-3 py-2 text-sm text-muted-foreground">
                   {course.duration !== undefined && course.duration !== null
                     ? formatDuration(course.duration)
@@ -1007,6 +1179,30 @@ const CourseDetail = () => {
                 uploadState={coverUploadState}
                 onRetry={
                   coverImageFile ? () => startImageUpload(coverImageFile) : undefined
+                }
+                disabled={isSaving}
+              />
+            </div>
+
+            <Separator />
+
+            <div className="max-w-2xl">
+              <PdfDropzone
+                id="pdfMaterial"
+                label="PDF material"
+                helperText="Optional PDF handout or material for this course. Students can download it from the course preview."
+                fileName={course.pdf_material_name ?? null}
+                fileUrl={"pdfMaterialUrl" in course ? (course as CourseDoc & { pdfMaterialUrl: string | null }).pdfMaterialUrl ?? null : null}
+                fileSizeBytes={course.pdf_material_size ?? null}
+                pendingFileName={lastUploadedPdfName}
+                hasExistingFile={!!(course.pdf_material_name ?? course.pdf_material_storage_id)}
+                onSelectFile={handlePdfSelect}
+                onRemove={handleRemovePdf}
+                uploadState={pdfUploadState}
+                onRetry={
+                  pdfUploadState.status === "error"
+                    ? () => setPdfUploadState({ status: "idle", progress: 0 })
+                    : undefined
                 }
                 disabled={isSaving}
               />

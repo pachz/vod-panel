@@ -38,7 +38,7 @@ const adminMenuItems: MenuItem[] = [
   { title: "Categories", url: "/categories", icon: FolderTree },
   { title: "Courses", url: "/courses", icon: BookOpen },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
-  { title: "Coach", url: "/coach", icon: UserRound },
+  { title: "Coaches", url: "/coaches", icon: UserRound },
   // { title: "Video Panel", url: "/video-panel", icon: PlayCircle },
   { title: "Users", url: "/users", icon: Users },
   { title: "Payments", url: "/payments", icon: CreditCard },

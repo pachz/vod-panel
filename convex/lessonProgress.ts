@@ -164,7 +164,7 @@ export const getUserDashboardStats = query({
     // Calculate stats for each course
     let completedCourses = 0;
     let inProgressCourses = 0;
-    let totalHoursWatched = 0;
+    let totalSecondsWatched = 0;
 
     for (const course of validCourses) {
       // Get all published lessons for this course
@@ -181,12 +181,12 @@ export const getUserDashboardStats = query({
       const completedLessonIds = new Set(courseProgress.map((p) => p.lesson_id));
       const completedCount = publishedLessons.filter((l) => completedLessonIds.has(l._id)).length;
 
-      // Calculate hours watched (sum of completed lesson durations)
+      // Calculate seconds watched (sum of completed lesson durations; duration is stored in seconds)
       const completedLessons = publishedLessons.filter((l) => completedLessonIds.has(l._id));
-      const courseHours = completedLessons.reduce((sum, lesson) => {
+      const courseSeconds = completedLessons.reduce((sum, lesson) => {
         return sum + (lesson.duration ?? 0);
       }, 0);
-      totalHoursWatched += courseHours;
+      totalSecondsWatched += courseSeconds;
 
       // Check if course is completed (all published lessons completed)
       if (publishedLessons.length > 0 && completedCount === publishedLessons.length) {
@@ -196,8 +196,8 @@ export const getUserDashboardStats = query({
       }
     }
 
-    // Convert minutes to hours
-    const hoursWatched = Math.round((totalHoursWatched / 60) * 10) / 10; // Round to 1 decimal place
+    // Convert seconds to hours
+    const hoursWatched = Math.round((totalSecondsWatched / 3600) * 10) / 10; // Round to 1 decimal place
 
     return {
       coursesCompleted: completedCourses,

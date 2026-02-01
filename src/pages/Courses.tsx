@@ -47,25 +47,34 @@ import {
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
+type CoachDoc = Doc<"coaches">;
 
 type FormValues = {
   name: string;
   nameAr: string;
   categoryId: string;
+  coachId: string;
 };
 
 const initialFormValues: FormValues = {
   name: "",
   nameAr: "",
   categoryId: "",
+  coachId: "",
 };
 
-const formatDuration = (minutes: number | undefined) => {
-  if (minutes === undefined || minutes === null) {
+/** Duration is stored in seconds; format for display. */
+const formatDuration = (seconds: number | undefined) => {
+  if (seconds === undefined || seconds === null) {
     return "—";
   }
-
-  return `${minutes} min`;
+  if (seconds < 3600) {
+    const minutes = Math.max(1, Math.round(seconds / 60));
+    return `${minutes} min`;
+  }
+  const h = Math.floor(seconds / 3600);
+  const m = Math.round((seconds % 3600) / 60);
+  return m > 0 ? `${h}h ${m}m` : `${h}h`;
 };
 
 const Courses = () => {
@@ -112,6 +121,7 @@ const Courses = () => {
       : "skip"
   );
   const categories = useQuery(api.category.listCategories);
+  const coaches = useQuery(api.coach.listCoaches);
   const createCourse = useMutation(api.course.createCourse);
   const deleteCourse = useMutation(api.course.deleteCourse);
   const restoreCourse = useMutation(api.course.restoreCourse);
@@ -212,6 +222,10 @@ const Courses = () => {
   const categoryList = useMemo<CategoryDoc[]>(
     () => categories ?? [],
     [categories]
+  );
+  const coachList = useMemo<CoachDoc[]>(
+    () => coaches ?? [],
+    [coaches]
   );
   const handleLoadMore = useCallback(() => {
     if (!canLoadMore || isLoadingMore) return;
@@ -398,7 +412,7 @@ const Courses = () => {
 
     if (!validation.success) {
       // Prioritize required field errors over optional field errors
-      const requiredFieldPaths = ["name", "nameAr", "categoryId"];
+      const requiredFieldPaths = ["name", "nameAr", "categoryId", "coachId"];
       const errors = validation.error.errors;
 
       // Find first error for a required field, or fall back to first error
@@ -411,7 +425,7 @@ const Courses = () => {
       return;
     }
 
-    const { name, nameAr, shortDescription, shortDescriptionAr, categoryId } =
+    const { name, nameAr, shortDescription, shortDescriptionAr, categoryId, coachId } =
       validation.data;
 
     setIsSaving(true);
@@ -423,6 +437,7 @@ const Courses = () => {
         shortDescription,
         shortDescriptionAr,
         categoryId: categoryId as Id<"categories">,
+        coachId: coachId as Id<"coaches">,
       });
 
       toast.success("Course draft created");
@@ -545,6 +560,26 @@ const Courses = () => {
                       {categoryList.map((category) => (
                         <SelectItem key={category._id} value={category._id}>
                           {category.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="coachId">Coach</Label>
+                  <Select
+                    value={formValues.coachId}
+                    onValueChange={(value) =>
+                      setFormValues((prev) => ({ ...prev, coachId: value }))
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select coach" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {coachList.map((coach) => (
+                        <SelectItem key={coach._id} value={coach._id}>
+                          {coach.name}
                         </SelectItem>
                       ))}
                     </SelectContent>
