@@ -217,8 +217,8 @@ const CourseDetail = () => {
   const categories = useQuery(api.category.listCategories);
   const coaches = useQuery(api.coach.listCoaches);
   const lessons = useQuery(
-    api.lesson.listLessons,
-    courseId ? { courseId, limit: 100 } : undefined,
+    api.lesson.listLessonsByCourse,
+    courseId ? { courseId } : undefined,
   );
 
   const updateCourse = useMutation(api.course.updateCourse);
@@ -256,8 +256,7 @@ const CourseDetail = () => {
   const coachList = useMemo<CoachDoc[]>(() => coaches ?? [], [coaches]);
   const lessonList = useMemo<LessonDoc[]>(() => {
     if (!lessons) return [];
-    // Extract page from paginated result
-    return lessons.page ?? [];
+    return lessons;
   }, [lessons]);
   const isLoading = course === undefined || categories === undefined || coaches === undefined;
 

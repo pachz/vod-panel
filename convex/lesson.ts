@@ -81,6 +81,62 @@ const validateLessonUpdateInput = (input: LessonUpdateInput) => {
   return result.data;
 };
 
+/**
+ * List all lessons for a course, ordered by priority (for course detail reordering).
+ * No pagination - returns the full array for drag-and-drop UX.
+ */
+export const listLessonsByCourse = query({
+  args: {
+    courseId: v.id("courses"),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("lessons"),
+      _creationTime: v.number(),
+      title: v.string(),
+      title_ar: v.string(),
+      short_review: v.string(),
+      short_review_ar: v.string(),
+      description: v.optional(v.string()),
+      description_ar: v.optional(v.string()),
+      learning_objectives: v.optional(v.string()),
+      learning_objectives_ar: v.optional(v.string()),
+      course_id: v.id("courses"),
+      duration: v.optional(v.number()),
+      type: v.union(v.literal("video"), v.literal("article")),
+      status: v.union(
+        v.literal("draft"),
+        v.literal("published"),
+        v.literal("archived"),
+      ),
+      pending_status: v.optional(
+        v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+      ),
+      video_url: v.optional(v.string()),
+      body: v.optional(v.string()),
+      body_ar: v.optional(v.string()),
+      cover_image_url: v.optional(v.string()),
+      thumbnail_image_url: v.optional(v.string()),
+      priority: v.number(),
+      createdAt: v.number(),
+      deletedAt: v.optional(v.number()),
+    }),
+  ),
+  handler: async (ctx, { courseId }) => {
+    await requireUser(ctx);
+
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("course_id", (q) =>
+        q.eq("course_id", courseId).eq("deletedAt", undefined),
+      )
+      .collect();
+
+    lessons.sort((a, b) => a.priority - b.priority);
+    return lessons;
+  },
+});
+
 export const listLessons = query({
   args: {
     courseId: v.optional(v.id("courses")),
