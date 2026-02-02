@@ -704,6 +704,26 @@ export const updateLessonImages = mutation({
   },
 });
 
+/**
+ * Internal mutation: recalculate course lesson_count and duration after a lesson change.
+ * Scheduled from deleteLesson/restoreLesson so the recalc runs in a separate transaction
+ * and sees the committed state (Convex mutations cannot see their own writes).
+ */
+export const recalculateCourseAfterLessonChange = internalMutation({
+  args: {
+    courseId: v.id("courses"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { courseId }) => {
+    const course = await ctx.db.get(courseId);
+    if (!course || course.deletedAt !== undefined) {
+      return null;
+    }
+    await recalculateLessonCount(ctx, courseId);
+    return null;
+  },
+});
+
 export const deleteLesson = mutation({
   args: {
     id: v.id("lessons"),
@@ -720,16 +740,20 @@ export const deleteLesson = mutation({
       });
     }
 
+    const courseId = lesson.course_id;
     const now = Date.now();
     await ctx.db.patch(id, {
       deletedAt: now,
     });
 
-    const course = await ctx.db.get(lesson.course_id);
+    const course = await ctx.db.get(courseId);
 
     if (course && course.deletedAt === undefined) {
-      // Recalculate lesson count to ensure accuracy
-      await recalculateLessonCount(ctx, lesson.course_id);
+      // Recalculate in a separate mutation so it sees the committed delete
+      // (Convex mutations cannot see their own writes within the same transaction).
+      await ctx.scheduler.runAfter(0, internal.lesson.recalculateCourseAfterLessonChange, {
+        courseId,
+      });
     }
 
     await logActivity({
@@ -772,8 +796,10 @@ export const restoreLesson = mutation({
       deletedAt: undefined,
     });
 
-    // Recalculate lesson count to ensure accuracy
-    await recalculateLessonCount(ctx, lesson.course_id);
+    // Recalculate in a separate mutation so it sees the committed restore
+    await ctx.scheduler.runAfter(0, internal.lesson.recalculateCourseAfterLessonChange, {
+      courseId: lesson.course_id,
+    });
 
     await logActivity({
       ctx,
