@@ -27,8 +27,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
-// Subscription period dates from backend are Unix seconds
-const periodDate = (sec: number) => new Date(sec * 1000);
+// Subscription period dates from backend are Unix milliseconds (Stripe and admin-grant)
+const periodDate = (ms: number) => new Date(ms);
 
 const DURATION_OPTIONS = [
   { value: 30, label: "1 month" },

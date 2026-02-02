@@ -849,8 +849,8 @@ export const adminGrantSubscription = mutation({
     }
 
     const days = args.durationDays ?? 365;
-    const nowSec = Math.floor(Date.now() / 1000);
-    const periodEndSec = nowSec + days * 86400;
+    const nowMs = Date.now();
+    const periodEndMs = nowMs + days * 86400 * 1000;
     const subscriptionId = `admin-grant-${args.userId}-${Date.now()}`;
     const customerId = `admin-grant-${args.userId}`;
 
@@ -859,8 +859,8 @@ export const adminGrantSubscription = mutation({
       userId: args.userId,
       customerId,
       status: "active",
-      currentPeriodStart: nowSec,
-      currentPeriodEnd: periodEndSec,
+      currentPeriodStart: nowMs,
+      currentPeriodEnd: periodEndMs,
       cancelAtPeriodEnd: false,
       createdAt: Date.now(),
       updatedAt: Date.now(),
