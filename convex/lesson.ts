@@ -99,6 +99,7 @@ export const listLessonsByCourse = query({
       _creationTime: v.number(),
       title: v.string(),
       title_ar: v.string(),
+      title_search: v.optional(v.string()),
       short_review: v.string(),
       short_review_ar: v.string(),
       description: v.optional(v.string()),
