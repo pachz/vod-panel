@@ -87,7 +87,7 @@ const validateLessonUpdateInput = (input: LessonUpdateInput) => {
  */
 export const listLessonsByCourse = query({
   args: {
-    courseId: v.id("courses"),
+    courseId: v.optional(v.id("courses")),
     status: v.optional(v.union(
       v.literal("draft"),
       v.literal("published"),
@@ -129,6 +129,10 @@ export const listLessonsByCourse = query({
   ),
   handler: async (ctx, { courseId, status }) => {
     await requireUser(ctx);
+
+    if (!courseId) {
+      return [];
+    }
 
     let lessons;
     if (status) {
