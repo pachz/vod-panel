@@ -88,6 +88,12 @@ export default defineSchema({
     duration: v.optional(v.number()),
     type: v.union(v.literal("video"), v.literal("article")),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    // When a video lesson is requested to be published but is temporarily
+    // saved as draft while waiting for Vimeo duration, we store the intended
+    // status here so we can apply it once duration is available.
+    pending_status: v.optional(
+      v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
+    ),
     video_url: v.optional(v.string()),
     body: v.optional(v.string()),
     body_ar: v.optional(v.string()),

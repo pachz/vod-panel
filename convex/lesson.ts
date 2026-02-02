@@ -407,13 +407,21 @@ export const updateLesson = mutation({
 
     let courseRevertedToDraft: { courseName: string } | null = null;
 
-    // For video lessons missing duration: revert to draft but still allow the update
-    // (Vimeo fetch will run and set duration when it completes)
+    // For video lessons missing duration: revert to draft but still allow the update.
+    // We also remember the originally requested status in `pending_status` so that
+    // when Vimeo returns a duration we can automatically apply it.
     let effectiveStatus = validated.status;
+    let pendingStatus:
+      | "draft"
+      | "published"
+      | "archived"
+      | undefined = undefined;
     if (validated.type === "video") {
       const hasDuration = lesson.duration != null && lesson.duration >= 0;
-      if (!hasDuration) {
+      if (!hasDuration && validated.status === "published") {
+        // Temporarily save as draft but remember the desired published status
         effectiveStatus = "draft";
+        pendingStatus = "published";
       }
     }
 
@@ -464,6 +472,9 @@ export const updateLesson = mutation({
       course_id: courseId,
       type: validated.type,
       status: effectiveStatus,
+      // If we had to downgrade status due to missing duration, remember the
+      // requested status so we can apply it after Vimeo duration fetch.
+      pending_status: pendingStatus,
       video_url: validated.type === "video" ? validated.videoUrl : undefined,
       body: validated.type === "article" ? validated.body : undefined,
       body_ar: validated.type === "article" ? validated.bodyAr : undefined,
@@ -764,12 +775,30 @@ export const updateLessonImageUrls = internalMutation({
       return;
     }
 
-    const patch: { cover_image_url: string; thumbnail_image_url: string; duration?: number } = {
+    const patch: {
+      cover_image_url: string;
+      thumbnail_image_url: string;
+      duration?: number;
+      status?: "draft" | "published" | "archived";
+      pending_status?: "draft" | "published" | "archived";
+    } = {
       cover_image_url: coverImageUrl,
       thumbnail_image_url: thumbnailImageUrl,
     };
     if (duration !== undefined) {
       patch.duration = duration;
+
+      // If this is a video lesson that was temporarily saved as draft while
+      // waiting for duration, and it had a pending_status of "published",
+      // automatically flip it back to published now that duration is known.
+      if (
+        lesson.type === "video" &&
+        lesson.status === "draft" &&
+        (lesson as any).pending_status === "published"
+      ) {
+        patch.status = "published";
+        patch.pending_status = undefined;
+      }
     }
 
     await ctx.db.patch(lessonId, patch);
