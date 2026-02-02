@@ -179,7 +179,7 @@ export const listLessons = query({
       const queryWithSearch = ctx.db
         .query("lessons")
         .withSearchIndex("search_title", (q) => {
-          let query = q.search("title", searchTerm).eq("deletedAt", undefined);
+          let query = q.search("title_search", searchTerm).eq("deletedAt", undefined);
           if (courseId) {
             query = query.eq("course_id", courseId);
           }
@@ -346,9 +346,11 @@ export const createLesson = mutation({
 
     const now = Date.now();
 
+    const titleSearch = [validated.title, validated.titleAr].filter(Boolean).join(" ").trim();
     const lessonId = await ctx.db.insert("lessons", {
       title: validated.title,
       title_ar: validated.titleAr,
+      title_search: titleSearch || undefined,
       short_review: validated.shortReview,
       short_review_ar: validated.shortReviewAr,
       course_id: courseId,
@@ -534,9 +536,11 @@ export const updateLesson = mutation({
 
     // Clear duration when video URL changes (old duration is for old video; Vimeo fetch will set new one)
     const videoUrlChanged = lesson.video_url !== validated.videoUrl;
+    const titleSearch = [validated.title, validated.titleAr].filter(Boolean).join(" ").trim();
     const patch: Record<string, unknown> = {
       title: validated.title,
       title_ar: validated.titleAr,
+      title_search: titleSearch || undefined,
       short_review: validated.shortReview,
       short_review_ar: validated.shortReviewAr,
       description: validated.description,

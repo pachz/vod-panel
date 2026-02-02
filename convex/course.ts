@@ -86,7 +86,7 @@ export const listCourses = query({
       const queryWithSearch = ctx.db
         .query("courses")
         .withSearchIndex("search_name", (q) => {
-          let query = q.search("name", searchTerm).eq("deletedAt", undefined);
+          let query = q.search("name_search", searchTerm).eq("deletedAt", undefined);
           if (categoryId) {
             query = query.eq("category_id", categoryId);
           }
@@ -219,14 +219,13 @@ export const listDeletedCourses = query({
       filtered = filtered.filter((course) => course.status === status);
     }
 
-    // Apply search filter
+    // Apply search filter (use name_search when set, else fallback to name/name_ar)
     if (search && search.trim().length > 0) {
       const searchTerm = search.trim().toLowerCase();
-      filtered = filtered.filter(
-        (course) =>
-          course.name.toLowerCase().includes(searchTerm) ||
-          (course.name_ar && course.name_ar.toLowerCase().includes(searchTerm))
-      );
+      filtered = filtered.filter((course) => {
+        const text = course.name_search ?? [course.name, course.name_ar].filter(Boolean).join(" ");
+        return text.toLowerCase().includes(searchTerm);
+      });
     }
 
     // Sort by deletedAt descending (most recently deleted first)
@@ -319,9 +318,11 @@ export const createCourse = mutation({
     });
     const now = Date.now();
 
+    const nameSearch = [validated.name, validated.nameAr].filter(Boolean).join(" ").trim();
     const courseId = await ctx.db.insert("courses", {
       name: validated.name,
       name_ar: validated.nameAr,
+      name_search: nameSearch || undefined,
       short_description: validated.shortDescription,
       short_description_ar: validated.shortDescriptionAr,
       slug,
@@ -586,9 +587,11 @@ export const updateCourse = mutation({
       });
     }
 
+    const nameSearch = [validated.name, validated.nameAr].filter(Boolean).join(" ").trim();
     await ctx.db.patch(id, {
       name: validated.name,
       name_ar: validated.nameAr,
+      name_search: nameSearch || undefined,
       short_description: validated.shortDescription,
       short_description_ar: validated.shortDescriptionAr,
       description: validated.description,

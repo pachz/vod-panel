@@ -84,8 +84,18 @@ export function TableFilters({
               placeholder={searchPlaceholder}
               value={searchValue}
               onChange={(e) => onSearchChange(e.target.value)}
-              className="h-9 w-[240px] pl-9"
+              className="h-9 w-[240px] pl-9 pr-9"
             />
+            {searchValue && (
+              <button
+                type="button"
+                onClick={() => onSearchChange("")}
+                className="absolute right-2 top-1/2 -translate-y-1/2 rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground focus:outline-none focus:ring-1 focus:ring-ring"
+                aria-label="Clear search"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            )}
           </div>
         </>
       )}

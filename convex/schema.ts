@@ -41,6 +41,8 @@ export default defineSchema({
   courses: defineTable({
     name: v.string(),
     name_ar: v.string(),
+    /** Combined name_en + name_ar for full-text search (one index). */
+    name_search: v.optional(v.string()),
     description: v.optional(v.string()),
     description_ar: v.optional(v.string()),
     short_description: v.optional(v.string()),
@@ -71,13 +73,15 @@ export default defineSchema({
     .index("deletedAt", ["deletedAt"])
     .index("coach_id", ["coach_id", "deletedAt"])
     .searchIndex("search_name", {
-      searchField: "name",
+      searchField: "name_search",
       filterFields: ["deletedAt", "category_id", "status"],
     }),
 
   lessons: defineTable({
     title: v.string(),
     title_ar: v.string(),
+    /** Combined title + title_ar for full-text search (one index). */
+    title_search: v.optional(v.string()),
     short_review: v.string(),
     short_review_ar: v.string(),
     description: v.optional(v.string()),
@@ -108,7 +112,7 @@ export default defineSchema({
     .index("deletedAt_status", ["deletedAt", "status"])
     .index("deletedAt", ["deletedAt"])
     .searchIndex("search_title", {
-      searchField: "title",
+      searchField: "title_search",
       filterFields: ["deletedAt", "course_id", "status"],
     }),
 
