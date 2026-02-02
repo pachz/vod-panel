@@ -1,4 +1,4 @@
-import { mutation, query, internalMutation } from "./_generated/server";
+import { mutation, query, internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { internal } from "./_generated/api";
 import { ConvexError, v } from "convex/values";
@@ -827,6 +827,66 @@ export const reorderLessons = mutation({
     }
 
     await touchCourseUpdatedAt(ctx, courseId, course);
+  },
+});
+
+/**
+ * Internal query: list all non-deleted video lessons that have a Vimeo video_url.
+ * Used by refetchAllLessonDurationsFromVimeo to refetch durations with rate limiting.
+ */
+export const listAllVideoLessonsWithVimeoUrl = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      lessonId: v.id("lessons"),
+      videoUrl: v.string(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const lessons = await ctx.db
+      .query("lessons")
+      .withIndex("deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+    const result: Array<{ lessonId: Id<"lessons">; videoUrl: string }> = [];
+    for (const lesson of lessons) {
+      if (
+        lesson.type !== "video" ||
+        !lesson.video_url ||
+        (!lesson.video_url.includes("vimeo.com") && !lesson.video_url.includes("player.vimeo.com"))
+      ) {
+        continue;
+      }
+      result.push({ lessonId: lesson._id, videoUrl: lesson.video_url });
+    }
+    return result;
+  },
+});
+
+/**
+ * Internal mutation to update only a lesson's duration (seconds) and recalc course counts.
+ * Used by refetchAllLessonDurationsFromVimeo when refetching from Vimeo without re-downloading thumbnails.
+ */
+export const updateLessonDurationOnly = internalMutation({
+  args: {
+    lessonId: v.id("lessons"),
+    duration: v.number(),
+  },
+  returns: v.null(),
+  handler: async (ctx, { lessonId, duration }) => {
+    const lesson = await ctx.db.get(lessonId);
+    if (!lesson || lesson.deletedAt) {
+      return null;
+    }
+    await ctx.db.patch(lessonId, {
+      duration,
+      ...(lesson.type === "video" &&
+        lesson.status === "draft" &&
+        (lesson as { pending_status?: string }).pending_status === "published"
+        ? { status: "published" as const, pending_status: undefined }
+        : {}),
+    });
+    await recalculateLessonCount(ctx, lesson.course_id);
+    return null;
   },
 });
 

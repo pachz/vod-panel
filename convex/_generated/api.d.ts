@@ -22,6 +22,7 @@ import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
+import type * as refetchLessonDurations from "../refetchLessonDurations.js";
 import type * as seed from "../seed.js";
 import type * as user from "../user.js";
 import type * as utils_activityLog from "../utils/activityLog.js";
@@ -50,6 +51,7 @@ declare const fullApi: ApiFromModules<{
   lessonProgress: typeof lessonProgress;
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;
+  refetchLessonDurations: typeof refetchLessonDurations;
   seed: typeof seed;
   user: typeof user;
   "utils/activityLog": typeof utils_activityLog;
