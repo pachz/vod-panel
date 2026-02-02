@@ -1,11 +1,12 @@
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen } from "lucide-react";
-import { useQuery } from "convex/react";
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen, Gift, History } from "lucide-react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
+import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { format } from "date-fns";
 import {
   Table,
@@ -15,15 +16,39 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { toast } from "sonner";
+
+// Subscription period dates from backend are Unix seconds
+const periodDate = (sec: number) => new Date(sec * 1000);
+
+const DURATION_OPTIONS = [
+  { value: 30, label: "1 month" },
+  { value: 90, label: "3 months" },
+  { value: 180, label: "6 months" },
+  { value: 365, label: "1 year" },
+] as const;
 
 const UserInfo = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
-  
+  const [giveSubOpen, setGiveSubOpen] = useState(false);
+  const [durationDays, setDurationDays] = useState<number>(365);
+  const [isGranting, setIsGranting] = useState(false);
+
   const userInfo = useQuery(
     api.user.getUserInfo,
-    id ? { id: id as any } : "skip"
+    id ? { id: id as Id<"users"> } : "skip"
   );
+  const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
 
   if (userInfo === undefined) {
     return (
@@ -47,7 +72,26 @@ const UserInfo = () => {
     );
   }
 
-  const { user, subscription, paymentInfo, courses } = userInfo;
+  const { user, subscription, subscriptionHistory, checkoutHistory, paymentInfo, courses } = userInfo;
+  const hasActiveSubscription = subscription && (subscription.status === "active" || subscription.status === "trialing");
+  const canGrantSubscription = !user.isGod && !hasActiveSubscription;
+
+  const handleGrantSubscription = async () => {
+    if (!id) return;
+    setIsGranting(true);
+    try {
+      await adminGrantSubscription({ userId: id as Id<"users">, durationDays });
+      toast.success("Subscription granted successfully");
+      setGiveSubOpen(false);
+    } catch (error: unknown) {
+      const msg = error && typeof error === "object" && "data" in error && typeof (error as { data?: { message?: string } }).data?.message === "string"
+        ? (error as { data: { message: string } }).data.message
+        : "Failed to grant subscription";
+      toast.error(msg);
+    } finally {
+      setIsGranting(false);
+    }
+  };
 
   const formatCurrency = (amount: number, currency: string) => {
     return new Intl.NumberFormat("en-US", {
@@ -193,11 +237,21 @@ const UserInfo = () => {
 
       {/* Subscription Information */}
       <Card>
-        <CardHeader>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
           <CardTitle className="flex items-center gap-2">
             <Calendar className="h-5 w-5" />
             Current Subscription
           </CardTitle>
+          {canGrantSubscription && (
+            <Button
+              variant="cta"
+              size="sm"
+              onClick={() => setGiveSubOpen(true)}
+            >
+              <Gift className="mr-2 h-4 w-4" />
+              Give subscription
+            </Button>
+          )}
         </CardHeader>
         <CardContent>
           {subscription ? (
@@ -205,22 +259,27 @@ const UserInfo = () => {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Status</div>
-                  <div>{getSubscriptionStatusBadge(subscription.status)}</div>
+                  <div className="flex items-center gap-2">
+                    {getSubscriptionStatusBadge(subscription.status)}
+                    {subscription?.isAdminGranted && (
+                      <Badge variant="secondary">Admin granted</Badge>
+                    )}
+                  </div>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Subscription ID</div>
-                  <p className="font-mono text-sm">{subscription.subscriptionId}</p>
+                  <p className="font-mono text-sm break-all">{subscription.subscriptionId}</p>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Current Period Start</div>
                   <p className="font-medium">
-                    {format(new Date(subscription.currentPeriodStart), "PPP")}
+                    {format(periodDate(subscription.currentPeriodStart), "PPP")}
                   </p>
                 </div>
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Current Period End</div>
                   <p className="font-medium">
-                    {format(new Date(subscription.currentPeriodEnd), "PPP")}
+                    {format(periodDate(subscription.currentPeriodEnd), "PPP")}
                   </p>
                 </div>
                 <div className="space-y-1">
@@ -237,7 +296,7 @@ const UserInfo = () => {
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">Canceled At</div>
                     <p className="font-medium">
-                      {format(new Date(subscription.canceledAt), "PPP")}
+                      {format(periodDate(subscription.canceledAt), "PPP")}
                     </p>
                   </div>
                 )}
@@ -248,6 +307,142 @@ const UserInfo = () => {
           )}
         </CardContent>
       </Card>
+
+      {/* Subscription History */}
+      {subscriptionHistory && subscriptionHistory.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Subscription history
+            </CardTitle>
+            <CardDescription>All plans and status changes for this user</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Period start</TableHead>
+                    <TableHead>Period end</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Source</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {subscriptionHistory.map((sub) => (
+                    <TableRow key={sub.subscriptionId}>
+                      <TableCell>{getSubscriptionStatusBadge(sub.status)}</TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(periodDate(sub.currentPeriodStart), "PPP")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(periodDate(sub.currentPeriodEnd), "PPP")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(sub.createdAt), "PPP")}
+                      </TableCell>
+                      <TableCell>
+                        {sub.isAdminGranted ? (
+                          <Badge variant="secondary">Admin granted</Badge>
+                        ) : (
+                          <span className="text-muted-foreground">Stripe</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Checkout / payment history */}
+      {checkoutHistory && checkoutHistory.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <CreditCard className="h-5 w-5" />
+              Payment / checkout history
+            </CardTitle>
+            <CardDescription>Checkout sessions and payment events</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="rounded-lg border">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Created</TableHead>
+                    <TableHead>Completed</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {checkoutHistory.map((session) => (
+                    <TableRow key={session.sessionId}>
+                      <TableCell>
+                        <Badge variant={session.status === "complete" ? "default" : "outline"}>
+                          {session.status}
+                        </Badge>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {format(new Date(session.createdAt), "PPP p")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {session.completedAt
+                          ? format(new Date(session.completedAt), "PPP p")
+                          : "—"}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Give subscription dialog */}
+      <Dialog open={giveSubOpen} onOpenChange={setGiveSubOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Give subscription</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2">
+            <p className="text-sm text-muted-foreground">
+              Grant an active subscription to this user. They will have full access until the period end.
+            </p>
+            <div className="space-y-2">
+              <Label>Duration</Label>
+              <Select
+                value={String(durationDays)}
+                onValueChange={(v) => setDurationDays(Number(v))}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {DURATION_OPTIONS.map((opt) => (
+                    <SelectItem key={opt.value} value={String(opt.value)}>
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setGiveSubOpen(false)} disabled={isGranting}>
+              Cancel
+            </Button>
+            <Button variant="cta" onClick={handleGrantSubscription} disabled={isGranting}>
+              {isGranting ? "Granting…" : "Grant subscription"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Courses List */}
       <Card>

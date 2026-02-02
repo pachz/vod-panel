@@ -17,6 +17,8 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUser, requireUserAction } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
 
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
+
 export const getCurrentUser = query(async (ctx) => {
   const { identity } = await requireUser(ctx);
   
@@ -74,6 +76,31 @@ export const listUsers = query(async (ctx) => {
       }
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
+});
+
+/**
+ * Returns subscription status for the given user IDs (admin only).
+ * Used by the Users table to show Active / None badges.
+ */
+export const getSubscriptionStatusForUsers = query({
+  args: {
+    userIds: v.array(v.id("users")),
+  },
+  returns: v.record(v.string(), v.union(v.literal("active"), v.literal("none"))),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const result: Record<string, "active" | "none"> = {};
+    for (const userId of args.userIds) {
+      const sub = await ctx.db
+        .query("subscriptions")
+        .withIndex("userId", (q) => q.eq("userId", userId))
+        .order("desc")
+        .first();
+      result[userId] = sub && ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) ? "active" : "none";
+    }
+    return result;
+  },
 });
 
 export const getUser = query({
@@ -626,18 +653,45 @@ export const getUserInfo = query({
       });
     }
 
-    // Get subscription info
+    // Get subscription info (most recent)
     const subscription = await ctx.db
       .query("subscriptions")
       .withIndex("userId", (q) => q.eq("userId", id))
       .order("desc")
       .first();
 
-    // Get completed checkout sessions (to count payments)
+    // All subscriptions for this user (history), newest first
+    const allSubscriptions = await ctx.db
+      .query("subscriptions")
+      .withIndex("userId", (q) => q.eq("userId", id))
+      .order("desc")
+      .collect();
+
+    const subscriptionHistory = allSubscriptions.map((sub) => ({
+      subscriptionId: sub.subscriptionId,
+      status: sub.status,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      canceledAt: sub.canceledAt,
+      createdAt: sub.createdAt,
+      isAdminGranted: sub.subscriptionId.startsWith("admin-grant-"),
+    }));
+
+    // Checkout sessions (payment history)
     const checkoutSessions = await ctx.db
       .query("checkoutSessions")
       .withIndex("userId", (q) => q.eq("userId", id))
       .collect();
+
+    const checkoutHistory = checkoutSessions
+      .sort((a, b) => b.createdAt - a.createdAt)
+      .map((session) => ({
+        sessionId: session.sessionId,
+        status: session.status,
+        createdAt: session.createdAt,
+        completedAt: session.completedAt,
+      }));
 
     const completedSessions = checkoutSessions.filter(
       (session) => session.status === "complete"
@@ -741,8 +795,11 @@ export const getUserInfo = query({
             cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
             canceledAt: subscription.canceledAt,
             createdAt: subscription.createdAt,
+            isAdminGranted: subscription.subscriptionId.startsWith("admin-grant-"),
           }
         : null,
+      subscriptionHistory,
+      checkoutHistory,
       paymentInfo: {
         totalPaid,
         currency: paymentSettings?.priceCurrency || "USD",
@@ -754,6 +811,70 @@ export const getUserInfo = query({
         list: coursesWithProgress,
       },
     };
+  },
+});
+
+/**
+ * Admin-only: grant a subscription to a user who does not have an active one.
+ * Creates an admin-granted subscription (no Stripe); duration in days.
+ */
+export const adminGrantSubscription = mutation({
+  args: {
+    userId: v.id("users"),
+    durationDays: v.optional(v.number()),
+  },
+  returns: v.id("subscriptions"),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const user = await ctx.db.get(args.userId);
+    if (!user || user.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+
+    const latest = await ctx.db
+      .query("subscriptions")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .order("desc")
+      .first();
+
+    if (latest && ACTIVE_SUBSCRIPTION_STATUSES.has(latest.status)) {
+      throw new ConvexError({
+        code: "ALREADY_HAS_SUBSCRIPTION",
+        message: "User already has an active subscription.",
+      });
+    }
+
+    const days = args.durationDays ?? 365;
+    const nowSec = Math.floor(Date.now() / 1000);
+    const periodEndSec = nowSec + days * 86400;
+    const subscriptionId = `admin-grant-${args.userId}-${Date.now()}`;
+    const customerId = `admin-grant-${args.userId}`;
+
+    const id = await ctx.db.insert("subscriptions", {
+      subscriptionId,
+      userId: args.userId,
+      customerId,
+      status: "active",
+      currentPeriodStart: nowSec,
+      currentPeriodEnd: periodEndSec,
+      cancelAtPeriodEnd: false,
+      createdAt: Date.now(),
+      updatedAt: Date.now(),
+    });
+
+    await logActivity({
+      ctx,
+      entityType: "user",
+      action: "updated",
+      entityId: args.userId,
+      entityName: user.name || user.email || "User",
+    });
+
+    return id;
   },
 });
 

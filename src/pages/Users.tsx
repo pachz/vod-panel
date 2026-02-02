@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Lock, Eye, Download } from "lucide-react";
+import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift } from "lucide-react";
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -71,6 +71,16 @@ const Users = () => {
   const updateUserPassword = useAction(api.user.updateUserPassword);
   const deleteUser = useMutation(api.user.deleteUser);
   const exportUserEmails = useAction(api.user.exportUserEmails);
+  const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
+
+  const regularUserIds = useMemo(
+    () => (users ?? []).filter((u) => !u.isGod).map((u) => u._id),
+    [users]
+  );
+  const subscriptionStatus = useQuery(
+    api.user.getSubscriptionStatusForUsers,
+    regularUserIds.length > 0 ? { userIds: regularUserIds } : "skip"
+  );
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
