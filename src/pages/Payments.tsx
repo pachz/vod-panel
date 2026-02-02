@@ -149,12 +149,27 @@ const Payments = () => {
     }
   };
 
+  const getEffectiveStatus = () => {
+    if (!subscription) return "canceled";
+    const { status, currentPeriodEnd } = subscription;
+    if (
+      (status === "active" || status === "trialing") &&
+      currentPeriodEnd != null &&
+      currentPeriodEnd < Date.now()
+    ) {
+      return "expired";
+    }
+    return status;
+  };
+
   const getStatusBadge = (status: string) => {
     switch (status) {
       case "active":
         return <Badge variant="default" className="bg-green-500">{t("active")}</Badge>;
       case "trialing":
         return <Badge variant="default" className="bg-blue-500">{t("trialing")}</Badge>;
+      case "expired":
+        return <Badge variant="secondary">{t("expired")}</Badge>;
       case "past_due":
         return <Badge variant="destructive">{t("pastDue")}</Badge>;
       case "canceled":
@@ -436,13 +451,25 @@ const Payments = () => {
             ) : (
               <div className="space-y-6">
                 {/* Subscription Status Header */}
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <CheckCircle2 className="h-5 w-5 text-green-500" />
-                    <span className="font-medium">{t("subscriptionActive")}</span>
-                  </div>
-                  {getStatusBadge(subscription.status)}
-                </div>
+                {(() => {
+                  const effectiveStatus = getEffectiveStatus();
+                  const isExpired = effectiveStatus === "expired";
+                  return (
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        {isExpired ? (
+                          <XCircle className="h-5 w-5 text-muted-foreground" />
+                        ) : (
+                          <CheckCircle2 className="h-5 w-5 text-green-500" />
+                        )}
+                        <span className="font-medium">
+                          {isExpired ? t("subscriptionExpired") : t("subscriptionActive")}
+                        </span>
+                      </div>
+                      {getStatusBadge(effectiveStatus)}
+                    </div>
+                  );
+                })()}
 
                 <Separator />
 

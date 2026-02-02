@@ -73,7 +73,12 @@ const UserInfo = () => {
   }
 
   const { user, subscription, subscriptionHistory, checkoutHistory, paymentInfo, courses } = userInfo;
-  const hasActiveSubscription = subscription && (subscription.status === "active" || subscription.status === "trialing");
+  const nowMs = Date.now();
+  const isPeriodActive = (endMs: number) => endMs >= nowMs;
+  const hasActiveSubscription =
+    subscription &&
+    (subscription.status === "active" || subscription.status === "trialing") &&
+    isPeriodActive(subscription.currentPeriodEnd);
   const canGrantSubscription = !user.isGod && !hasActiveSubscription;
 
   const handleGrantSubscription = async () => {
@@ -100,17 +105,23 @@ const UserInfo = () => {
     }).format(amount);
   };
 
-  const getSubscriptionStatusBadge = (status: string) => {
+  const getSubscriptionStatusBadge = (status: string, periodEndMs?: number) => {
+    const isExpired =
+      (status === "active" || status === "trialing") &&
+      periodEndMs != null &&
+      periodEndMs < nowMs;
+    const displayStatus = isExpired ? "expired" : status;
     const statusMap: Record<string, { variant: "default" | "secondary" | "destructive" | "outline"; label: string }> = {
       active: { variant: "default", label: "Active" },
       trialing: { variant: "default", label: "Trialing" },
+      expired: { variant: "secondary", label: "Expired" },
       canceled: { variant: "secondary", label: "Canceled" },
       past_due: { variant: "destructive", label: "Past Due" },
       unpaid: { variant: "destructive", label: "Unpaid" },
       incomplete: { variant: "outline", label: "Incomplete" },
     };
 
-    const config = statusMap[status] || { variant: "outline" as const, label: status };
+    const config = statusMap[displayStatus] || { variant: "outline" as const, label: displayStatus };
     return <Badge variant={config.variant}>{config.label}</Badge>;
   };
 
@@ -260,7 +271,7 @@ const UserInfo = () => {
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Status</div>
                   <div className="flex items-center gap-2">
-                    {getSubscriptionStatusBadge(subscription.status)}
+                    {getSubscriptionStatusBadge(subscription.status, subscription.currentPeriodEnd)}
                     {subscription?.isAdminGranted && (
                       <Badge variant="secondary">Admin granted</Badge>
                     )}
@@ -333,7 +344,7 @@ const UserInfo = () => {
                 <TableBody>
                   {subscriptionHistory.map((sub) => (
                     <TableRow key={sub.subscriptionId}>
-                      <TableCell>{getSubscriptionStatusBadge(sub.status)}</TableCell>
+                      <TableCell>{getSubscriptionStatusBadge(sub.status, sub.currentPeriodEnd)}</TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(periodDate(sub.currentPeriodStart), "PPP")}
                       </TableCell>

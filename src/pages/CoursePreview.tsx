@@ -59,7 +59,10 @@ const CoursePreview = () => {
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
   const isAdmin = currentUser?.isGod ?? false;
-  const hasActiveSubscription = subscription ? ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) : false;
+  const hasActiveSubscription =
+    subscription &&
+    ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
+    subscription.currentPeriodEnd >= Date.now();
   const canAccessProtectedContent = isAdmin || hasActiveSubscription;
   const lessons = useQuery(
     api.lesson.listLessonsByCourse,
