@@ -62,7 +62,7 @@ const CoursePreview = () => {
   const hasActiveSubscription = subscription ? ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) : false;
   const canAccessProtectedContent = isAdmin || hasActiveSubscription;
   const lessons = useQuery(
-    api.lesson.listLessons,
+    api.lesson.listLessonsByCourse,
     courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
   );
   const progress = useQuery(
@@ -100,10 +100,7 @@ const CoursePreview = () => {
     if (!lessons) {
       return [];
     }
-
-    // Extract page from paginated result
-    const lessonsArray = lessons.page ?? [];
-    return [...lessonsArray].sort((a, b) => a.priority - b.priority);
+    return lessons;
   }, [lessons]);
 
   const searchLessonId = searchParams.get("lesson");

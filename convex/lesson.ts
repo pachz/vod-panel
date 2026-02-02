@@ -82,12 +82,17 @@ const validateLessonUpdateInput = (input: LessonUpdateInput) => {
 };
 
 /**
- * List all lessons for a course, ordered by priority (for course detail reordering).
- * No pagination - returns the full array for drag-and-drop UX.
+ * List all lessons for a course, ordered by priority.
+ * No pagination - returns the full array. Use for course detail reordering and course preview.
  */
 export const listLessonsByCourse = query({
   args: {
     courseId: v.id("courses"),
+    status: v.optional(v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("archived"),
+    )),
   },
   returns: v.array(
     v.object({
@@ -122,15 +127,25 @@ export const listLessonsByCourse = query({
       deletedAt: v.optional(v.number()),
     }),
   ),
-  handler: async (ctx, { courseId }) => {
+  handler: async (ctx, { courseId, status }) => {
     await requireUser(ctx);
 
-    const lessons = await ctx.db
-      .query("lessons")
-      .withIndex("course_id", (q) =>
-        q.eq("course_id", courseId).eq("deletedAt", undefined),
-      )
-      .collect();
+    let lessons;
+    if (status) {
+      lessons = await ctx.db
+        .query("lessons")
+        .withIndex("deletedAt_course_status", (q) =>
+          q.eq("deletedAt", undefined).eq("course_id", courseId).eq("status", status),
+        )
+        .collect();
+    } else {
+      lessons = await ctx.db
+        .query("lessons")
+        .withIndex("course_id", (q) =>
+          q.eq("course_id", courseId).eq("deletedAt", undefined),
+        )
+        .collect();
+    }
 
     lessons.sort((a, b) => a.priority - b.priority);
     return lessons;
