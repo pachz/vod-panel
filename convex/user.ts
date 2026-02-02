@@ -841,7 +841,12 @@ export const adminGrantSubscription = mutation({
       .order("desc")
       .first();
 
-    if (latest && ACTIVE_SUBSCRIPTION_STATUSES.has(latest.status)) {
+    const hasActiveSubscription =
+      latest &&
+      ACTIVE_SUBSCRIPTION_STATUSES.has(latest.status) &&
+      latest.currentPeriodEnd >= Date.now();
+
+    if (hasActiveSubscription) {
       throw new ConvexError({
         code: "ALREADY_HAS_SUBSCRIPTION",
         message: "User already has an active subscription.",
