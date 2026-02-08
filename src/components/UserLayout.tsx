@@ -1,5 +1,6 @@
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { LanguageToggle } from "@/components/LanguageToggle";
+import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfile } from "@/components/UserProfile";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
@@ -70,6 +71,7 @@ const UserLayout = () => {
             ))}
           </nav>
           <div className="flex items-center gap-4">
+            <ThemeToggle />
             <LanguageToggle />
             <UserProfile />
           </div>
