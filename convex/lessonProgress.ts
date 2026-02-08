@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalMutation, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
@@ -286,6 +286,62 @@ export const getUserCourses = query({
     });
 
     return coursesWithProgress;
+  },
+});
+
+/**
+ * Internal mutation: validates and fixes lesson progress records for all users.
+ * - Removes orphan records (user, course, or lesson missing or deleted).
+ * - Fixes invalid completedAt (≤ 0 or in the future) by setting to _creationTime.
+ * Run via dashboard or scheduler: internal.lessonProgress.fixAllLessonProgressTimes
+ */
+export const fixAllLessonProgressTimes = internalMutation({
+  args: {},
+  returns: v.object({
+    processed: v.number(),
+    deletedOrphans: v.number(),
+    fixedCompletedAt: v.number(),
+  }),
+  handler: async (ctx) => {
+    let processed = 0;
+    let deletedOrphans = 0;
+    let fixedCompletedAt = 0;
+    const now = Date.now();
+
+    const allProgress = await ctx.db.query("lessonProgress").collect();
+
+    for (const progress of allProgress) {
+      processed += 1;
+
+      const user = await ctx.db.get(progress.user_id);
+      const course = await ctx.db.get(progress.course_id);
+      const lesson = await ctx.db.get(progress.lesson_id);
+
+      const userMissingOrDeleted = !user || user.deletedAt !== undefined;
+      const courseMissingOrDeleted = !course || course.deletedAt !== undefined;
+      const lessonMissingOrDeleted = !lesson || lesson.deletedAt !== undefined;
+
+      if (userMissingOrDeleted || courseMissingOrDeleted || lessonMissingOrDeleted) {
+        await ctx.db.delete(progress._id);
+        deletedOrphans += 1;
+        continue;
+      }
+
+      const completedAtInvalid =
+        typeof progress.completedAt !== "number" ||
+        progress.completedAt <= 0 ||
+        progress.completedAt > now;
+
+      if (completedAtInvalid) {
+        const creationTime = progress._creationTime;
+        await ctx.db.patch(progress._id, {
+          completedAt: typeof creationTime === "number" && creationTime > 0 ? creationTime : now,
+        });
+        fixedCompletedAt += 1;
+      }
+    }
+
+    return { processed, deletedOrphans, fixedCompletedAt };
   },
 });
 
