@@ -258,10 +258,12 @@ const LoginPage = () => {
     return mode === "register" ? "Create Account" : "Log In";
   })();
 
+  const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
+
   const isFormValid = useMemo(() => {
     if (passwordResetStep) {
       if (passwordResetStep === "forgot") {
-        return email.trim().length > 0;
+        return isValidEmailFormat(email);
       }
       return resetCode.trim().length > 0 && isPasswordValid;
     }
@@ -304,18 +306,17 @@ const LoginPage = () => {
 
     const formData = new FormData(event.currentTarget);
     const emailValue = formData.get("email") as string;
+    const trimmedEmail = emailValue.trim();
 
     try {
       await signIn("password", {
         flow: "reset",
-        email: emailValue.trim(),
+        email: trimmedEmail,
       });
-      setPasswordResetStep({ email: emailValue.trim() });
-      setStatus("idle");
-    } catch (cause: any) {
-      console.error(cause);
-      const errorMessage = parseAuthError(cause) || "Failed to send reset code. Please check your email address and try again.";
-      setError(errorMessage);
+    } catch {
+      // Do not reveal whether the email exists; always show the same success state
+    } finally {
+      setPasswordResetStep({ email: trimmedEmail });
       setStatus("idle");
     }
   };
@@ -481,6 +482,9 @@ const LoginPage = () => {
             </form>
           ) : (
             <form className="login-form" onSubmit={handlePasswordResetVerification} noValidate>
+              <p role="alert" className="login-info-message">
+                If your email is registered with us, you'll receive a password reset email soon.
+              </p>
               <div className="login-field-group">
                 <Label htmlFor="reset-code" className="login-label">Reset code</Label>
                 <Input
