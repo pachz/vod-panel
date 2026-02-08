@@ -374,40 +374,62 @@ export const clearUserStripeCustomerId = internalMutation({
   },
 });
 
+const paymentSettingsReturnValidator = v.union(
+  v.object({
+    selectedProductId: v.string(),
+    selectedPriceId: v.string(),
+    productName: v.string(),
+    priceAmount: v.number(),
+    priceCurrency: v.string(),
+    priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
+    selectedMonthlyPriceId: v.string(),
+    monthlyPriceAmount: v.number(),
+    monthlyPriceCurrency: v.string(),
+    selectedYearlyPriceId: v.optional(v.string()),
+    yearlyPriceAmount: v.optional(v.number()),
+    yearlyPriceCurrency: v.optional(v.string()),
+  }),
+  v.null()
+);
+
+function normalizePaymentSettings(settings: Record<string, unknown> | null) {
+  if (!settings) return null;
+
+  // selectedPriceId, priceAmount, priceCurrency, priceInterval are the monthly fields (legacy names)
+  const monthlyPriceId = (settings.selectedPriceId as string) ?? "";
+  const monthlyAmount = (settings.priceAmount as number) ?? 0;
+  const monthlyCurrency = (settings.priceCurrency as string) ?? "usd";
+  const priceInterval = (settings.priceInterval as string) ?? "month";
+
+  return {
+    selectedProductId: settings.selectedProductId as string,
+    selectedPriceId: monthlyPriceId,
+    productName: settings.productName as string,
+    priceAmount: monthlyAmount,
+    priceCurrency: monthlyCurrency,
+    priceInterval: priceInterval as "month" | "year" | "week" | "day",
+    selectedMonthlyPriceId: monthlyPriceId,
+    monthlyPriceAmount: monthlyAmount,
+    monthlyPriceCurrency: monthlyCurrency,
+    selectedYearlyPriceId: settings.selectedYearlyPriceId as string | undefined,
+    yearlyPriceAmount: settings.yearlyPriceAmount as number | undefined,
+    yearlyPriceCurrency: settings.yearlyPriceCurrency as string | undefined,
+  };
+}
+
 /**
  * Query to get payment settings (selected product/price)
  */
 export const getPaymentSettings = internalQuery({
   args: {},
-  returns: v.union(
-    v.object({
-      selectedProductId: v.string(),
-      selectedPriceId: v.string(),
-      productName: v.string(),
-      priceAmount: v.number(),
-      priceCurrency: v.string(),
-      priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
-    }),
-    v.null()
-  ),
+  returns: paymentSettingsReturnValidator,
   handler: async (ctx) => {
     const settings = await ctx.db
       .query("paymentSettings")
       .order("desc")
       .first();
 
-    if (!settings) {
-      return null;
-    }
-
-    return {
-      selectedProductId: settings.selectedProductId,
-      selectedPriceId: settings.selectedPriceId,
-      productName: settings.productName,
-      priceAmount: settings.priceAmount,
-      priceCurrency: settings.priceCurrency,
-      priceInterval: settings.priceInterval,
-    };
+    return normalizePaymentSettings(settings as Record<string, unknown>);
   },
 });
 
@@ -416,35 +438,14 @@ export const getPaymentSettings = internalQuery({
  */
 export const getPaymentSettingsPublic = query({
   args: {},
-  returns: v.union(
-    v.object({
-      selectedProductId: v.string(),
-      selectedPriceId: v.string(),
-      productName: v.string(),
-      priceAmount: v.number(),
-      priceCurrency: v.string(),
-      priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
-    }),
-    v.null()
-  ),
+  returns: paymentSettingsReturnValidator,
   handler: async (ctx) => {
     const settings = await ctx.db
       .query("paymentSettings")
       .order("desc")
       .first();
 
-    if (!settings) {
-      return null;
-    }
-
-    return {
-      selectedProductId: settings.selectedProductId,
-      selectedPriceId: settings.selectedPriceId,
-      productName: settings.productName,
-      priceAmount: settings.priceAmount,
-      priceCurrency: settings.priceCurrency,
-      priceInterval: settings.priceInterval,
-    };
+    return normalizePaymentSettings(settings as Record<string, unknown>);
   },
 });
 
@@ -454,11 +455,13 @@ export const getPaymentSettingsPublic = query({
 export const setPaymentSettings = mutation({
   args: {
     selectedProductId: v.string(),
-    selectedPriceId: v.string(),
     productName: v.string(),
-    priceAmount: v.number(),
-    priceCurrency: v.string(),
-    priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
+    selectedMonthlyPriceId: v.string(),
+    monthlyPriceAmount: v.number(),
+    monthlyPriceCurrency: v.string(),
+    selectedYearlyPriceId: v.optional(v.string()),
+    yearlyPriceAmount: v.optional(v.number()),
+    yearlyPriceCurrency: v.optional(v.string()),
   },
   returns: v.id("paymentSettings"),
   handler: async (ctx, args) => {
@@ -478,14 +481,17 @@ export const setPaymentSettings = mutation({
       await ctx.db.delete(setting._id);
     }
 
-    // Create new settings
+    // Store monthly in legacy fields (selectedPriceId, priceAmount, priceCurrency, priceInterval)
     const settingsId = await ctx.db.insert("paymentSettings", {
       selectedProductId: args.selectedProductId,
-      selectedPriceId: args.selectedPriceId,
+      selectedPriceId: args.selectedMonthlyPriceId,
       productName: args.productName,
-      priceAmount: args.priceAmount,
-      priceCurrency: args.priceCurrency,
-      priceInterval: args.priceInterval,
+      priceAmount: args.monthlyPriceAmount,
+      priceCurrency: args.monthlyPriceCurrency,
+      priceInterval: "month" as const,
+      selectedYearlyPriceId: args.selectedYearlyPriceId,
+      yearlyPriceAmount: args.yearlyPriceAmount,
+      yearlyPriceCurrency: args.yearlyPriceCurrency,
       updatedBy: userId as Id<"users">,
       updatedAt: Date.now(),
     });

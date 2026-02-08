@@ -1,6 +1,8 @@
 import { CheckCircle2, CreditCard, Loader2, Lock, Video } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardHeader, CardTitle } from "@/components/ui/card";
+import { BillingCycleChoice } from "@/pages/Payments/BillingCycleChoice";
+import type { PaymentSettings } from "@/pages/Payments/usePayments";
 import type { Doc } from "../../../convex/_generated/dataModel";
 
 type CourseDoc = Doc<"courses">;
@@ -18,9 +20,10 @@ type PaywallProps = {
   course: CourseDoc;
   subscription: Subscription | null;
   priceSummary: PriceSummary | null;
+  paymentSettings: PaymentSettings | null | undefined;
   isPriceLoading: boolean;
   isStartingCheckout: boolean;
-  onStartSubscription: () => void;
+  onStartSubscription: (priceId?: string) => void;
   onBackToCourses: () => void;
   language: string;
   isRTL: boolean;
@@ -32,6 +35,7 @@ export const Paywall = ({
   course,
   subscription,
   priceSummary,
+  paymentSettings,
   isPriceLoading,
   isStartingCheckout,
   onStartSubscription,
@@ -91,36 +95,42 @@ export const Paywall = ({
 
               <div className="space-y-1">
                 <p className="text-xs uppercase tracking-wide text-muted-foreground">{t("yourInvestment")}</p>
-                {isPriceLoading ? (
-                  <div className="h-10 w-40 animate-pulse rounded-xl bg-muted" />
-                ) : priceSummary ? (
-                  <div className="flex items-baseline gap-2">
-                    <span className="text-4xl font-bold text-foreground">{priceSummary.amount}</span>
-                    <span className="text-sm text-muted-foreground">{t("per")} {translateInterval(priceSummary.interval)}</span>
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">
-                    {t("subscriptionPricing")}
-                  </p>
-                )}
                 {priceSummary?.productName && (
                   <p className="text-xs text-muted-foreground/80">{t("plan")}: {priceSummary.productName}</p>
                 )}
               </div>
 
-              <div className="space-y-3">
-                <Button variant="cta" className="w-full justify-center gap-2 text-base" onClick={onStartSubscription} disabled={isStartingCheckout}>
-                  {isStartingCheckout ? (
+              {paymentSettings ? (
+                <BillingCycleChoice
+                  paymentSettings={paymentSettings}
+                  isLoading={isStartingCheckout}
+                  t={t}
+                  translateInterval={translateInterval}
+                  onSubscribe={onStartSubscription}
+                  subscribeLabel={t("subscribeUnlock")}
+                  variant="default"
+                  isRTL={isRTL}
+                />
+              ) : isPriceLoading ? (
+                <div className="space-y-3">
+                  <div className="h-24 animate-pulse rounded-xl bg-muted" />
+                  <Button variant="cta" className="w-full" disabled>
                     <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
+                  </Button>
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">{t("subscriptionPricing")}</p>
+                  <Button variant="cta" className="w-full justify-center gap-2" disabled>
                     <CreditCard className="h-4 w-4" />
-                  )}
-                  {t("subscribeUnlock")}
-                </Button>
-                <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={onBackToCourses}>
-                  {t("backToCourses")}
-                </Button>
-              </div>
+                    {t("subscribeUnlock")}
+                  </Button>
+                </div>
+              )}
+
+              <Button variant="ghost" className="w-full justify-center text-muted-foreground" onClick={onBackToCourses}>
+                {t("backToCourses")}
+              </Button>
 
               <ul className="space-y-2 text-sm text-muted-foreground">
                 <li className="flex items-center gap-2">

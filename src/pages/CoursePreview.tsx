@@ -205,11 +205,11 @@ const CoursePreview = () => {
     );
   }
 
-  const handleStartSubscription = async () => {
+  const handleStartSubscription = async (priceId?: string) => {
     setIsStartingCheckout(true);
 
     try {
-      const checkoutUrl = await createCheckoutSession();
+      const checkoutUrl = await createCheckoutSession({ priceId });
       if (checkoutUrl) {
         window.location.href = checkoutUrl;
         return;
@@ -230,6 +230,7 @@ const CoursePreview = () => {
         course={course}
         subscription={subscription}
         priceSummary={priceSummary}
+        paymentSettings={paymentSettings}
         isPriceLoading={isPriceLoading}
         isStartingCheckout={isStartingCheckout}
         onStartSubscription={handleStartSubscription}

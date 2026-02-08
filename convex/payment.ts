@@ -261,9 +261,11 @@ export const getOrCreateStripeCustomer = action({
  * For test mode, use a test key starting with sk_test_
  */
 export const createCheckoutSession = action({
-  args: {},
+  args: {
+    priceId: v.optional(v.string()),
+  },
   returns: v.string(),
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     // Require user to be authenticated
     const { userId } = await requireUserAction(ctx);
     
@@ -305,6 +307,16 @@ export const createCheckoutSession = action({
       throw new Error("No product/price configured. Please configure a product in the admin section.");
     }
 
+    // Use provided priceId (yearly) or fall back to monthly (default)
+    const allowedPriceIds = [
+      paymentSettings.selectedMonthlyPriceId,
+      paymentSettings.selectedYearlyPriceId,
+    ].filter((id): id is string => !!id);
+    const priceId =
+      args.priceId && allowedPriceIds.includes(args.priceId)
+        ? args.priceId
+        : paymentSettings.selectedMonthlyPriceId;
+
     // Initialize Stripe client
     const stripe = new Stripe(stripeSecretKey);
 
@@ -316,10 +328,11 @@ export const createCheckoutSession = action({
         payment_method_types: ["card"],
         line_items: [
           {
-            price: paymentSettings.selectedPriceId,
+            price: priceId,
             quantity: 1,
           },
         ],
+        allow_promotion_codes: true,
         success_url: `${process.env.PANEL_URL || "http://localhost:5173"}/payments?success=true&session_id={CHECKOUT_SESSION_ID}`,
         cancel_url: `${process.env.PANEL_URL || "http://localhost:5173"}/payments?canceled=true`,
         // Store user ID in metadata for webhook processing

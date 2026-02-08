@@ -203,11 +203,15 @@ export default defineSchema({
 
   paymentSettings: defineTable({
     selectedProductId: v.string(), // Stripe product ID
-    selectedPriceId: v.string(), // Stripe price ID
+    selectedPriceId: v.string(), // Monthly price ID (legacy field name)
     productName: v.string(),
-    priceAmount: v.number(), // Amount in cents
-    priceCurrency: v.string(),
-    priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")),
+    priceAmount: v.number(), // Monthly amount in cents (legacy field name)
+    priceCurrency: v.string(), // Monthly currency (legacy field name)
+    priceInterval: v.union(v.literal("month"), v.literal("year"), v.literal("week"), v.literal("day")), // Monthly interval (legacy)
+    // Yearly price (optional)
+    selectedYearlyPriceId: v.optional(v.string()),
+    yearlyPriceAmount: v.optional(v.number()),
+    yearlyPriceCurrency: v.optional(v.string()),
     updatedBy: v.id("users"),
     updatedAt: v.number(),
   })
