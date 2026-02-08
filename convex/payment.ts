@@ -824,11 +824,19 @@ export const createCustomerPortalSession = action({
       return portalSession.url;
     } catch (error) {
       console.error("Error creating customer portal session:", error);
-      throw new Error(
-        error instanceof Error 
-          ? `Failed to create customer portal session: ${error.message}`
-          : "Failed to create customer portal session"
-      );
+      const message = error instanceof Error ? error.message : String(error);
+      // Preserve user-facing messages; don't wrap in technical "Failed to create..." text
+      const isUserFacing =
+        message.includes("granted by an admin") ||
+        message.includes("contact support") ||
+        message.includes("subscription has been reset") ||
+        message.includes("Please subscribe again") ||
+        message.includes("No subscription found") ||
+        message === "Failed to create customer portal session URL";
+      if (isUserFacing) {
+        throw new Error(message);
+      }
+      throw new Error("We couldn't open the billing portal. Please try again or contact support.");
     }
   },
 });

@@ -157,8 +157,10 @@ export function usePayments() {
       }
     } catch (error) {
       console.error("Error opening customer portal:", error);
+      const message = error instanceof Error ? error.message : "";
+      const isAdminGranted = message.includes("granted by an admin") || message.includes("contact support");
       toast.error(
-        error instanceof Error ? error.message : t("failedToOpenCustomerPortalRetry")
+        isAdminGranted ? t("subscriptionAdminGrantedContactSupport") : t("failedToOpenCustomerPortalRetry")
       );
     } finally {
       setIsOpeningPortal(false);
