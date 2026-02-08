@@ -136,9 +136,15 @@ export const getUserDashboardStats = query({
     await requireUser(ctx);
     const userId = await getUserIdOrThrow(ctx);
 
-    // Get user to find member since date
+    // Get user to find registration date (member since)
     const user = await ctx.db.get(userId);
-    const memberSince = user?.emailVerificationTime ?? Date.now();
+    if(!user) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+    const memberSince = user?._creationTime;
 
     // Get all user's lesson progress
     const allProgress = await ctx.db
