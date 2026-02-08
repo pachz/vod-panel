@@ -61,7 +61,7 @@ const initialFormValues: FormValues = {
   isAdmin: false,
 };
 
-const PAGE_SIZE = 25;
+const PAGE_SIZE = 10;
 
 const Users = () => {
   const navigate = useNavigate();
