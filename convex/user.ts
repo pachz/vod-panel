@@ -161,6 +161,33 @@ export const listUsersPaginated = query({
 });
 
 /**
+ * Returns total counts of regular users and admins (admin only). Used for tab badges.
+ */
+export const getUsersCounts = query({
+  args: {},
+  returns: v.object({
+    regular: v.number(),
+    admin: v.number(),
+  }),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    let regular = 0;
+    let admin = 0;
+    for (const u of users) {
+      if (u.isGod) admin += 1;
+      else regular += 1;
+    }
+    return { regular, admin };
+  },
+});
+
+/**
  * Search users by name or email (admin only). Uses full-text search on name_search.
  */
 export const searchUsers = query({

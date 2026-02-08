@@ -103,6 +103,7 @@ const Users = () => {
     api.user.searchUsers,
     searchTerm.trim() ? { searchTerm: searchTerm.trim(), limit: 100 } : "skip"
   );
+  const usersCounts = useQuery(api.user.getUsersCounts);
   const currentUser = useQuery(api.user.getCurrentUser);
   const createUser = useAction(api.user.createUser);
   const updateUser = useMutation(api.user.updateUser);
@@ -110,7 +111,6 @@ const Users = () => {
   const updateUserPassword = useAction(api.user.updateUserPassword);
   const deleteUser = useMutation(api.user.deleteUser);
   const exportUserEmails = useAction(api.user.exportUserEmails);
-  const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
 
   const regularUsers = useMemo(
     () =>
@@ -613,10 +613,18 @@ const Users = () => {
       <Tabs defaultValue="users" className="space-y-4">
         <TabsList>
           <TabsTrigger value="users">
-            Users ({regularUsers.length})
+            Users (
+            {searchTerm.trim()
+              ? regularUsers.length
+              : usersCounts?.regular ?? regularUsers.length}
+            )
           </TabsTrigger>
           <TabsTrigger value="admins">
-            Administrators ({adminUsers.length})
+            Administrators (
+            {searchTerm.trim()
+              ? adminUsers.length
+              : usersCounts?.admin ?? adminUsers.length}
+            )
           </TabsTrigger>
         </TabsList>
 
