@@ -202,8 +202,8 @@ export const getUserDashboardStats = query({
       }
     }
 
-    // Convert seconds to hours
-    const hoursWatched = Math.round((totalSecondsWatched / 3600) * 10) / 10; // Round to 1 decimal place
+    // Convert seconds to hours (3 decimal places so short lessons e.g. 3:18 don't round up incorrectly)
+    const hoursWatched = Math.round((totalSecondsWatched / 3600) * 1000) / 1000;
 
     return {
       coursesCompleted: completedCourses,

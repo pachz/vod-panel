@@ -1,7 +1,7 @@
 "use node";
 
 import { action, internalAction } from "./_generated/server";
-import { v } from "convex/values";
+import { ConvexError, v } from "convex/values";
 import Stripe from "stripe";
 import { requireUserAction } from "./utils/auth";
 import { internal } from "./_generated/api";
@@ -757,7 +757,7 @@ export const createCustomerPortalSession = action({
 
         // Admin-granted subscriptions have no Stripe subscription; cannot open portal
         if (subscription.subscriptionId.startsWith(ADMIN_GRANT_SUBSCRIPTION_ID_PREFIX)) {
-          throw new Error("Your subscription was granted by an admin. To change it, contact support. It cannot be managed in Stripe.");
+          throw new ConvexError({ code: "ADMIN_GRANTED_SUBSCRIPTION", message: "Your subscription was granted by an admin. To change it, contact support." });
         }
 
         // Get subscription from Stripe to get customer ID
@@ -797,7 +797,7 @@ export const createCustomerPortalSession = action({
             await ctx.runMutation((internal as any).paymentInternal.clearUserStripeCustomerId, {
               userId: userId as any,
             });
-            throw new Error("Your subscription was granted by an admin. To change it, contact support. It cannot be managed in Stripe.");
+            throw new ConvexError({ code: "ADMIN_GRANTED_SUBSCRIPTION", message: "Your subscription was granted by an admin. To change it, contact support." });
           }
           // Customer not found - likely Stripe account/token changed
           // Reset subscription status and clear customer ID
@@ -824,6 +824,10 @@ export const createCustomerPortalSession = action({
       return portalSession.url;
     } catch (error) {
       console.error("Error creating customer portal session:", error);
+      // Preserve ConvexError so client receives structured data (e.g. ADMIN_GRANTED_SUBSCRIPTION)
+      if (error instanceof ConvexError) {
+        throw error;
+      }
       const message = error instanceof Error ? error.message : String(error);
       // Preserve user-facing messages; don't wrap in technical "Failed to create..." text
       const isUserFacing =

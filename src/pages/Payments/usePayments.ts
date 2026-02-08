@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useSearchParams } from "react-router-dom";
 import { useAction, useQuery, useMutation } from "convex/react";
+import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/hooks/use-language";
@@ -157,8 +158,16 @@ export function usePayments() {
       }
     } catch (error) {
       console.error("Error opening customer portal:", error);
-      const message = error instanceof Error ? error.message : "";
-      const isAdminGranted = message.includes("granted by an admin") || message.includes("contact support");
+      const message =
+        error instanceof ConvexError && typeof error.data === "object" && error.data !== null && "message" in error.data
+          ? String((error.data as { message?: string }).message ?? "")
+          : error instanceof Error
+            ? error.message
+            : "";
+      const isAdminGranted =
+        (error instanceof ConvexError && typeof error.data === "object" && error.data !== null && (error.data as { code?: string }).code === "ADMIN_GRANTED_SUBSCRIPTION") ||
+        message.includes("granted by an admin") ||
+        message.includes("contact support");
       toast.error(
         isAdminGranted ? t("subscriptionAdminGrantedContactSupport") : t("failedToOpenCustomerPortalRetry")
       );
