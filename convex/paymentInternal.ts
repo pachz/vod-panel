@@ -200,6 +200,33 @@ export const getCheckoutSessionBySessionId = internalQuery({
 });
 
 /**
+ * Internal query to list all subscriptions that are Stripe-backed (subscriptionId starts with "sub_").
+ * Used by the daily cron to sync subscription statuses from Stripe.
+ */
+export const listStripeSubscriptionsForSync = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      subscriptionId: v.string(),
+      userId: v.id("users"),
+      currentPeriodStart: v.number(),
+      currentPeriodEnd: v.number(),
+    })
+  ),
+  handler: async (ctx) => {
+    const all = await ctx.db.query("subscriptions").collect();
+    return all
+      .filter((s) => s.subscriptionId.startsWith("sub_"))
+      .map((s) => ({
+        subscriptionId: s.subscriptionId,
+        userId: s.userId,
+        currentPeriodStart: s.currentPeriodStart,
+        currentPeriodEnd: s.currentPeriodEnd,
+      }));
+  },
+});
+
+/**
  * Internal query to get subscription for a specific user (for actions)
  */
 export const getMySubscriptionForUser = internalQuery({

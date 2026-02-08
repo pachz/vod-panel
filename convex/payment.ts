@@ -450,6 +450,58 @@ export const syncSubscriptionFromStripe = action({
 });
 
 /**
+ * Internal action: sync all Stripe-backed subscription statuses from Stripe.
+ * Used by the daily cron to keep subscription status, period dates, and cancel state in sync.
+ */
+export const syncAllSubscriptionsFromStripe = internalAction({
+  args: {},
+  returns: v.object({ synced: v.number(), errors: v.number() }),
+  handler: async (ctx) => {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error("STRIPE_SECRET_KEY is not configured; skipping subscription sync.");
+      return { synced: 0, errors: 0 };
+    }
+
+    const list = await ctx.runQuery(internal.paymentInternal.listStripeSubscriptionsForSync, {});
+    const stripe = new Stripe(stripeSecretKey);
+    let synced = 0;
+    let errors = 0;
+
+    for (const row of list) {
+      try {
+        const subscription = await stripe.subscriptions.retrieve(row.subscriptionId);
+        const dates = getSubscriptionDates(subscription, {
+          currentPeriodStart: row.currentPeriodStart,
+          currentPeriodEnd: row.currentPeriodEnd,
+        });
+        await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
+          subscriptionId: subscription.id,
+          userId: row.userId,
+          customerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
+          status: subscription.status as "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing",
+          currentPeriodStart: dates.currentPeriodStart,
+          currentPeriodEnd: dates.currentPeriodEnd,
+          cancelAtPeriodEnd: (subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end ?? false,
+          canceledAt: (subscription as { canceled_at?: number }).canceled_at
+            ? convertStripeTimestamp((subscription as { canceled_at: number }).canceled_at, "canceled_at")
+            : undefined,
+        });
+        synced += 1;
+      } catch (err) {
+        console.error(`Failed to sync subscription ${row.subscriptionId}:`, err);
+        errors += 1;
+      }
+    }
+
+    if (list.length > 0) {
+      console.log(`Subscription sync complete: ${synced} synced, ${errors} errors`);
+    }
+    return { synced, errors };
+  },
+});
+
+/**
  * Manually sync subscription status from Stripe
  * Useful when webhooks are not set up yet
  * Call this after user redirects from Stripe checkout
