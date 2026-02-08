@@ -430,6 +430,24 @@ export const createUserRecord = internalMutation({
   },
 });
 
+/** Internal mutation to backfill name_search for all users. Run from dashboard or scheduler. */
+export const backfillNameSearch = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    let updated = 0;
+    for (const user of users) {
+      const name_search = buildNameSearch(user.name, user.email);
+      if (name_search !== user.name_search) {
+        await ctx.db.patch(user._id, { name_search });
+        updated += 1;
+      }
+    }
+    return updated;
+  },
+});
+
 // Public action for user registration (no auth required)
 export const registerUser = action({
   args: {

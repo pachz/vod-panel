@@ -66,19 +66,36 @@ const PAGE_SIZE = 10;
 const Users = () => {
   const navigate = useNavigate();
   const [searchTerm, setSearchTerm] = useState("");
-  const [paginatedUsers, setPaginatedUsers] = useState<UserDoc[]>([]);
-  const [cursor, setCursor] = useState<string | null>(null);
-  const [continueCursor, setContinueCursor] = useState<string | null>(null);
-  const [isDone, setIsDone] = useState(false);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [cursorScope, setCursorScope] = useState<string | null>(null);
+  const [paginatedRegularUsers, setPaginatedRegularUsers] = useState<UserDoc[]>([]);
+  const [paginatedAdminUsers, setPaginatedAdminUsers] = useState<UserDoc[]>([]);
+  const [regularCursor, setRegularCursor] = useState<string | null>(null);
+  const [regularContinueCursor, setRegularContinueCursor] = useState<string | null>(null);
+  const [regularIsDone, setRegularIsDone] = useState(false);
+  const [regularLoadingMore, setRegularLoadingMore] = useState(false);
+  const [regularCursorScope, setRegularCursorScope] = useState<string | null>(null);
+  const [adminCursor, setAdminCursor] = useState<string | null>(null);
+  const [adminContinueCursor, setAdminContinueCursor] = useState<string | null>(null);
+  const [adminIsDone, setAdminIsDone] = useState(false);
+  const [adminLoadingMore, setAdminLoadingMore] = useState(false);
+  const [adminCursorScope, setAdminCursorScope] = useState<string | null>(null);
 
-  const usersPage = useQuery(
+  const regularUsersPage = useQuery(
     api.user.listUsersPaginated,
     !searchTerm.trim()
       ? {
           numItems: PAGE_SIZE,
-          cursor: cursor !== null && cursorScope === "list" ? cursor : undefined,
+          isGod: false,
+          cursor: regularCursor !== null && regularCursorScope === "list" ? regularCursor : undefined,
+        }
+      : "skip"
+  );
+  const adminUsersPage = useQuery(
+    api.user.listUsersPaginated,
+    !searchTerm.trim()
+      ? {
+          numItems: PAGE_SIZE,
+          isGod: true,
+          cursor: adminCursor !== null && adminCursorScope === "list" ? adminCursor : undefined,
         }
       : "skip"
   );
@@ -95,14 +112,24 @@ const Users = () => {
   const exportUserEmails = useAction(api.user.exportUserEmails);
   const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
 
-  const displayUsers = useMemo(
-    () => (searchTerm.trim() ? (searchResults ?? []) : paginatedUsers),
-    [searchTerm, searchResults, paginatedUsers]
+  const regularUsers = useMemo(
+    () =>
+      searchTerm.trim()
+        ? (searchResults ?? []).filter((u) => !u.isGod)
+        : paginatedRegularUsers,
+    [searchTerm, searchResults, paginatedRegularUsers]
+  );
+  const adminUsers = useMemo(
+    () =>
+      searchTerm.trim()
+        ? (searchResults ?? []).filter((u) => u.isGod)
+        : paginatedAdminUsers,
+    [searchTerm, searchResults, paginatedAdminUsers]
   );
 
   const regularUserIds = useMemo(
-    () => displayUsers.filter((u) => !u.isGod).map((u) => u._id),
-    [displayUsers]
+    () => regularUsers.map((u) => u._id),
+    [regularUsers]
   );
   const subscriptionStatus = useQuery(
     api.user.getSubscriptionStatusForUsers,
@@ -152,22 +179,28 @@ const Users = () => {
 
   // Reset pagination when search changes
   useEffect(() => {
-    setPaginatedUsers([]);
-    setCursor(null);
-    setContinueCursor(null);
-    setIsDone(false);
-    setIsLoadingMore(false);
-    setCursorScope(null);
+    setPaginatedRegularUsers([]);
+    setPaginatedAdminUsers([]);
+    setRegularCursor(null);
+    setRegularContinueCursor(null);
+    setRegularIsDone(false);
+    setRegularLoadingMore(false);
+    setRegularCursorScope(null);
+    setAdminCursor(null);
+    setAdminContinueCursor(null);
+    setAdminIsDone(false);
+    setAdminLoadingMore(false);
+    setAdminCursorScope(null);
   }, [searchTerm]);
 
-  // Merge paginated results
+  // Merge regular users paginated results
   useEffect(() => {
-    if (!usersPage || searchTerm.trim()) return;
+    if (!regularUsersPage || searchTerm.trim()) return;
 
-    const { page, continueCursor: nextCursor, isDone: nextIsDone } = usersPage;
+    const { page, continueCursor: nextCursor, isDone: nextIsDone } = regularUsersPage;
 
-    setPaginatedUsers((prev) => {
-      if (!cursor) return page;
+    setPaginatedRegularUsers((prev) => {
+      if (!regularCursor) return page as UserDoc[];
       const existingIds = new Set(prev.map((u) => u._id));
       const merged = [...prev];
       page.forEach((u) => {
@@ -175,32 +208,57 @@ const Users = () => {
       });
       return merged;
     });
-    setContinueCursor(nextCursor ?? null);
-    setIsDone(Boolean(nextIsDone) || !nextCursor);
-    setIsLoadingMore(false);
-  }, [usersPage, cursor, searchTerm]);
+    setRegularContinueCursor(nextCursor ?? null);
+    setRegularIsDone(Boolean(nextIsDone) || !nextCursor);
+    setRegularLoadingMore(false);
+  }, [regularUsersPage, regularCursor, searchTerm]);
 
-  const canLoadMore = !searchTerm.trim() && !isDone && Boolean(continueCursor);
-  const handleLoadMore = useCallback(() => {
-    if (!canLoadMore || isLoadingMore) return;
-    setIsLoadingMore(true);
-    setCursorScope("list");
-    setCursor(continueCursor);
-  }, [canLoadMore, continueCursor, isLoadingMore]);
+  // Merge admin users paginated results
+  useEffect(() => {
+    if (!adminUsersPage || searchTerm.trim()) return;
 
-  const userList = useMemo<UserDoc[]>(() => displayUsers, [displayUsers]);
-  const isLoading =
+    const { page, continueCursor: nextCursor, isDone: nextIsDone } = adminUsersPage;
+
+    setPaginatedAdminUsers((prev) => {
+      if (!adminCursor) return page as UserDoc[];
+      const existingIds = new Set(prev.map((u) => u._id));
+      const merged = [...prev];
+      page.forEach((u) => {
+        if (!existingIds.has(u._id)) merged.push(u as UserDoc);
+      });
+      return merged;
+    });
+    setAdminContinueCursor(nextCursor ?? null);
+    setAdminIsDone(Boolean(nextIsDone) || !nextCursor);
+    setAdminLoadingMore(false);
+  }, [adminUsersPage, adminCursor, searchTerm]);
+
+  const canLoadMoreRegular =
+    !searchTerm.trim() && !regularIsDone && Boolean(regularContinueCursor);
+  const handleLoadMoreRegular = useCallback(() => {
+    if (!canLoadMoreRegular || regularLoadingMore) return;
+    setRegularLoadingMore(true);
+    setRegularCursorScope("list");
+    setRegularCursor(regularContinueCursor);
+  }, [canLoadMoreRegular, regularContinueCursor, regularLoadingMore]);
+
+  const canLoadMoreAdmin =
+    !searchTerm.trim() && !adminIsDone && Boolean(adminContinueCursor);
+  const handleLoadMoreAdmin = useCallback(() => {
+    if (!canLoadMoreAdmin || adminLoadingMore) return;
+    setAdminLoadingMore(true);
+    setAdminCursorScope("list");
+    setAdminCursor(adminContinueCursor);
+  }, [canLoadMoreAdmin, adminContinueCursor, adminLoadingMore]);
+
+  const regularIsLoading =
     searchTerm.trim()
       ? searchResults === undefined
-      : usersPage === undefined && paginatedUsers.length === 0;
-  const adminUsers = useMemo(
-    () => userList.filter((user) => user.isGod),
-    [userList],
-  );
-  const regularUsers = useMemo(
-    () => userList.filter((user) => !user.isGod),
-    [userList],
-  );
+      : regularUsersPage === undefined && paginatedRegularUsers.length === 0;
+  const adminIsLoading =
+    searchTerm.trim()
+      ? searchResults === undefined
+      : adminUsersPage === undefined && paginatedAdminUsers.length === 0;
   const editingOwnAccount = useMemo(
     () => (editingUser && currentUser ? editingUser._id === currentUser._id : false),
     [editingUser, currentUser],
@@ -581,7 +639,7 @@ const Users = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {regularIsLoading ? (
                   <TableRow>
                     <TableCell colSpan={5}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
@@ -677,6 +735,25 @@ const Users = () => {
               </TableBody>
             </Table>
           </div>
+          {(canLoadMoreRegular || (regularLoadingMore && paginatedRegularUsers.length > 0)) && (
+            <div className="flex items-center justify-center">
+              <Button
+                variant="outline"
+                onClick={handleLoadMoreRegular}
+                disabled={!canLoadMoreRegular || regularLoadingMore}
+                className="min-w-[160px]"
+              >
+                {regularLoadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading…
+                  </>
+                ) : (
+                  "Load more"
+                )}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="admins" className="space-y-4">
@@ -698,11 +775,11 @@ const Users = () => {
                 </TableRow>
               </TableHeader>
               <TableBody>
-                {isLoading ? (
+                {adminIsLoading ? (
                   <TableRow>
                     <TableCell colSpan={5}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
-                        Loading users…
+                        Loading administrators…
                       </div>
                     </TableCell>
                   </TableRow>
@@ -794,28 +871,27 @@ const Users = () => {
               </TableBody>
             </Table>
           </div>
+          {(canLoadMoreAdmin || (adminLoadingMore && paginatedAdminUsers.length > 0)) && (
+            <div className="flex items-center justify-center">
+              <Button
+                variant="outline"
+                onClick={handleLoadMoreAdmin}
+                disabled={!canLoadMoreAdmin || adminLoadingMore}
+                className="min-w-[160px]"
+              >
+                {adminLoadingMore ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Loading…
+                  </>
+                ) : (
+                  "Load more"
+                )}
+              </Button>
+            </div>
+          )}
         </TabsContent>
       </Tabs>
-
-      {(canLoadMore || (isLoadingMore && paginatedUsers.length > 0)) && (
-        <div className="flex items-center justify-center">
-          <Button
-            variant="outline"
-            onClick={handleLoadMore}
-            disabled={!canLoadMore || isLoadingMore}
-            className="min-w-[160px]"
-          >
-            {isLoadingMore ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                Loading…
-              </>
-            ) : (
-              "Load more"
-            )}
-          </Button>
-        </div>
-      )}
 
       {/* Password Update Dialog */}
       <Dialog
