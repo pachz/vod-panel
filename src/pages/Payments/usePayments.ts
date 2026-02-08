@@ -15,6 +15,9 @@ export type Subscription = {
   currentPeriodEnd: number;
   cancelAtPeriodEnd: boolean;
   canceledAt?: number;
+  /** Billing interval from Stripe (e.g. "month", "year") so yearly plans don't show as "month" */
+  interval?: string;
+  intervalCount?: number;
 };
 
 export type PaymentSettings = {

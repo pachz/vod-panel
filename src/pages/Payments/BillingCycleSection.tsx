@@ -12,6 +12,7 @@ type BillingCycleSectionProps = {
   isReSyncing: boolean;
   isRTL: boolean;
   t: (key: string) => string;
+  translateInterval?: (interval: string) => string;
   onReSync: () => void;
 };
 
@@ -22,6 +23,7 @@ export function BillingCycleSection({
   isReSyncing,
   isRTL,
   t,
+  translateInterval,
   onReSync,
 }: BillingCycleSectionProps) {
   if (!validPeriodDates) {
@@ -50,10 +52,20 @@ export function BillingCycleSection({
 
   if (!cycleInfo) return null;
 
+  const intervalLabel =
+    subscription.interval && translateInterval
+      ? translateInterval(subscription.interval)
+      : null;
+
   return (
     <div className="space-y-4">
       <div>
         <h3 className="text-sm font-semibold mb-3">{t("billingCycle")}</h3>
+        {intervalLabel && (
+          <p className="text-xs text-muted-foreground mb-2">
+            {intervalLabel}
+          </p>
+        )}
         <div className="grid gap-4 md:grid-cols-2">
           <div className="space-y-1">
             <p className="text-xs text-muted-foreground">{t("currentPeriod")}</p>

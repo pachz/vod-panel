@@ -88,6 +88,7 @@ export function SubscriptionStatusCard({
             isReSyncing={isReSyncing}
             isRTL={isRTL}
             t={t}
+            translateInterval={translateInterval}
             onReactivate={onReactivate}
             onOpenPortal={onOpenPortal}
             onReSync={onReSync}

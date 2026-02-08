@@ -95,6 +95,8 @@ export const upsertSubscription = internalMutation({
     currentPeriodEnd: v.number(),
     cancelAtPeriodEnd: v.boolean(),
     canceledAt: v.optional(v.number()),
+    interval: v.optional(v.string()),
+    intervalCount: v.optional(v.number()),
   },
   returns: v.id("subscriptions"),
   handler: async (ctx, args) => {
@@ -112,6 +114,8 @@ export const upsertSubscription = internalMutation({
         currentPeriodEnd: args.currentPeriodEnd,
         cancelAtPeriodEnd: args.cancelAtPeriodEnd,
         canceledAt: args.canceledAt,
+        ...(args.interval !== undefined && { interval: args.interval }),
+        ...(args.intervalCount !== undefined && { intervalCount: args.intervalCount }),
         updatedAt: Date.now(),
       });
       return existing._id;
@@ -126,6 +130,8 @@ export const upsertSubscription = internalMutation({
         currentPeriodEnd: args.currentPeriodEnd,
         cancelAtPeriodEnd: args.cancelAtPeriodEnd,
         canceledAt: args.canceledAt,
+        interval: args.interval,
+        intervalCount: args.intervalCount,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
@@ -248,6 +254,8 @@ export const getMySubscriptionForUser = internalQuery({
       currentPeriodEnd: v.number(),
       cancelAtPeriodEnd: v.boolean(),
       canceledAt: v.optional(v.number()),
+      interval: v.optional(v.string()),
+      intervalCount: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -269,6 +277,8 @@ export const getMySubscriptionForUser = internalQuery({
       currentPeriodEnd: subscription.currentPeriodEnd,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       canceledAt: subscription.canceledAt,
+      interval: subscription.interval,
+      intervalCount: subscription.intervalCount,
     };
   },
 });
@@ -547,6 +557,8 @@ export const getMySubscription = query({
       currentPeriodEnd: v.number(),
       cancelAtPeriodEnd: v.boolean(),
       canceledAt: v.optional(v.number()),
+      interval: v.optional(v.string()),
+      intervalCount: v.optional(v.number()),
     }),
     v.null()
   ),
@@ -582,6 +594,8 @@ export const getMySubscription = query({
       currentPeriodEnd: subscription.currentPeriodEnd,
       cancelAtPeriodEnd: subscription.cancelAtPeriodEnd,
       canceledAt: subscription.canceledAt,
+      interval: subscription.interval,
+      intervalCount: subscription.intervalCount,
     };
   },
 });

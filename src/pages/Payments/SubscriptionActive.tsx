@@ -18,6 +18,7 @@ type SubscriptionActiveProps = {
   isReSyncing: boolean;
   isRTL: boolean;
   t: (key: string) => string;
+  translateInterval?: (interval: string) => string;
   onReactivate: () => void;
   onOpenPortal: () => void;
   onReSync: () => void;
@@ -33,6 +34,7 @@ export function SubscriptionActive({
   isReSyncing,
   isRTL,
   t,
+  translateInterval,
   onReactivate,
   onOpenPortal,
   onReSync,
@@ -64,6 +66,7 @@ export function SubscriptionActive({
         isReSyncing={isReSyncing}
         isRTL={isRTL}
         t={t}
+        translateInterval={translateInterval}
         onReSync={onReSync}
       />
 

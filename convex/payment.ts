@@ -25,8 +25,26 @@ function convertStripeTimestamp(timestamp: any, fieldName: string): number {
 }
 
 /**
+ * Get billing interval from Stripe subscription (requires expanded items.data.price).
+ * Returns the interval from the first subscription item's price so yearly plans show "year" not "month".
+ */
+function getSubscriptionInterval(subscription: any): { interval: string; intervalCount: number } | null {
+  const item = subscription.items?.data?.[0];
+  if (!item) return null;
+  const price = item.price;
+  if (!price || typeof price === "string") return null;
+  const recurring = price.recurring;
+  if (!recurring?.interval) return null;
+  return {
+    interval: String(recurring.interval).toLowerCase(),
+    intervalCount: typeof recurring.interval_count === "number" ? recurring.interval_count : 1,
+  };
+}
+
+/**
  * Helper function to safely get subscription dates from Stripe subscription object
- * Handles missing dates gracefully by using fallback values
+ * Handles missing dates gracefully by using fallback values.
+ * When fallback is used, respects billing interval (e.g. yearly = 365 days, not 30).
  */
 function getSubscriptionDates(
   subscription: any,
@@ -61,10 +79,19 @@ function getSubscriptionDates(
       };
     }
 
-    // Calculate defaults
-    const createdTimestamp = subscription.created;
+    // Use billing interval for fallback period length (yearly = 365 days, not 30)
+    const intervalInfo = getSubscriptionInterval(subscription);
+    const daysPerPeriod = intervalInfo
+      ? (intervalInfo.interval === "year"
+          ? 365 * intervalInfo.intervalCount
+          : intervalInfo.interval === "month"
+            ? 30 * intervalInfo.intervalCount
+            : intervalInfo.interval === "week"
+              ? 7 * intervalInfo.intervalCount
+              : 30)
+      : 30;
     const startDate = Date.now();
-    const endDate = Date.now() + (30 * 24 * 60 * 60 * 1000); // 30 days from now
+    const endDate = Date.now() + daysPerPeriod * 24 * 60 * 60 * 1000;
 
     return {
       currentPeriodStart: startDate,
@@ -389,8 +416,10 @@ export const syncSubscriptionFromStripe = action({
     const stripe = new Stripe(stripeSecretKey);
 
     try {
-      // Get subscription from Stripe
-      const subscription = await stripe.subscriptions.retrieve(args.subscriptionId);
+      // Get subscription from Stripe (expand price so we can store billing interval e.g. year vs month)
+      const subscription = await stripe.subscriptions.retrieve(args.subscriptionId, {
+        expand: ["items.data.price"],
+      });
 
       // Verify this subscription belongs to the user first
       const userSubscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
@@ -421,6 +450,7 @@ export const syncSubscriptionFromStripe = action({
         currentPeriodStart: userSubscription.currentPeriodStart,
         currentPeriodEnd: userSubscription.currentPeriodEnd,
       });
+      const intervalInfo = getSubscriptionInterval(subscription);
 
       // Update subscription in database with fresh data from Stripe
       await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
@@ -432,6 +462,8 @@ export const syncSubscriptionFromStripe = action({
         currentPeriodEnd: dates.currentPeriodEnd,
         cancelAtPeriodEnd: (subscription as any).cancel_at_period_end || false,
         canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : undefined,
+        interval: intervalInfo?.interval,
+        intervalCount: intervalInfo?.intervalCount,
       });
 
       return {
@@ -470,11 +502,14 @@ export const syncAllSubscriptionsFromStripe = internalAction({
 
     for (const row of list) {
       try {
-        const subscription = await stripe.subscriptions.retrieve(row.subscriptionId);
+        const subscription = await stripe.subscriptions.retrieve(row.subscriptionId, {
+          expand: ["items.data.price"],
+        });
         const dates = getSubscriptionDates(subscription, {
           currentPeriodStart: row.currentPeriodStart,
           currentPeriodEnd: row.currentPeriodEnd,
         });
+        const intervalInfo = getSubscriptionInterval(subscription);
         await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
           subscriptionId: subscription.id,
           userId: row.userId,
@@ -486,6 +521,8 @@ export const syncAllSubscriptionsFromStripe = internalAction({
           canceledAt: (subscription as { canceled_at?: number }).canceled_at
             ? convertStripeTimestamp((subscription as { canceled_at: number }).canceled_at, "canceled_at")
             : undefined,
+          interval: intervalInfo?.interval,
+          intervalCount: intervalInfo?.intervalCount,
         });
         synced += 1;
       } catch (err) {
@@ -574,7 +611,9 @@ export const syncSubscriptionStatus = action({
           ? session.subscription 
           : session.subscription.id;
 
-        const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+        const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+          expand: ["items.data.price"],
+        });
 
         // Get existing subscription to use as fallback for dates
         const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
@@ -586,6 +625,7 @@ export const syncSubscriptionStatus = action({
           currentPeriodStart: existingSub.currentPeriodStart,
           currentPeriodEnd: existingSub.currentPeriodEnd,
         } : undefined);
+        const intervalInfo = getSubscriptionInterval(subscription);
 
         await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
           subscriptionId: subscription.id,
@@ -596,6 +636,8 @@ export const syncSubscriptionStatus = action({
           currentPeriodEnd: dates.currentPeriodEnd,
           cancelAtPeriodEnd: (subscription as any).cancel_at_period_end || false,
           canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : undefined,
+          interval: intervalInfo?.interval,
+          intervalCount: intervalInfo?.intervalCount,
         });
 
         return {
@@ -665,7 +707,7 @@ export const cancelSubscription = action({
         currentPeriodEnd: subscription.currentPeriodEnd,
       });
 
-      // Update subscription in database
+      // Update subscription in database (preserve interval so yearly stays yearly)
       await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
         subscriptionId: updatedSubscription.id,
         userId: userId as any,
@@ -677,6 +719,8 @@ export const cancelSubscription = action({
         currentPeriodEnd: dates.currentPeriodEnd,
         cancelAtPeriodEnd: (updatedSubscription as any).cancel_at_period_end || false,
         canceledAt: (updatedSubscription as any).canceled_at ? convertStripeTimestamp((updatedSubscription as any).canceled_at, "canceled_at") : undefined,
+        interval: subscription.interval,
+        intervalCount: subscription.intervalCount,
       });
 
       return {
@@ -738,7 +782,7 @@ export const reactivateSubscription = action({
         currentPeriodEnd: subscription.currentPeriodEnd,
       });
 
-      // Update subscription in database
+      // Update subscription in database (preserve interval so yearly stays yearly)
       await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
         subscriptionId: updatedSubscription.id,
         userId: userId as any,
@@ -750,6 +794,8 @@ export const reactivateSubscription = action({
         currentPeriodEnd: dates.currentPeriodEnd,
         cancelAtPeriodEnd: (updatedSubscription as any).cancel_at_period_end || false,
         canceledAt: (updatedSubscription as any).canceled_at ? convertStripeTimestamp((updatedSubscription as any).canceled_at, "canceled_at") : undefined,
+        interval: subscription.interval,
+        intervalCount: subscription.intervalCount,
       });
 
       return {
@@ -943,13 +989,13 @@ export const handleStripeWebhook = internalAction({
       case "customer.subscription.created":
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionUpdate(ctx, subscription);
+        await handleSubscriptionUpdate(ctx, stripe, subscription);
         break;
       }
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        await handleSubscriptionDeleted(ctx, subscription);
+        await handleSubscriptionDeleted(ctx, stripe, subscription);
         break;
       }
 
@@ -1004,7 +1050,9 @@ async function handleCheckoutSessionCompleted(
     if (!stripeSecretKey) return;
 
     const stripe = new Stripe(stripeSecretKey);
-    const subscription = await stripe.subscriptions.retrieve(subscriptionId);
+    const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+      expand: ["items.data.price"],
+    });
 
     // Get existing subscription to use as fallback for dates
     const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
@@ -1016,6 +1064,7 @@ async function handleCheckoutSessionCompleted(
       currentPeriodStart: existingSub.currentPeriodStart,
       currentPeriodEnd: existingSub.currentPeriodEnd,
     } : undefined);
+    const intervalInfo = getSubscriptionInterval(subscription);
 
     // Using type assertion until API regenerates
     await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
@@ -1027,6 +1076,8 @@ async function handleCheckoutSessionCompleted(
       currentPeriodEnd: dates.currentPeriodEnd,
       cancelAtPeriodEnd: (subscription as any).cancel_at_period_end || false,
       canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : undefined,
+      interval: intervalInfo?.interval,
+      intervalCount: intervalInfo?.intervalCount,
     });
   }
 }
@@ -1036,15 +1087,18 @@ async function handleCheckoutSessionCompleted(
  */
 async function handleSubscriptionUpdate(
   ctx: any,
+  stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
-  // Get userId from checkout session metadata or find by customer ID
-  const customerId = typeof subscription.customer === "string" 
-    ? subscription.customer 
-    : subscription.customer.id;
+  // Re-retrieve with expand so we get billing interval (year vs month) from price
+  const subscriptionExpanded = await stripe.subscriptions.retrieve(subscription.id, {
+    expand: ["items.data.price"],
+  });
 
-  // Find checkout session by customer ID to get userId
-  // Using type assertion until API regenerates
+  const customerId = typeof subscriptionExpanded.customer === "string"
+    ? subscriptionExpanded.customer
+    : subscriptionExpanded.customer.id;
+
   const checkoutSessions = await ctx.runQuery((internal as any).paymentInternal.getCheckoutSessionByCustomerId, {
     customerId,
   });
@@ -1056,27 +1110,27 @@ async function handleSubscriptionUpdate(
 
   const userId = checkoutSessions[0].userId;
 
-  // Get existing subscription to use as fallback for dates
   const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
     userId: userId,
   });
 
-  // Get dates safely
-  const dates = getSubscriptionDates(subscription, existingSub ? {
+  const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
     currentPeriodStart: existingSub.currentPeriodStart,
     currentPeriodEnd: existingSub.currentPeriodEnd,
   } : undefined);
+  const intervalInfo = getSubscriptionInterval(subscriptionExpanded);
 
-  // Using type assertion until API regenerates
   await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
-    subscriptionId: subscription.id,
+    subscriptionId: subscriptionExpanded.id,
     userId: userId,
     customerId: customerId,
-    status: subscription.status as any,
+    status: subscriptionExpanded.status as any,
     currentPeriodStart: dates.currentPeriodStart,
     currentPeriodEnd: dates.currentPeriodEnd,
-    cancelAtPeriodEnd: (subscription as any).cancel_at_period_end || false,
-    canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : undefined,
+    cancelAtPeriodEnd: (subscriptionExpanded as any).cancel_at_period_end || false,
+    canceledAt: (subscriptionExpanded as any).canceled_at ? convertStripeTimestamp((subscriptionExpanded as any).canceled_at, "canceled_at") : undefined,
+    interval: intervalInfo?.interval,
+    intervalCount: intervalInfo?.intervalCount,
   });
 }
 
@@ -1085,13 +1139,18 @@ async function handleSubscriptionUpdate(
  */
 async function handleSubscriptionDeleted(
   ctx: any,
+  stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
-  const customerId = typeof subscription.customer === "string" 
-    ? subscription.customer 
-    : subscription.customer.id;
+  // Re-retrieve with expand so we have consistent shape; interval preserved from existingSub if needed
+  const subscriptionExpanded = await stripe.subscriptions.retrieve(subscription.id, {
+    expand: ["items.data.price"],
+  });
 
-  // Using type assertion until API regenerates
+  const customerId = typeof subscriptionExpanded.customer === "string"
+    ? subscriptionExpanded.customer
+    : subscriptionExpanded.customer.id;
+
   const checkoutSessions = await ctx.runQuery((internal as any).paymentInternal.getCheckoutSessionByCustomerId, {
     customerId,
   });
@@ -1103,27 +1162,27 @@ async function handleSubscriptionDeleted(
 
   const userId = checkoutSessions[0].userId;
 
-  // Get existing subscription to use as fallback for dates
   const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
     userId: userId,
   });
 
-  // Get dates safely
-  const dates = getSubscriptionDates(subscription, existingSub ? {
+  const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
     currentPeriodStart: existingSub.currentPeriodStart,
     currentPeriodEnd: existingSub.currentPeriodEnd,
   } : undefined);
+  const intervalInfo = getSubscriptionInterval(subscriptionExpanded);
 
-  // Using type assertion until API regenerates
   await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
-    subscriptionId: subscription.id,
+    subscriptionId: subscriptionExpanded.id,
     userId: userId,
     customerId: customerId,
     status: "canceled" as const,
     currentPeriodStart: dates.currentPeriodStart,
     currentPeriodEnd: dates.currentPeriodEnd,
     cancelAtPeriodEnd: false,
-    canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : Date.now(),
+    canceledAt: (subscriptionExpanded as any).canceled_at ? convertStripeTimestamp((subscriptionExpanded as any).canceled_at, "canceled_at") : Date.now(),
+    interval: intervalInfo?.interval ?? existingSub?.interval,
+    intervalCount: intervalInfo?.intervalCount ?? existingSub?.intervalCount,
   });
 }
 

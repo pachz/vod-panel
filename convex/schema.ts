@@ -194,6 +194,10 @@ export default defineSchema({
     currentPeriodEnd: v.number(),
     cancelAtPeriodEnd: v.boolean(),
     canceledAt: v.optional(v.number()),
+    /** Billing interval from Stripe price (e.g. "month", "year") */
+    interval: v.optional(v.string()),
+    /** Interval count from Stripe price (e.g. 1 for monthly, 1 for yearly) */
+    intervalCount: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
