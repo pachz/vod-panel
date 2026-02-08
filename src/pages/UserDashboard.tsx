@@ -20,6 +20,16 @@ const formatDate = (timestamp: number) => {
   }).format(date);
 };
 
+/** Format decimal hours as "Xh Ym" (e.g. 2.5 → "2h 30m", 0.5 → "30m"). */
+const formatHoursWatched = (decimalHours: number): string => {
+  if (decimalHours <= 0) return "0h";
+  const hours = Math.floor(decimalHours);
+  const minutes = Math.round((decimalHours - hours) * 60);
+  if (hours === 0) return `${minutes}m`;
+  if (minutes === 0) return `${hours}h`;
+  return `${hours}h ${minutes}m`;
+};
+
 const UserDashboard = () => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -87,7 +97,7 @@ const UserDashboard = () => {
     },
     {
       title: t("hoursWatched"),
-      value: stats?.hoursWatched ?? 0,
+      value: formatHoursWatched(stats?.hoursWatched ?? 0),
       icon: Clock,
       color: "from-purple-500 to-purple-600",
     },
