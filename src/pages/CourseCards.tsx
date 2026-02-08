@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { Clock } from "lucide-react";
+import { ChevronLeft, ChevronRight, Clock } from "lucide-react";
 import { useQuery } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -37,6 +37,8 @@ const formatLessonCount = (count: number | undefined, t: (key: string) => string
   return `${count} ${count === 1 ? t("lesson") : t("lessons")}`;
 };
 
+const PAGE_SIZE = 12;
+
 const CourseCards = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -44,12 +46,21 @@ const CourseCards = () => {
   const searchFilter = searchParams.get("search") || undefined;
   const { language, t, isRTL } = useLanguage();
 
+  const [cursor, setCursor] = useState<string | undefined>(undefined);
+  const [prevCursors, setPrevCursors] = useState<string[]>([]);
+
   const courses = useQuery(api.course.listCourses, {
     categoryId: categoryFilter as Id<"categories"> | undefined,
     status: "published",
     search: searchFilter,
-    limit: 72,
+    limit: PAGE_SIZE,
+    cursor: cursor || undefined,
   });
+
+  useEffect(() => {
+    setCursor(undefined);
+    setPrevCursors([]);
+  }, [categoryFilter, searchFilter]);
 
   const categories = useQuery(api.category.listCategories);
   const categoryIdsWithPublishedCourses = useQuery(
@@ -146,6 +157,25 @@ const CourseCards = () => {
     [setSearchParams],
   );
 
+  const handleNextPage = useCallback(() => {
+    if (!courses?.continueCursor) return;
+    setPrevCursors((prev) => [...prev, cursor ?? ""]);
+    setCursor(courses.continueCursor);
+  }, [courses?.continueCursor, cursor]);
+
+  const handlePrevPage = useCallback(() => {
+    if (prevCursors.length === 0) return;
+    const nextPrev = prevCursors.slice(0, -1);
+    const prevCursor = prevCursors[prevCursors.length - 1];
+    setPrevCursors(nextPrev);
+    setCursor(prevCursor === "" ? undefined : prevCursor);
+  }, [prevCursors]);
+
+  const showPagination =
+    !isLoading &&
+    courseList.length > 0 &&
+    (prevCursors.length > 0 || (courses && !courses.isDone));
+
   return (
     <div className="space-y-8" dir={isRTL ? "rtl" : "ltr"}>
       <div className="space-y-2 text-center">
@@ -208,75 +238,105 @@ const CourseCards = () => {
             : t("noCoursesAvailable")}
         </div>
       ) : (
-        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
-          {courseList.map((course) => (
-            <Card key={course._id} className="flex h-full flex-col overflow-hidden">
-              {course.thumbnail_image_url ? (
-                <div className="relative h-48 w-full overflow-hidden">
-                  <img
-                    src={course.thumbnail_image_url}
-                    alt={course.name}
-                    className="h-full w-full object-cover"
-                    loading="lazy"
-                  />
-                </div>
-              ) : (
-                <div className="flex h-48 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
-                  {t("noImage")}
-                </div>
-              )}
-              <CardHeader className="space-y-3">
-                <div className="flex flex-wrap gap-1.5">
-                  <Badge
-                    variant="secondary"
-                    className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
-                  >
-                    {categoryNameById[course.category_id] ?? t("uncategorized")}
-                  </Badge>
-                  {(course.additional_category_ids ?? []).map((id) => (
+        <>
+          <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+            {courseList.map((course) => (
+              <Card key={course._id} className="flex h-full flex-col overflow-hidden">
+                {course.thumbnail_image_url ? (
+                  <div className="relative h-48 w-full overflow-hidden">
+                    <img
+                      src={course.thumbnail_image_url}
+                      alt={course.name}
+                      className="h-full w-full object-cover"
+                      loading="lazy"
+                    />
+                  </div>
+                ) : (
+                  <div className="flex h-48 w-full items-center justify-center bg-muted text-sm text-muted-foreground">
+                    {t("noImage")}
+                  </div>
+                )}
+                <CardHeader className="space-y-3">
+                  <div className="flex flex-wrap gap-1.5">
                     <Badge
-                      key={id}
-                      variant="outline"
-                      className="w-fit rounded-full border-muted-foreground/30 text-muted-foreground"
+                      variant="secondary"
+                      className="w-fit rounded-full bg-purple-100 text-purple-700 hover:bg-purple-100 dark:bg-purple-900/30 dark:text-purple-300"
                     >
-                      {categoryNameById[id] ?? t("uncategorized")}
+                      {categoryNameById[course.category_id] ?? t("uncategorized")}
                     </Badge>
-                  ))}
-                </div>
-                <CardTitle className="text-lg font-bold leading-tight">
-                  {language === "ar" ? course.name_ar : course.name}
-                </CardTitle>
-                <p className="line-clamp-2 text-sm text-muted-foreground">
-                  {markdownToPlainText(
-                    language === "ar" 
-                      ? (course.short_description_ar ?? course.short_description ?? t("noDescription"))
-                      : (course.short_description ?? t("noDescription"))
-                  )}
-                </p>
-                <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                  <span>{formatLessonCount(course.lesson_count, t)}</span>
-                  <span aria-hidden="true">•</span>
-                  <span className="flex items-center gap-1">
-                    <Clock className="h-3.5 w-3.5" />
-                    <span>{formatDurationTime(course.duration)}</span>
-                  </span>
-                </div>
-              </CardHeader>
-              <CardFooter className="mt-auto pt-0">
-                <Button
-                  className="w-full rounded-lg bg-pink-500 text-white hover:bg-pink-600"
-                  onClick={() => {
-                    const currentLang = searchParams.get("lang");
-                    const url = `/courses/preview/${course._id}${currentLang ? `?lang=${currentLang}` : ""}`;
-                    navigate(url);
-                  }}
-                >
-                  {t("viewCourse")}
-                </Button>
-              </CardFooter>
-            </Card>
-          ))}
-        </div>
+                    {(course.additional_category_ids ?? []).map((id) => (
+                      <Badge
+                        key={id}
+                        variant="outline"
+                        className="w-fit rounded-full border-muted-foreground/30 text-muted-foreground"
+                      >
+                        {categoryNameById[id] ?? t("uncategorized")}
+                      </Badge>
+                    ))}
+                  </div>
+                  <CardTitle className="text-lg font-bold leading-tight">
+                    {language === "ar" ? course.name_ar : course.name}
+                  </CardTitle>
+                  <p className="line-clamp-2 text-sm text-muted-foreground">
+                    {markdownToPlainText(
+                      language === "ar" 
+                        ? (course.short_description_ar ?? course.short_description ?? t("noDescription"))
+                        : (course.short_description ?? t("noDescription"))
+                    )}
+                  </p>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                    <span>{formatLessonCount(course.lesson_count, t)}</span>
+                    <span aria-hidden="true">•</span>
+                    <span className="flex items-center gap-1">
+                      <Clock className="h-3.5 w-3.5" />
+                      <span>{formatDurationTime(course.duration)}</span>
+                    </span>
+                  </div>
+                </CardHeader>
+                <CardFooter className="mt-auto pt-0">
+                  <Button
+                    className="w-full rounded-lg bg-pink-500 text-white hover:bg-pink-600"
+                    onClick={() => {
+                      const currentLang = searchParams.get("lang");
+                      const url = `/courses/preview/${course._id}${currentLang ? `?lang=${currentLang}` : ""}`;
+                      navigate(url);
+                    }}
+                  >
+                    {t("viewCourse")}
+                  </Button>
+                </CardFooter>
+              </Card>
+            ))}
+          </div>
+          {showPagination && (
+            <nav
+              role="navigation"
+              aria-label="pagination"
+              className="mt-8 flex flex-wrap items-center justify-center gap-2"
+            >
+              <Button
+                variant="outline"
+                size="default"
+                onClick={handlePrevPage}
+                disabled={prevCursors.length === 0}
+                className="gap-1"
+              >
+                <ChevronLeft className="h-4 w-4" aria-hidden />
+                {t("previousPage")}
+              </Button>
+              <Button
+                variant="outline"
+                size="default"
+                onClick={handleNextPage}
+                disabled={!courses?.continueCursor || courses.isDone}
+                className="gap-1"
+              >
+                {t("nextPage")}
+                <ChevronRight className="h-4 w-4" aria-hidden />
+              </Button>
+            </nav>
+          )}
+        </>
       )}
     </div>
   );

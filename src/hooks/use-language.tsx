@@ -21,7 +21,9 @@ const translations = {
     "noImage": "No image",
     "uncategorized": "Uncategorized",
     "noDescription": "No description available.",
-    
+    "previousPage": "Previous",
+    "nextPage": "Next",
+
     // CoursePreview
     "backToCourseList": "Back to course list",
     "courseProgress": "Course progress",
@@ -202,7 +204,9 @@ const translations = {
     "noImage": "لا توجد صورة",
     "uncategorized": "غير مصنف",
     "noDescription": "لا يوجد وصف متاح.",
-    
+    "previousPage": "السابق",
+    "nextPage": "التالي",
+
     // CoursePreview
     "backToCourseList": "العودة إلى قائمة الدورات",
     "courseProgress": "تقدم الدورة",
