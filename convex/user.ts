@@ -19,6 +19,13 @@ import { logActivity } from "./utils/activityLog";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
+/** Build searchable string from name + email for full-text search. */
+function buildNameSearch(name?: string | null, email?: string | null): string | undefined {
+  const parts = [(name ?? "").trim(), (email ?? "").trim()].filter(Boolean);
+  const value = parts.join(" ").trim();
+  return value || undefined;
+}
+
 export const getCurrentUser = query(async (ctx) => {
   const { identity } = await requireUser(ctx);
   
@@ -76,6 +83,126 @@ export const listUsers = query(async (ctx) => {
       }
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
+});
+
+const PAGE_SIZE = 25;
+
+/**
+ * Paginated list of users (admin only). Uses index for scalability.
+ * Pass isGod to filter by role: true = admins only, false = regular only, undefined = all.
+ */
+export const listUsersPaginated = query({
+  args: {
+    numItems: v.optional(v.number()),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    isGod: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    page: v.array(
+      v.object({
+        _id: v.id("users"),
+        _creationTime: v.number(),
+        name: v.optional(v.string()),
+        email: v.optional(v.string()),
+        name_search: v.optional(v.string()),
+        phone: v.optional(v.string()),
+        image: v.optional(v.string()),
+        emailVerificationTime: v.optional(v.number()),
+        phoneVerificationTime: v.optional(v.number()),
+        isAnonymous: v.optional(v.boolean()),
+        isGod: v.optional(v.boolean()),
+        deletedAt: v.optional(v.number()),
+        stripeCustomerId: v.optional(v.string()),
+      }),
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const numItems = Math.min(Math.max(args.numItems ?? PAGE_SIZE, 1), 100);
+
+    if (args.isGod === true || args.isGod === false) {
+      const result = await ctx.db
+        .query("users")
+        .withIndex("by_deletedAt_isGod", (q) =>
+          q.eq("deletedAt", undefined).eq("isGod", args.isGod!),
+        )
+        .order("desc")
+        .paginate({
+          numItems,
+          cursor: args.cursor ?? null,
+        });
+      return {
+        page: result.page,
+        isDone: result.isDone,
+        continueCursor: result.continueCursor,
+      };
+    }
+
+    const result = await ctx.db
+      .query("users")
+      .withIndex("by_deletedAt", (q) =>
+        q.eq("deletedAt", undefined),
+      )
+      .order("desc")
+      .paginate({
+        numItems,
+        cursor: args.cursor ?? null,
+      });
+
+    return {
+      page: result.page,
+      isDone: result.isDone,
+      continueCursor: result.continueCursor,
+    };
+  },
+});
+
+/**
+ * Search users by name or email (admin only). Uses full-text search on name_search.
+ */
+export const searchUsers = query({
+  args: {
+    searchTerm: v.string(),
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      _id: v.id("users"),
+      _creationTime: v.number(),
+      name: v.optional(v.string()),
+      email: v.optional(v.string()),
+      name_search: v.optional(v.string()),
+      phone: v.optional(v.string()),
+      image: v.optional(v.string()),
+      emailVerificationTime: v.optional(v.number()),
+      phoneVerificationTime: v.optional(v.number()),
+      isAnonymous: v.optional(v.boolean()),
+      isGod: v.optional(v.boolean()),
+      deletedAt: v.optional(v.number()),
+      stripeCustomerId: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const term = args.searchTerm.trim();
+    if (!term) {
+      return [];
+    }
+
+    const limit = Math.min(args.limit ?? 50, 100);
+    const users = await ctx.db
+      .query("users")
+      .withSearchIndex("search_name", (q) =>
+        q.search("name_search", term).eq("deletedAt", undefined),
+      )
+      .take(limit);
+
+    return users;
+  },
 });
 
 /**
@@ -263,6 +390,7 @@ export const createUserRecord = internalMutation({
       await ctx.db.patch(existing._id, {
         name: args.name,
         email: args.email,
+        name_search: buildNameSearch(args.name, args.email),
         phone,
         isGod: args.isAdmin,
         emailVerificationTime: existing.emailVerificationTime ?? Date.now(),
@@ -284,6 +412,7 @@ export const createUserRecord = internalMutation({
     const userId = await ctx.db.insert("users", {
       name: args.name,
       email: args.email,
+      name_search: buildNameSearch(args.name, args.email),
       phone,
       isGod: args.isAdmin,
       emailVerificationTime: Date.now(), // Auto-verify for admin-created users
@@ -473,6 +602,7 @@ export const updateUser = mutation({
     await ctx.db.patch(id, {
       name: validated.name,
       email: validated.email,
+      name_search: buildNameSearch(validated.name, validated.email),
       phone: validated.phone && validated.phone.trim() ? validated.phone.trim() : undefined,
       isGod: validated.isAdmin ?? false,
     });

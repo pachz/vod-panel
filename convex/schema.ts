@@ -8,6 +8,8 @@ export default defineSchema({
   users: defineTable({
     name: v.optional(v.string()),
     email: v.optional(v.string()),
+    /** Combined name + email for full-text search (one index). */
+    name_search: v.optional(v.string()),
     phone: v.optional(v.string()),
     image: v.optional(v.string()),
     emailVerificationTime: v.optional(v.number()),
@@ -18,7 +20,13 @@ export default defineSchema({
     stripeCustomerId: v.optional(v.string()), // Stripe customer ID
   })
     .index("email", ["email", "deletedAt"])
-    .index("stripeCustomerId", ["stripeCustomerId"]),
+    .index("stripeCustomerId", ["stripeCustomerId"])
+    .index("by_deletedAt", ["deletedAt"])
+    .index("by_deletedAt_isGod", ["deletedAt", "isGod"])
+    .searchIndex("search_name", {
+      searchField: "name_search",
+      filterFields: ["deletedAt"],
+    }),
 
   videos: defineTable({
     url: v.string(),

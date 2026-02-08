@@ -33,6 +33,16 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           message: "This account has been deactivated. Please contact support.",
         });
       }
+
+      // Keep searchable name+email field in sync (auth creates/updates users without it)
+      if (user) {
+        const name = (user.name ?? "").trim();
+        const email = (user.email ?? "").trim();
+        const name_search = [name, email].filter(Boolean).join(" ").trim() || undefined;
+        if (name_search !== user.name_search) {
+          await ctx.db.patch(args.userId as Id<"users">, { name_search });
+        }
+      }
     },
     // async createOrUpdateUser(ctx: MutationCtx, args) {
     //   // Helper function to update user image

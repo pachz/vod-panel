@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift } from "lucide-react";
+import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift, Search, Loader2 } from "lucide-react";
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -61,9 +61,31 @@ const initialFormValues: FormValues = {
   isAdmin: false,
 };
 
+const PAGE_SIZE = 25;
+
 const Users = () => {
   const navigate = useNavigate();
-  const users = useQuery(api.user.listUsers);
+  const [searchTerm, setSearchTerm] = useState("");
+  const [paginatedUsers, setPaginatedUsers] = useState<UserDoc[]>([]);
+  const [cursor, setCursor] = useState<string | null>(null);
+  const [continueCursor, setContinueCursor] = useState<string | null>(null);
+  const [isDone, setIsDone] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [cursorScope, setCursorScope] = useState<string | null>(null);
+
+  const usersPage = useQuery(
+    api.user.listUsersPaginated,
+    !searchTerm.trim()
+      ? {
+          numItems: PAGE_SIZE,
+          cursor: cursor !== null && cursorScope === "list" ? cursor : undefined,
+        }
+      : "skip"
+  );
+  const searchResults = useQuery(
+    api.user.searchUsers,
+    searchTerm.trim() ? { searchTerm: searchTerm.trim(), limit: 100 } : "skip"
+  );
   const currentUser = useQuery(api.user.getCurrentUser);
   const createUser = useAction(api.user.createUser);
   const updateUser = useMutation(api.user.updateUser);
@@ -73,9 +95,14 @@ const Users = () => {
   const exportUserEmails = useAction(api.user.exportUserEmails);
   const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
 
+  const displayUsers = useMemo(
+    () => (searchTerm.trim() ? (searchResults ?? []) : paginatedUsers),
+    [searchTerm, searchResults, paginatedUsers]
+  );
+
   const regularUserIds = useMemo(
-    () => (users ?? []).filter((u) => !u.isGod).map((u) => u._id),
-    [users]
+    () => displayUsers.filter((u) => !u.isGod).map((u) => u._id),
+    [displayUsers]
   );
   const subscriptionStatus = useQuery(
     api.user.getSubscriptionStatusForUsers,
@@ -123,8 +150,49 @@ const Users = () => {
     setPasswordFormValues({ password: "" });
   }, [isPasswordDialogOpen]);
 
-  const userList = useMemo<UserDoc[]>(() => users ?? [], [users]);
-  const isLoading = users === undefined;
+  // Reset pagination when search changes
+  useEffect(() => {
+    setPaginatedUsers([]);
+    setCursor(null);
+    setContinueCursor(null);
+    setIsDone(false);
+    setIsLoadingMore(false);
+    setCursorScope(null);
+  }, [searchTerm]);
+
+  // Merge paginated results
+  useEffect(() => {
+    if (!usersPage || searchTerm.trim()) return;
+
+    const { page, continueCursor: nextCursor, isDone: nextIsDone } = usersPage;
+
+    setPaginatedUsers((prev) => {
+      if (!cursor) return page;
+      const existingIds = new Set(prev.map((u) => u._id));
+      const merged = [...prev];
+      page.forEach((u) => {
+        if (!existingIds.has(u._id)) merged.push(u as UserDoc);
+      });
+      return merged;
+    });
+    setContinueCursor(nextCursor ?? null);
+    setIsDone(Boolean(nextIsDone) || !nextCursor);
+    setIsLoadingMore(false);
+  }, [usersPage, cursor, searchTerm]);
+
+  const canLoadMore = !searchTerm.trim() && !isDone && Boolean(continueCursor);
+  const handleLoadMore = useCallback(() => {
+    if (!canLoadMore || isLoadingMore) return;
+    setIsLoadingMore(true);
+    setCursorScope("list");
+    setCursor(continueCursor);
+  }, [canLoadMore, continueCursor, isLoadingMore]);
+
+  const userList = useMemo<UserDoc[]>(() => displayUsers, [displayUsers]);
+  const isLoading =
+    searchTerm.trim()
+      ? searchResults === undefined
+      : usersPage === undefined && paginatedUsers.length === 0;
   const adminUsers = useMemo(
     () => userList.filter((user) => user.isGod),
     [userList],
@@ -341,6 +409,15 @@ const Users = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Search by name or email…"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="pl-9 w-64"
+            />
+          </div>
           <Button
             variant="outline"
             onClick={handleExportEmails}
@@ -719,6 +796,26 @@ const Users = () => {
           </div>
         </TabsContent>
       </Tabs>
+
+      {(canLoadMore || (isLoadingMore && paginatedUsers.length > 0)) && (
+        <div className="flex items-center justify-center">
+          <Button
+            variant="outline"
+            onClick={handleLoadMore}
+            disabled={!canLoadMore || isLoadingMore}
+            className="min-w-[160px]"
+          >
+            {isLoadingMore ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Loading…
+              </>
+            ) : (
+              "Load more"
+            )}
+          </Button>
+        </div>
+      )}
 
       {/* Password Update Dialog */}
       <Dialog
