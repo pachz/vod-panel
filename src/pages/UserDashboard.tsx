@@ -29,6 +29,16 @@ const UserDashboard = () => {
   const stats = useQuery(api.lessonProgress.getUserDashboardStats);
   const userCourses = useQuery(api.lessonProgress.getUserCourses);
 
+  const coursesInProgress = useMemo(
+    () => userCourses?.filter((c) => !c.isCompleted) ?? [],
+    [userCourses]
+  );
+
+  const coursesCompleted = useMemo(
+    () => userCourses?.filter((c) => c.isCompleted) ?? [],
+    [userCourses]
+  );
+
   const isLoading = stats === undefined || userCourses === undefined;
 
   // Redirect admin users to their dashboard
@@ -47,16 +57,6 @@ const UserDashboard = () => {
   if (currentUser?.isGod) {
     return <Navigate to="/dashboard" replace />;
   }
-
-  const coursesInProgress = useMemo(
-    () => userCourses?.filter((c) => !c.isCompleted) ?? [],
-    [userCourses]
-  );
-
-  const coursesCompleted = useMemo(
-    () => userCourses?.filter((c) => c.isCompleted) ?? [],
-    [userCourses]
-  );
 
   const hasNoCourses = !isLoading && userCourses && userCourses.length === 0;
 
