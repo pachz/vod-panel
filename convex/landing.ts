@@ -1,6 +1,7 @@
 import { internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 type CategoryItem = {
   id: Id<"categories">;
@@ -20,6 +21,7 @@ type LandingCourse = {
   shortDescriptionAr: string;
   categories: Array<CategoryItem>;
   durationMinutes: number;
+  watchedHours: number;
   coverImageUrl: string;
   updatedAt: number;
   coachId: Id<"coaches"> | null;
@@ -117,6 +119,7 @@ export const listLandingCourses = internalQuery({
         }),
       ),
       durationMinutes: v.number(),
+      watchedHours: v.number(),
       coverImageUrl: v.string(),
       updatedAt: v.number(),
       coachId: v.union(v.id("coaches"), v.null()),
@@ -152,6 +155,14 @@ export const listLandingCourses = internalQuery({
     });
 
     const sortedCourses = courses.slice(0, normalizedLimit);
+    const courseIds = sortedCourses.map((c) => c._id);
+    const watchedHoursList = await ctx.runQuery(
+      internal.lessonProgress.getWatchedHoursByCoursesBatch,
+      { courseIds },
+    );
+    const watchedHoursMap = new Map(
+      courseIds.map((id, i) => [id, watchedHoursList[i] ?? 0]),
+    );
 
     const categoryIds = Array.from(
       new Set<Id<"categories">>(courses.map((course) => course.category_id)),
@@ -226,6 +237,7 @@ export const listLandingCourses = internalQuery({
         shortDescriptionAr: course.short_description_ar ?? "",
         categories,
         durationMinutes: Math.round((course.duration ?? 0) / 60),
+        watchedHours: watchedHoursMap.get(course._id) ?? 0,
         coverImageUrl:
           course.banner_image_url ??
           course.thumbnail_image_url ??
@@ -261,6 +273,7 @@ export const getLandingCourseBySlug = internalQuery({
         }),
       ),
       durationMinutes: v.number(),
+      watchedHours: v.number(),
       coverImageUrl: v.string(),
       thumbnailImageUrl: v.string(),
       instructor: v.string(),
@@ -332,6 +345,11 @@ export const getLandingCourseBySlug = internalQuery({
 
     lessons.sort((a, b) => a.priority - b.priority);
 
+    const [watchedHours] = await ctx.runQuery(
+      internal.lessonProgress.getWatchedHoursByCoursesBatch,
+      { courseIds: [course._id] },
+    );
+
     return {
       id: course._id,
       slug: course.slug,
@@ -343,6 +361,7 @@ export const getLandingCourseBySlug = internalQuery({
       shortDescriptionAr: course.short_description_ar ?? "",
       categories,
       durationMinutes: Math.round((course.duration ?? 0) / 60),
+      watchedHours: watchedHours ?? 0,
       coverImageUrl:
         course.banner_image_url ?? course.thumbnail_image_url ?? "",
       thumbnailImageUrl: course.thumbnail_image_url ?? "",

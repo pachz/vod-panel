@@ -9,6 +9,8 @@ const app = defineApp();
 app.use(actionRetrier);
 
 app.use(aggregate, { name: "aggregateCategories" });
+app.use(aggregate, { name: "aggregateLessonWatched" });
+app.use(aggregate, { name: "aggregateCourseWatched" });
 
 app.use(migrations);
 

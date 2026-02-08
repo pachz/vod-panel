@@ -1,10 +1,37 @@
-import { internalMutation, mutation, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Id, Doc } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
+import { TableAggregate } from "@convex-dev/aggregate";
+import { components } from "./_generated/api";
+import { DataModel } from "./_generated/dataModel";
 
 import { requireUser } from "./utils/auth";
+
+// Aggregate: total watched seconds per lesson (across all users)
+const lessonWatchedAggregate = new TableAggregate<
+  {
+    Key: Id<"lessons">;
+    DataModel: DataModel;
+    TableName: "lessonProgress";
+  }
+>(components.aggregateLessonWatched, {
+  sortKey: (doc) => doc.lesson_id,
+  sumValue: (doc) => doc.watchedSeconds ?? 0,
+});
+
+// Aggregate: total watched seconds per course (across all users)
+const courseWatchedAggregate = new TableAggregate<
+  {
+    Key: Id<"courses">;
+    DataModel: DataModel;
+    TableName: "lessonProgress";
+  }
+>(components.aggregateCourseWatched, {
+  sortKey: (doc) => doc.course_id,
+  sumValue: (doc) => doc.watchedSeconds ?? 0,
+});
 
 const getUserIdOrThrow = async (ctx: QueryCtx | MutationCtx) => {
   const userId = await getAuthUserId(ctx);
@@ -24,6 +51,57 @@ const emptyProgress = {
   completedCount: 0,
   lastCompletedAt: null as number | null,
 };
+
+/** Total watched hours for a single lesson (across all users). */
+export const getWatchedHoursByLesson = query({
+  args: { lessonId: v.id("lessons") },
+  returns: v.number(),
+  handler: async (ctx, { lessonId }) => {
+    await requireUser(ctx);
+    const totalSeconds = await lessonWatchedAggregate.sum(ctx, {
+      bounds: {
+        lower: { key: lessonId, inclusive: true },
+        upper: { key: lessonId, inclusive: true },
+      },
+    });
+    return Math.round((totalSeconds / 3600) * 1000) / 1000;
+  },
+});
+
+/** Internal: batch watched hours for multiple courses (no auth). Used by HTTP landing. */
+export const getWatchedHoursByCoursesBatch = internalQuery({
+  args: { courseIds: v.array(v.id("courses")) },
+  returns: v.array(v.number()),
+  handler: async (ctx, { courseIds }) => {
+    if (courseIds.length === 0) return [];
+    const sums = await courseWatchedAggregate.sumBatch(
+      ctx,
+      courseIds.map((courseId) => ({
+        bounds: {
+          lower: { key: courseId, inclusive: true },
+          upper: { key: courseId, inclusive: true },
+        },
+      })),
+    );
+    return sums.map((s) => Math.round((s / 3600) * 1000) / 1000);
+  },
+});
+
+/** Total watched hours for a single course (across all users). */
+export const getWatchedHoursByCourse = query({
+  args: { courseId: v.id("courses") },
+  returns: v.number(),
+  handler: async (ctx, { courseId }) => {
+    await requireUser(ctx);
+    const totalSeconds = await courseWatchedAggregate.sum(ctx, {
+      bounds: {
+        lower: { key: courseId, inclusive: true },
+        upper: { key: courseId, inclusive: true },
+      },
+    });
+    return Math.round((totalSeconds / 3600) * 1000) / 1000;
+  },
+});
 
 export const getCourseProgress = query({
   args: {
@@ -99,18 +177,36 @@ export const setLessonCompletion = mutation({
       )
       .unique();
 
+    const watchedSeconds = lesson.duration ?? 0;
+
     if (completed) {
       if (existing) {
-        await ctx.db.patch(existing._id, { completedAt: Date.now() });
+        await ctx.db.patch(existing._id, {
+          completedAt: Date.now(),
+          watchedSeconds,
+        });
+        const updatedDoc = await ctx.db.get(existing._id);
+        if (updatedDoc) {
+          await lessonWatchedAggregate.replaceOrInsert(ctx, existing, updatedDoc);
+          await courseWatchedAggregate.replaceOrInsert(ctx, existing, updatedDoc);
+        }
       } else {
-        await ctx.db.insert("lessonProgress", {
+        const id = await ctx.db.insert("lessonProgress", {
           user_id: userId,
           course_id: courseId,
           lesson_id: lessonId,
           completedAt: Date.now(),
+          watchedSeconds,
         });
+        const doc = await ctx.db.get(id);
+        if (doc) {
+          await lessonWatchedAggregate.insert(ctx, doc);
+          await courseWatchedAggregate.insert(ctx, doc);
+        }
       }
     } else if (existing) {
+      await lessonWatchedAggregate.delete(ctx, existing);
+      await courseWatchedAggregate.delete(ctx, existing);
       await ctx.db.delete(existing._id);
     }
 
@@ -286,6 +382,45 @@ export const getUserCourses = query({
     });
 
     return coursesWithProgress;
+  },
+});
+
+/**
+ * Backfill watchedSeconds and initialize watched-hours aggregates.
+ * Run once after deploying: internal.lessonProgress.initializeWatchedHoursAggregates
+ * - Patches existing lessonProgress with watchedSeconds from lesson duration
+ * - Inserts all records into lesson and course aggregates
+ */
+export const initializeWatchedHoursAggregates = internalMutation({
+  args: {},
+  returns: v.object({
+    patched: v.number(),
+    inserted: v.number(),
+    total: v.number(),
+  }),
+  handler: async (ctx) => {
+    const allProgress = await ctx.db.query("lessonProgress").collect();
+    let patched = 0;
+    let inserted = 0;
+
+    for (const progress of allProgress) {
+      const lesson = await ctx.db.get(progress.lesson_id);
+      const watchedSeconds = lesson?.duration ?? 0;
+
+      if (progress.watchedSeconds === undefined) {
+        await ctx.db.patch(progress._id, { watchedSeconds });
+        patched++;
+      }
+
+      const doc = await ctx.db.get(progress._id);
+      if (doc) {
+        await lessonWatchedAggregate.insertIfDoesNotExist(ctx, doc);
+        await courseWatchedAggregate.insertIfDoesNotExist(ctx, doc);
+        inserted++;
+      }
+    }
+
+    return { patched, inserted, total: allProgress.length };
   },
 });
 

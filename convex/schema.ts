@@ -121,6 +121,8 @@ export default defineSchema({
     course_id: v.id("courses"),
     lesson_id: v.id("lessons"),
     completedAt: v.number(),
+    /** Seconds watched (lesson duration at completion). Used for per-lesson/course aggregates. */
+    watchedSeconds: v.optional(v.number()),
   }).index("by_user_course_lesson", ["user_id", "course_id", "lesson_id"]),
 
   coaches: defineTable({
