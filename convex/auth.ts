@@ -137,15 +137,38 @@ export const setUserPassword = internalAction({
   args: {
     email: v.string(),
     password: v.string(),
+    name: v.optional(v.string()),
   },
   handler: async (ctx, args) => {
-    await modifyAccountCredentials(ctx, {
-      provider: "password",
-      account: {
-        id: args.email,
-        secret: args.password,
-      },
-    });
-    return true;
+    try {
+      await modifyAccountCredentials(ctx, {
+        provider: "password",
+        account: {
+          id: args.email,
+          secret: args.password,
+        },
+      });
+      return true;
+    } catch (error) {
+      // User may have signed in with Google only — no password account exists.
+      // Create and link a password account for them (set password).
+      const message = error instanceof Error ? error.message : String(error);
+      if (!message.includes("does not exist")) {
+        throw error;
+      }
+      await createAccount(ctx, {
+        provider: "password",
+        account: {
+          id: args.email,
+          secret: args.password,
+        },
+        profile: {
+          email: args.email,
+          ...(args.name !== undefined && { name: args.name }),
+        } as { email: string; name?: string },
+        shouldLinkViaEmail: true,
+      });
+      return true;
+    }
   },
 });

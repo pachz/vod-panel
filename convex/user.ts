@@ -559,10 +559,11 @@ export const changeMyPassword = action({
 
     const validated = validateUserPasswordUpdateInput({ password: newPassword });
 
-    // Update password in auth system
+    // Update or set password in auth system (sets password for OAuth-only users)
     await ctx.runAction(internal.auth.setUserPassword, {
       email: currentUser.email,
       password: validated.password,
+      name: currentUser.name,
     });
   },
 });
@@ -590,10 +591,11 @@ export const updateUserPassword = action({
 
     const validated = validateUserPasswordUpdateInput({ password });
 
-    // Update password in auth system
+    // Update or set password in auth system
     await ctx.runAction(internal.auth.setUserPassword, {
       email: user.email ?? "",
       password: validated.password,
+      name: user.name,
     });
   },
 });
