@@ -2,10 +2,11 @@ import { internalQuery } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 
-type AdditionalCategory = {
+type CategoryItem = {
   id: Id<"categories">;
   nameEn: string;
   nameAr: string;
+  main: boolean;
 };
 
 type LandingCourse = {
@@ -17,10 +18,7 @@ type LandingCourse = {
   descriptionAr: string;
   shortDescriptionEn: string;
   shortDescriptionAr: string;
-  categoryNameEn: string;
-  categoryNameAr: string;
-  additionalCategoryIds: Array<Id<"categories">>;
-  additionalCategories: Array<AdditionalCategory>;
+  categories: Array<CategoryItem>;
   durationMinutes: number;
   coverImageUrl: string;
   updatedAt: number;
@@ -110,14 +108,12 @@ export const listLandingCourses = internalQuery({
       descriptionAr: v.string(),
       shortDescriptionEn: v.string(),
       shortDescriptionAr: v.string(),
-      categoryNameEn: v.string(),
-      categoryNameAr: v.string(),
-      additionalCategoryIds: v.array(v.id("categories")),
-      additionalCategories: v.array(
+      categories: v.array(
         v.object({
           id: v.id("categories"),
           nameEn: v.string(),
           nameAr: v.string(),
+          main: v.boolean(),
         }),
       ),
       durationMinutes: v.number(),
@@ -195,13 +191,29 @@ export const listLandingCourses = internalQuery({
     return sortedCourses.map((course) => {
       const category = categoryMap.get(course.category_id);
       const additionalCategoryIds = course.additional_category_ids ?? [];
-      const additionalCategories: Array<AdditionalCategory> = additionalCategoryIds
+      const additionalItems: Array<CategoryItem> = additionalCategoryIds
         .map((catId) => {
           const cat = categoryMap.get(catId);
           if (!cat) return null;
-          return { id: cat._id, nameEn: cat.name, nameAr: cat.name_ar };
+          return {
+            id: cat._id,
+            nameEn: cat.name,
+            nameAr: cat.name_ar,
+            main: false,
+          };
         })
-        .filter((c): c is AdditionalCategory => c !== null);
+        .filter((c): c is CategoryItem => c !== null);
+
+      const categories: Array<CategoryItem> = [];
+      if (category) {
+        categories.push({
+          id: category._id,
+          nameEn: category.name,
+          nameAr: category.name_ar,
+          main: true,
+        });
+      }
+      categories.push(...additionalItems);
 
       return {
         id: course._id,
@@ -212,10 +224,7 @@ export const listLandingCourses = internalQuery({
         descriptionAr: course.description_ar ?? course.short_description_ar ?? "",
         shortDescriptionEn: course.short_description ?? "",
         shortDescriptionAr: course.short_description_ar ?? "",
-        categoryNameEn: category?.name ?? "",
-        categoryNameAr: category?.name_ar ?? "",
-        additionalCategoryIds,
-        additionalCategories,
+        categories,
         durationMinutes: Math.round((course.duration ?? 0) / 60),
         coverImageUrl:
           course.banner_image_url ??
@@ -243,14 +252,12 @@ export const getLandingCourseBySlug = internalQuery({
       descriptionAr: v.string(),
       shortDescriptionEn: v.string(),
       shortDescriptionAr: v.string(),
-      categoryNameEn: v.string(),
-      categoryNameAr: v.string(),
-      additionalCategoryIds: v.array(v.id("categories")),
-      additionalCategories: v.array(
+      categories: v.array(
         v.object({
           id: v.id("categories"),
           nameEn: v.string(),
           nameAr: v.string(),
+          main: v.boolean(),
         }),
       ),
       durationMinutes: v.number(),
@@ -287,15 +294,31 @@ export const getLandingCourseBySlug = internalQuery({
 
     const category = await ctx.db.get(course.category_id);
     const additionalCategoryIds = course.additional_category_ids ?? [];
-    const additionalCategories: Array<AdditionalCategory> = await Promise.all(
+    const additionalItems: Array<CategoryItem> = await Promise.all(
       additionalCategoryIds.map(async (catId) => {
         const cat = await ctx.db.get(catId);
         if (!cat || cat.deletedAt !== undefined) {
           return null;
         }
-        return { id: cat._id, nameEn: cat.name, nameAr: cat.name_ar };
+        return {
+          id: cat._id,
+          nameEn: cat.name,
+          nameAr: cat.name_ar,
+          main: false,
+        };
       }),
-    ).then((arr) => arr.filter((c): c is AdditionalCategory => c !== null));
+    ).then((arr) => arr.filter((c): c is CategoryItem => c !== null));
+
+    const categories: Array<CategoryItem> = [];
+    if (category) {
+      categories.push({
+        id: category._id,
+        nameEn: category.name,
+        nameAr: category.name_ar,
+        main: true,
+      });
+    }
+    categories.push(...additionalItems);
 
     const lessons = await ctx.db
       .query("lessons")
@@ -318,10 +341,7 @@ export const getLandingCourseBySlug = internalQuery({
       descriptionAr: course.description_ar ?? "",
       shortDescriptionEn: course.short_description ?? "",
       shortDescriptionAr: course.short_description_ar ?? "",
-      categoryNameEn: category?.name ?? "",
-      categoryNameAr: category?.name_ar ?? "",
-      additionalCategoryIds,
-      additionalCategories,
+      categories,
       durationMinutes: Math.round((course.duration ?? 0) / 60),
       coverImageUrl:
         course.banner_image_url ?? course.thumbnail_image_url ?? "",
