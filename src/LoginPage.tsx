@@ -361,9 +361,8 @@ const LoginPage = () => {
         return;
       }
       
-      // Use the general error parser for other errors
-      const errorMessage = parseAuthError(cause) || "Invalid code or password. Please try again.";
-      setError(errorMessage);
+      // On reset-verification, show a clear message for wrong/expired code
+      setError("Your reset code is incorrect.");
       setStatus("idle");
     }
   };
