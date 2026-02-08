@@ -355,6 +355,26 @@ export const updateUserStripeCustomerId = internalMutation({
 });
 
 /**
+ * Internal mutation to clear user's Stripe customer ID (e.g. when they have admin-granted sub and stale Stripe ID)
+ */
+export const clearUserStripeCustomerId = internalMutation({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      throw new Error("User not found");
+    }
+    if (user.stripeCustomerId) {
+      await ctx.db.patch(args.userId, { stripeCustomerId: undefined });
+    }
+    return null;
+  },
+});
+
+/**
  * Query to get payment settings (selected product/price)
  */
 export const getPaymentSettings = internalQuery({
@@ -574,6 +594,10 @@ export const resetSubscriptionStatus = internalMutation({
 
     let canceledSubscription = false;
     for (const subscription of subscriptions) {
+      // Never cancel admin-granted subscriptions (they have no Stripe record)
+      if (subscription.subscriptionId.startsWith("admin-grant-")) {
+        continue;
+      }
       await ctx.db.patch(subscription._id, {
         status: "canceled" as const,
         cancelAtPeriodEnd: false,

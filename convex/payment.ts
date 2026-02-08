@@ -702,6 +702,9 @@ export const reactivateSubscription = action({
   },
 });
 
+/** Prefix for admin-granted subscription IDs (not real Stripe IDs) */
+const ADMIN_GRANT_SUBSCRIPTION_ID_PREFIX = "admin-grant-";
+
 /**
  * Create a Stripe Customer Portal session
  * Allows users to manage their subscription, payment methods, and billing history
@@ -739,6 +742,11 @@ export const createCustomerPortalSession = action({
           throw new Error("No subscription found and no customer ID stored");
         }
 
+        // Admin-granted subscriptions have no Stripe subscription; cannot open portal
+        if (subscription.subscriptionId.startsWith(ADMIN_GRANT_SUBSCRIPTION_ID_PREFIX)) {
+          throw new Error("Your subscription was granted by an admin. To change it, contact support. It cannot be managed in Stripe.");
+        }
+
         // Get subscription from Stripe to get customer ID
         const stripeSubscription = await stripe.subscriptions.retrieve(subscription.subscriptionId);
         customerId = typeof stripeSubscription.customer === "string" 
@@ -768,6 +776,16 @@ export const createCustomerPortalSession = action({
           errorMessage.includes('No such customer');
         
         if (isNotFoundError) {
+          // Don't reset admin-granted subscriptions when Stripe customer is missing
+          const subscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
+            userId: userId,
+          });
+          if (subscription?.subscriptionId.startsWith(ADMIN_GRANT_SUBSCRIPTION_ID_PREFIX)) {
+            await ctx.runMutation((internal as any).paymentInternal.clearUserStripeCustomerId, {
+              userId: userId as any,
+            });
+            throw new Error("Your subscription was granted by an admin. To change it, contact support. It cannot be managed in Stripe.");
+          }
           // Customer not found - likely Stripe account/token changed
           // Reset subscription status and clear customer ID
           console.log(`Customer ${customerId} not found in Stripe. Resetting subscription status.`);
