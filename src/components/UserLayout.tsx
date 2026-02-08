@@ -46,7 +46,7 @@ const UserLayout = () => {
       <div className="relative z-10 flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
           <a
-            href="https://vod.borj.dev"
+            href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`}
             className="cursor-pointer hover:opacity-80 transition-opacity"
           >
             <img

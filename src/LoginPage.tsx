@@ -710,11 +710,11 @@ const LoginPage = () => {
         {!passwordResetStep && (
           <p className="login-footer-text">
           By signing in, you agree to our{" "}
-          <a href="https://vod.borj.dev/en/terms" className="login-footer-link" target="_blank" rel="noopener noreferrer">
+          <a href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}/en/terms`} className="login-footer-link" target="_blank" rel="noopener noreferrer">
             Terms
           </a>{" "}
           and{" "}
-          <a href="https://vod.borj.dev/en/privacy" className="login-footer-link" target="_blank" rel="noopener noreferrer">
+          <a href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}/en/privacy`} className="login-footer-link" target="_blank" rel="noopener noreferrer">
             Privacy Policy
           </a>
           .

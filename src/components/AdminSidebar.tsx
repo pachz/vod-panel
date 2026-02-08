@@ -70,7 +70,7 @@ export function AdminSidebar() {
         {/* Logo Header */}
         <div className="px-5 py-6 transition-all duration-300">
           <a
-            href="https://vod.borj.dev"
+            href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`}
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <img
