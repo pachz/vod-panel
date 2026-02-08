@@ -67,6 +67,7 @@ async function validateAdditionalCategoryIds(
 export const listCourses = query({
   args: {
     categoryId: v.optional(v.id("categories")),
+    coachId: v.optional(v.id("coaches")),
     status: v.optional(
       v.union(v.literal("draft"), v.literal("published"), v.literal("archived"))
     ),
@@ -74,7 +75,7 @@ export const listCourses = query({
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
   },
-  handler: async (ctx, { categoryId, status, search, limit = 12, cursor }) => {
+  handler: async (ctx, { categoryId, coachId, status, search, limit = 12, cursor }) => {
     await requireUser(ctx);
 
     const numItems = Math.min(Math.max(limit, 1), 100);
@@ -89,6 +90,9 @@ export const listCourses = query({
           let query = q.search("name_search", searchTerm).eq("deletedAt", undefined);
           if (categoryId) {
             query = query.eq("category_id", categoryId);
+          }
+          if (coachId) {
+            query = query.eq("coach_id", coachId);
           }
           if (status) {
             query = query.eq("status", status);
@@ -115,11 +119,14 @@ export const listCourses = query({
               .query("courses")
               .withIndex("deletedAt", (q) => q.eq("deletedAt", undefined));
       const allMatching = await baseQuery.collect();
-      const filtered = allMatching.filter(
+      let filtered = allMatching.filter(
         (course) =>
           course.category_id === categoryId ||
           (course.additional_category_ids ?? []).includes(categoryId)
       );
+      if (coachId !== undefined) {
+        filtered = filtered.filter((course) => course.coach_id === coachId);
+      }
       const sorted = filtered.sort((a, b) => {
         const orderA = a.displayOrder ?? 50;
         const orderB = b.displayOrder ?? 50;
@@ -140,7 +147,39 @@ export const listCourses = query({
       };
     }
 
-    // No category filter - use regular index queries
+    // When filtering by coach only, use coach_id index then filter by status and paginate
+    if (coachId !== undefined) {
+      const byCoach = await ctx.db
+        .query("courses")
+        .withIndex("coach_id", (q) =>
+          q.eq("coach_id", coachId).eq("deletedAt", undefined)
+        )
+        .collect();
+      const filtered =
+        status !== undefined
+          ? byCoach.filter((c) => c.status === status)
+          : byCoach;
+      const sorted = filtered.sort((a, b) => {
+        const orderA = a.displayOrder ?? 50;
+        const orderB = b.displayOrder ?? 50;
+        if (orderA !== orderB) return orderA - orderB;
+        const createdA = a._creationTime ?? 0;
+        const createdB = b._creationTime ?? 0;
+        if (createdA !== createdB) return createdA - createdB;
+        return a._id.localeCompare(b._id);
+      });
+      const offset = Math.max(0, parseInt(cursor ?? "0", 10) || 0);
+      const page = sorted.slice(offset, offset + numItems);
+      const nextOffset = offset + page.length;
+      return {
+        page,
+        isDone: nextOffset >= sorted.length,
+        continueCursor:
+          nextOffset < sorted.length ? String(nextOffset) : null,
+      };
+    }
+
+    // No category or coach filter - use regular index queries
     let courses;
 
     if (status) {
@@ -180,6 +219,27 @@ export const getCategoryIdsWithPublishedCourses = query({
       ids.add(course.category_id);
       for (const id of course.additional_category_ids ?? []) {
         ids.add(id);
+      }
+    }
+    return Array.from(ids);
+  },
+});
+
+/** Coach IDs that have at least one published course. Used for coach filter chips on Course card page. */
+export const getCoachIdsWithPublishedCourses = query({
+  args: {},
+  handler: async (ctx) => {
+    await requireUser(ctx);
+    const published = await ctx.db
+      .query("courses")
+      .withIndex("deletedAt_status", (q) =>
+        q.eq("deletedAt", undefined).eq("status", "published")
+      )
+      .collect();
+    const ids = new Set<Id<"coaches">>();
+    for (const course of published) {
+      if (course.coach_id) {
+        ids.add(course.coach_id);
       }
     }
     return Array.from(ids);

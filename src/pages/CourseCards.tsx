@@ -9,11 +9,19 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { useLanguage } from "@/hooks/use-language";
 import { markdownToPlainText } from "@/lib/utils";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
+type CoachDoc = Doc<"coaches">;
 
 /** Duration is stored in seconds; format as time (0:10 or 01:10:10). */
 const formatDurationTime = (seconds: number | undefined | null) => {
@@ -43,6 +51,7 @@ const CourseCards = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const categoryFilter = searchParams.get("category") || undefined;
+  const coachFilter = searchParams.get("coach") || undefined;
   const searchFilter = searchParams.get("search") || undefined;
   const { language, t, isRTL } = useLanguage();
 
@@ -51,6 +60,7 @@ const CourseCards = () => {
 
   const courses = useQuery(api.course.listCourses, {
     categoryId: categoryFilter as Id<"categories"> | undefined,
+    coachId: coachFilter as Id<"coaches"> | undefined,
     status: "published",
     search: searchFilter,
     limit: PAGE_SIZE,
@@ -60,11 +70,15 @@ const CourseCards = () => {
   useEffect(() => {
     setCursor(undefined);
     setPrevCursors([]);
-  }, [categoryFilter, searchFilter]);
+  }, [categoryFilter, coachFilter, searchFilter]);
 
   const categories = useQuery(api.category.listCategories);
   const categoryIdsWithPublishedCourses = useQuery(
     api.course.getCategoryIdsWithPublishedCourses
+  );
+  const coaches = useQuery(api.coach.listCoaches);
+  const coachIdsWithPublishedCourses = useQuery(
+    api.course.getCoachIdsWithPublishedCourses
   );
 
   const [searchInput, setSearchInput] = useState(searchFilter || "");
@@ -133,6 +147,16 @@ const CourseCards = () => {
         idsWithCourses.has(category._id) || category._id === categoryFilter
     );
   }, [categoryList, categoryIdsWithPublishedCourses, categoryFilter]);
+
+  const coachList = useMemo<CoachDoc[]>(() => coaches ?? [], [coaches]);
+  const filterableCoaches = useMemo<CoachDoc[]>(() => {
+    const idsWithCourses = new Set(coachIdsWithPublishedCourses ?? []);
+    return coachList.filter(
+      (coach) =>
+        idsWithCourses.has(coach._id) || coach._id === coachFilter
+    );
+  }, [coachList, coachIdsWithPublishedCourses, coachFilter]);
+
   const isLoading = courses === undefined;
 
   const categoryNameById = useMemo(() => {
@@ -150,6 +174,21 @@ const CourseCards = () => {
           newParams.set("category", categoryId);
         } else {
           newParams.delete("category");
+        }
+        return newParams;
+      }, { replace: true });
+    },
+    [setSearchParams],
+  );
+
+  const handleCoachSelect = useCallback(
+    (coachId?: string) => {
+      setSearchParams((prev) => {
+        const newParams = new URLSearchParams(prev);
+        if (coachId) {
+          newParams.set("coach", coachId);
+        } else {
+          newParams.delete("coach");
         }
         return newParams;
       }, { replace: true });
@@ -217,14 +256,40 @@ const CourseCards = () => {
         })}
       </div>
 
-      <div className="mx-auto w-full max-w-lg">
+      <div
+        className="mx-auto flex w-full max-w-2xl flex-wrap items-center justify-center gap-2"
+        dir={isRTL ? "rtl" : "ltr"}
+      >
         <Input
           value={searchInput}
           onChange={(event) => setSearchInput(event.target.value)}
           placeholder={t("searchCourse")}
-          className="text-center"
-          dir={isRTL ? "rtl" : "ltr"}
+          className="min-w-[200px] flex-1 text-center sm:max-w-md"
         />
+        {filterableCoaches.length > 0 && (
+          <Select
+            value={coachFilter ?? "all"}
+            onValueChange={(value) =>
+              handleCoachSelect(value === "all" ? undefined : value)
+            }
+          >
+            <SelectTrigger className="w-[180px] shrink-0">
+              <SelectValue placeholder={t("allCoaches")} />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">{t("allCoaches")}</SelectItem>
+              {filterableCoaches.map((coach) => {
+                const coachName =
+                  language === "ar" ? coach.name_ar : coach.name;
+                return (
+                  <SelectItem key={coach._id} value={coach._id}>
+                    {coachName}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        )}
       </div>
 
       {isLoading ? (
@@ -233,7 +298,7 @@ const CourseCards = () => {
         </div>
       ) : courseList.length === 0 ? (
         <div className="rounded-lg border border-dashed p-8 text-center text-muted-foreground">
-          {categoryFilter || searchFilter
+          {categoryFilter || coachFilter || searchFilter
             ? t("noCoursesMatch")
             : t("noCoursesAvailable")}
         </div>

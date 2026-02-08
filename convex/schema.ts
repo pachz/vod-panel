@@ -74,7 +74,7 @@ export default defineSchema({
     .index("coach_id", ["coach_id", "deletedAt"])
     .searchIndex("search_name", {
       searchField: "name_search",
-      filterFields: ["deletedAt", "category_id", "status"],
+      filterFields: ["deletedAt", "category_id", "status", "coach_id"],
     }),
 
   lessons: defineTable({
