@@ -970,6 +970,7 @@ export const getUserInfo = query({
         isGod: user.isGod,
         emailVerificationTime: user.emailVerificationTime,
         createdAt: user._creationTime,
+        stripeCustomerId: user.stripeCustomerId,
       },
       subscription: subscription
         ? {

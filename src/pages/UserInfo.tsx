@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen, Gift, History } from "lucide-react";
-import { useQuery, useMutation } from "convex/react";
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen, Gift, History, Loader2 } from "lucide-react";
+import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -43,12 +43,16 @@ const UserInfo = () => {
   const [giveSubOpen, setGiveSubOpen] = useState(false);
   const [durationDays, setDurationDays] = useState<number>(365);
   const [isGranting, setIsGranting] = useState(false);
+  const [isRefreshingSub, setIsRefreshingSub] = useState(false);
 
   const userInfo = useQuery(
     api.user.getUserInfo,
     id ? { id: id as Id<"users"> } : "skip"
   );
   const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
+  const adminSyncUserSubscriptionFromStripe = useAction(
+    api.payment.adminSyncUserSubscriptionFromStripe,
+  );
 
   if (userInfo === undefined) {
     return (
@@ -80,6 +84,35 @@ const UserInfo = () => {
     (subscription.status === "active" || subscription.status === "trialing") &&
     isPeriodActive(subscription.currentPeriodEnd);
   const canGrantSubscription = !user.isGod && !hasActiveSubscription;
+
+  const handleRefreshSubscription = async () => {
+    if (!id) return;
+    setIsRefreshingSub(true);
+    try {
+      const result = await adminSyncUserSubscriptionFromStripe({
+        userId: id as Id<"users">,
+      });
+      if (!result.success) {
+        toast.error(result.message || "Failed to sync subscription");
+      } else {
+        toast.success(result.message || "Subscription synced successfully");
+      }
+    } catch (error: unknown) {
+      const msg =
+        error &&
+        typeof error === "object" &&
+        "data" in error &&
+        typeof (error as { data?: { message?: string } }).data?.message ===
+          "string"
+          ? (error as { data: { message: string } }).data.message
+          : error instanceof Error && error.message
+            ? error.message
+            : "Failed to sync subscription";
+      toast.error(msg);
+    } finally {
+      setIsRefreshingSub(false);
+    }
+  };
 
   const handleGrantSubscription = async () => {
     if (!id) return;
@@ -253,16 +286,33 @@ const UserInfo = () => {
             <Calendar className="h-5 w-5" />
             Current Subscription
           </CardTitle>
-          {canGrantSubscription && (
-            <Button
-              variant="cta"
-              size="sm"
-              onClick={() => setGiveSubOpen(true)}
-            >
-              <Gift className="mr-2 h-4 w-4" />
-              Give subscription
-            </Button>
-          )}
+          <div className="flex items-center gap-2">
+            {subscription &&
+              !subscription.isAdminGranted &&
+              user.stripeCustomerId && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleRefreshSubscription}
+                  disabled={isRefreshingSub}
+                >
+                  {isRefreshingSub && (
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  )}
+                  Refresh subscription
+                </Button>
+              )}
+            {canGrantSubscription && (
+              <Button
+                variant="cta"
+                size="sm"
+                onClick={() => setGiveSubOpen(true)}
+              >
+                <Gift className="mr-2 h-4 w-4" />
+                Give subscription
+              </Button>
+            )}
+          </div>
         </CardHeader>
         <CardContent>
           {subscription ? (

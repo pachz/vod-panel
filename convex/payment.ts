@@ -537,6 +537,136 @@ export const syncSubscriptionFromStripe = action({
 });
 
 /**
+ * Admin-only: sync a specific user's Stripe-backed subscription directly from Stripe.
+ * Used from the admin panel to refresh status/period dates when something looks off.
+ */
+export const adminSyncUserSubscriptionFromStripe = action({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    status: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    // Require auth and admin privileges
+    await requireUserAction(ctx);
+    await ctx.runQuery(internal.user.requireAdminQuery);
+
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new Error(
+        "STRIPE_SECRET_KEY is not configured. Please set it in your Convex environment variables.",
+      );
+    }
+
+    // Ensure target user exists and has a Stripe customer ID
+    const targetUser = await ctx.runQuery(
+      (internal as any).paymentInternal.getUserWithCustomer,
+      { userId: args.userId as any },
+    );
+
+    if (!targetUser) {
+      throw new Error("User not found");
+    }
+
+    if (!targetUser.stripeCustomerId) {
+      return {
+        success: false,
+        message: "User does not have a Stripe customer ID.",
+        status: undefined,
+        subscriptionId: undefined,
+      };
+    }
+
+    // Get the most recent subscription for this user
+    const userSubscription = await ctx.runQuery(
+      (internal as any).paymentInternal.getMySubscriptionForUser,
+      {
+        userId: args.userId as any,
+      },
+    );
+
+    if (!userSubscription) {
+      return {
+        success: false,
+        message: "No subscription found for this user.",
+        status: undefined,
+        subscriptionId: undefined,
+      };
+    }
+
+    // Only Stripe-backed subscriptions can be refreshed via the API
+    if (!userSubscription.subscriptionId.startsWith("sub_")) {
+      return {
+        success: false,
+        message: "This subscription is not managed by Stripe and cannot be refreshed.",
+        status: userSubscription.status,
+        subscriptionId: userSubscription.subscriptionId,
+      };
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
+
+    try {
+      const subscription = await stripe.subscriptions.retrieve(
+        userSubscription.subscriptionId,
+        {
+          expand: ["items.data.price"],
+        },
+      );
+
+      const dates = getSubscriptionDates(subscription, {
+        currentPeriodStart: userSubscription.currentPeriodStart,
+        currentPeriodEnd: userSubscription.currentPeriodEnd,
+      });
+      const intervalInfo = getSubscriptionInterval(subscription);
+
+      await ctx.runMutation(
+        (internal as any).paymentInternal.upsertSubscription,
+        {
+          subscriptionId: subscription.id,
+          userId: args.userId as any,
+          customerId:
+            typeof subscription.customer === "string"
+              ? subscription.customer
+              : subscription.customer.id,
+          status: subscription.status as any,
+          currentPeriodStart: dates.currentPeriodStart,
+          currentPeriodEnd: dates.currentPeriodEnd,
+          cancelAtPeriodEnd:
+            (subscription as any).cancel_at_period_end || false,
+          canceledAt: (subscription as any).canceled_at
+            ? convertStripeTimestamp(
+                (subscription as any).canceled_at,
+                "canceled_at",
+              )
+            : undefined,
+          interval: intervalInfo?.interval,
+          intervalCount: intervalInfo?.intervalCount,
+        },
+      );
+
+      return {
+        success: true,
+        message: "Subscription data synced successfully from Stripe.",
+        status: subscription.status,
+        subscriptionId: subscription.id,
+      };
+    } catch (error) {
+      console.error("Error syncing user subscription from Stripe (admin):", error);
+      throw new Error(
+        error instanceof Error
+          ? `Failed to sync subscription: ${error.message}`
+          : "Failed to sync subscription",
+      );
+    }
+  },
+});
+
+/**
  * Internal action: sync all Stripe-backed subscription statuses from Stripe.
  * Used by the daily cron to keep subscription status, period dates, and cancel state in sync.
  */

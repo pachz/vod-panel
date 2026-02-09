@@ -46,6 +46,12 @@ const getUserIdOrThrow = async (ctx: QueryCtx | MutationCtx) => {
   return userId as Id<"users">;
 };
 
+const isDeleteMissingKeyError = (error: unknown) => {
+  if (!(error instanceof ConvexError)) return false;
+  const data = (error as { data?: { code?: string } }).data;
+  return data?.code === "DELETE_MISSING_KEY";
+};
+
 const emptyProgress = {
   completedLessonIds: [] as Id<"lessons">[],
   completedCount: 0,
@@ -204,9 +210,23 @@ export const setLessonCompletion = mutation({
           await courseWatchedAggregate.insert(ctx, doc);
         }
       }
-    } else if (existing) {
-      await lessonWatchedAggregate.delete(ctx, existing);
-      await courseWatchedAggregate.delete(ctx, existing);
+      } else if (existing) {
+      try {
+        await lessonWatchedAggregate.delete(ctx, existing);
+      } catch (error) {
+        if (!isDeleteMissingKeyError(error)) {
+          throw error;
+        }
+      }
+
+      try {
+        await courseWatchedAggregate.delete(ctx, existing);
+      } catch (error) {
+        if (!isDeleteMissingKeyError(error)) {
+          throw error;
+        }
+      }
+
       await ctx.db.delete(existing._id);
     }
 
