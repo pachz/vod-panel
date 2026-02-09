@@ -14,14 +14,55 @@ function convertStripeTimestamp(timestamp: any, fieldName: string): number {
   if (timestamp === undefined || timestamp === null) {
     throw new Error(`Missing required timestamp field: ${fieldName}`);
   }
-  
-  const numTimestamp = typeof timestamp === "string" ? Number(timestamp) : timestamp;
-  
+
+  const numTimestamp =
+    typeof timestamp === "string"
+      ? Number(timestamp)
+      : typeof timestamp === "bigint"
+        ? Number(timestamp)
+        : timestamp;
+
   if (isNaN(numTimestamp) || numTimestamp <= 0) {
     throw new Error(`Invalid timestamp for ${fieldName}: ${timestamp}`);
   }
-  
+
   return numTimestamp * 1000;
+}
+
+/**
+ * Normalize an existing stored Unix timestamp so we can fix legacy
+ * values that were accidentally stored in seconds instead of ms.
+ * - If value looks like seconds (10 digits, < 1e11), convert to ms
+ * - If it already looks like ms (>= 1e11), return as-is
+ */
+function normalizeStoredTimestamp(value: any, fieldName: string): number {
+  if (value === undefined || value === null) {
+    throw new Error(`Missing stored timestamp field: ${fieldName}`);
+  }
+
+  const numValue =
+    typeof value === "string"
+      ? Number(value)
+      : typeof value === "bigint"
+        ? Number(value)
+        : value;
+
+  if (isNaN(numValue) || numValue <= 0) {
+    throw new Error(`Invalid stored timestamp for ${fieldName}: ${value}`);
+  }
+
+  // Heuristic: anything less than ~Sat Mar 03 5138 in ms is treated as ms.
+  // Current ms timestamps are ~1.7e12; current seconds are ~1.7e9.
+  if (numValue < 1e11) {
+    console.warn("Normalizing legacy seconds timestamp to ms", {
+      fieldName,
+      original: numValue,
+      normalized: numValue * 1000,
+    });
+    return numValue * 1000;
+  }
+
+  return numValue;
 }
 
 /**
@@ -71,11 +112,25 @@ function getSubscriptionDates(
     });
 
     // Try to use existing dates from database if they're valid
-    if (existingDates?.currentPeriodStart && existingDates.currentPeriodStart > 0 &&
-        existingDates?.currentPeriodEnd && existingDates.currentPeriodEnd > 0) {
+    if (
+      existingDates?.currentPeriodStart &&
+      existingDates.currentPeriodStart > 0 &&
+      existingDates?.currentPeriodEnd &&
+      existingDates.currentPeriodEnd > 0
+    ) {
+      // Normalize existing dates so old second-based values get fixed to ms.
+      const normalizedStart = normalizeStoredTimestamp(
+        existingDates.currentPeriodStart,
+        "existing.currentPeriodStart",
+      );
+      const normalizedEnd = normalizeStoredTimestamp(
+        existingDates.currentPeriodEnd,
+        "existing.currentPeriodEnd",
+      );
+
       return {
-        currentPeriodStart: existingDates.currentPeriodStart,
-        currentPeriodEnd: existingDates.currentPeriodEnd,
+        currentPeriodStart: normalizedStart,
+        currentPeriodEnd: normalizedEnd,
       };
     }
 
