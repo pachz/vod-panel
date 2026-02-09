@@ -180,8 +180,16 @@ export const getUsersCounts = query({
     let regular = 0;
     let admin = 0;
     for (const u of users) {
-      if (u.isGod) admin += 1;
-      else regular += 1;
+      // Align semantics with listUsersPaginated:
+      // - "Admins" are users with isGod === true
+      // - "Regular" users are users with isGod === false
+      // Users where isGod is undefined are excluded from both counts,
+      // matching how they are excluded from both paginated lists.
+      if (u.isGod === true) {
+        admin += 1;
+      } else if (u.isGod === false) {
+        regular += 1;
+      }
     }
     return { regular, admin };
   },
