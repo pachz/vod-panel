@@ -13,13 +13,15 @@ http.route({
   handler: ensureSeedAccount,
 });
 
-// Stripe webhook endpoint
+const landingSecret = process.env.LANDING_SECRET;
+
+// Stripe webhook endpoint for SNAPSHOT (full) payloads
 http.route({
   path: "/webhooks/stripe",
   method: "POST",
   handler: httpAction(async (ctx, request) => {
     const signature = request.headers.get("stripe-signature");
-    
+
     if (!signature) {
       return new Response("Missing stripe-signature header", { status: 400 });
     }
@@ -28,7 +30,7 @@ http.route({
     const body = await request.text();
 
     try {
-      // Call the webhook handler action (internalAction)
+      // Call the snapshot webhook handler action (internalAction)
       // Using type assertion until API regenerates
       await ctx.runAction((internal as any).payment.handleStripeWebhook, {
         body,
@@ -40,21 +42,63 @@ http.route({
         headers: { "Content-Type": "application/json" },
       });
     } catch (error) {
-      console.error("Webhook error:", error);
+      console.error("Stripe snapshot webhook error:", error);
       return new Response(
-        JSON.stringify({ 
-          error: error instanceof Error ? error.message : "Webhook processing failed" 
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Snapshot webhook processing failed",
         }),
-        { 
+        {
           status: 400,
           headers: { "Content-Type": "application/json" },
-        }
+        },
       );
     }
   }),
 });
 
-const landingSecret = process.env.LANDING_SECRET;
+// Stripe webhook endpoint for THIN payloads
+http.route({
+  path: "/webhooks/stripe-thin",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    const signature = request.headers.get("stripe-signature");
+
+    if (!signature) {
+      return new Response("Missing stripe-signature header", { status: 400 });
+    }
+
+    const body = await request.text();
+
+    try {
+      await ctx.runAction((internal as any).payment.handleStripeThinWebhook, {
+        body,
+        signature,
+      });
+
+      return new Response(JSON.stringify({ received: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Stripe THIN webhook error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "THIN webhook processing failed",
+        }),
+        {
+          status: 400,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
 
 http.route({
   path: "/landing/carousel",

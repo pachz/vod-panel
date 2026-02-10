@@ -35,12 +35,22 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
       }
 
       // Keep searchable name+email field in sync (auth creates/updates users without it)
+      // and ensure isGod is always an explicit boolean (treat unset as false).
       if (user) {
         const name = (user.name ?? "").trim();
         const email = (user.email ?? "").trim();
         const name_search = [name, email].filter(Boolean).join(" ").trim() || undefined;
+
+        const patch: Record<string, unknown> = {};
         if (name_search !== user.name_search) {
-          await ctx.db.patch(args.userId as Id<"users">, { name_search });
+          patch.name_search = name_search;
+        }
+        if (user.isGod === undefined) {
+          patch.isGod = false;
+        }
+
+        if (Object.keys(patch).length > 0) {
+          await ctx.db.patch(args.userId as Id<"users">, patch);
         }
       }
     },

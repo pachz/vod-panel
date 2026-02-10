@@ -1129,7 +1129,7 @@ export const createCustomerPortalSession = action({
 });
 
 /**
- * Webhook handler for Stripe events
+ * Webhook handler for Stripe events (snapshot / full payloads)
  * This should be called from an HTTP endpoint
  * Using internalAction since it's only called from our HTTP endpoint
  */
@@ -1154,7 +1154,6 @@ export const handleStripeWebhook = internalAction({
     const stripe = new Stripe(stripeSecretKey);
 
     let event: Stripe.Event;
-
     try {
       // Verify webhook signature
       event = stripe.webhooks.constructEvent(args.body, args.signature, webhookSecret);
@@ -1163,8 +1162,16 @@ export const handleStripeWebhook = internalAction({
       throw new Error("Webhook signature verification failed");
     }
 
+    // Basic logging so we can test and inspect incoming events
+    console.log("Stripe webhook received", {
+      id: event.id,
+      type: event.type,
+    });
+
     // Handle different event types
     switch (event.type) {
+      // SNAPSHOT endpoint is configured in Stripe to send full resource objects,
+      // so we can safely rely on event.data.object containing all the fields we need.
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
         await handleCheckoutSessionCompleted(ctx, session);
@@ -1186,6 +1193,110 @@ export const handleStripeWebhook = internalAction({
 
       default:
         console.log(`Unhandled event type: ${event.type}`);
+    }
+
+    return { received: true };
+  },
+});
+
+/**
+ * Webhook handler for Stripe events delivered as THIN payloads.
+ * In this mode Stripe only sends minimal objects (typically just IDs),
+ * so we re-fetch the full resource from the Stripe API before processing.
+ */
+export const handleStripeThinWebhook = internalAction({
+  args: {
+    body: v.string(),
+    signature: v.string(),
+  },
+  returns: v.object({ received: v.boolean() }),
+  handler: async (ctx, args) => {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    const webhookSecret = process.env.STRIPE_THIN_WEBHOOK_SECRET;
+
+    if (!stripeSecretKey) {
+      throw new Error("STRIPE_SECRET_KEY is not configured");
+    }
+
+    if (!webhookSecret) {
+      throw new Error(
+        "STRIPE_THIN_WEBHOOK_SECRET is not configured. Set this in your Convex environment variables.",
+      );
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
+
+    let event: Stripe.Event;
+    try {
+      // Verify webhook signature for the THIN endpoint
+      event = stripe.webhooks.constructEvent(
+        args.body,
+        args.signature,
+        webhookSecret,
+      );
+    } catch (err) {
+      console.error("Thin webhook signature verification failed:", err);
+      throw new Error("Webhook signature verification failed");
+    }
+
+    console.log("Stripe THIN webhook received", {
+      id: event.id,
+      type: event.type,
+    });
+
+    switch (event.type) {
+      case "checkout.session.completed": {
+        // Thin events only include a minimal object; fetch full session by ID
+        const thinSession = event.data.object as Partial<Stripe.Checkout.Session> & {
+          id?: string;
+        };
+        if (!thinSession.id) {
+          console.error(
+            "Thin checkout.session.completed event missing session id",
+          );
+          break;
+        }
+
+        const fullSession = await stripe.checkout.sessions.retrieve(
+          thinSession.id,
+          {
+            // We want subscription details as well, same as the snapshot handler
+            expand: ["subscription"],
+          },
+        );
+        await handleCheckoutSessionCompleted(ctx, fullSession);
+        break;
+      }
+
+      case "customer.subscription.created":
+      case "customer.subscription.updated": {
+        // For subscriptions we already re-fetch inside handleSubscriptionUpdate,
+        // so it's safe to pass the thin object as long as it has an ID.
+        const thinSub = event.data.object as Stripe.Subscription;
+        if (!thinSub.id) {
+          console.error(
+            "Thin customer.subscription.* event missing subscription id",
+          );
+          break;
+        }
+        await handleSubscriptionUpdate(ctx, stripe, thinSub);
+        break;
+      }
+
+      case "customer.subscription.deleted": {
+        const thinSub = event.data.object as Stripe.Subscription;
+        if (!thinSub.id) {
+          console.error(
+            "Thin customer.subscription.deleted event missing subscription id",
+          );
+          break;
+        }
+        await handleSubscriptionDeleted(ctx, stripe, thinSub);
+        break;
+      }
+
+      default:
+        console.log(`Unhandled THIN event type: ${event.type}`);
     }
 
     return { received: true };

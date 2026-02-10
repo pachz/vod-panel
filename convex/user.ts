@@ -77,9 +77,12 @@ export const listUsers = query(async (ctx) => {
   return users
     .filter((user) => user.deletedAt === undefined)
     .sort((a, b) => {
-      // Sort admins first, then by name
-      if (a.isGod !== b.isGod) {
-        return a.isGod ? -1 : 1;
+      // Sort admins first (treating undefined isGod the same as false), then by name
+      const aIsAdmin = !!a.isGod;
+      const bIsAdmin = !!b.isGod;
+
+      if (aIsAdmin !== bIsAdmin) {
+        return aIsAdmin ? -1 : 1;
       }
       return (a.name ?? "").localeCompare(b.name ?? "");
     });
@@ -180,14 +183,12 @@ export const getUsersCounts = query({
     let regular = 0;
     let admin = 0;
     for (const u of users) {
-      // Align semantics with listUsersPaginated:
-      // - "Admins" are users with isGod === true
-      // - "Regular" users are users with isGod === false
-      // Users where isGod is undefined are excluded from both counts,
-      // matching how they are excluded from both paginated lists.
-      if (u.isGod === true) {
+      // Treat undefined isGod the same as false:
+      // - "Admins" are users with !!isGod === true
+      // - "Regular" users are all other non-deleted users
+      if (!!u.isGod) {
         admin += 1;
-      } else if (u.isGod === false) {
+      } else {
         regular += 1;
       }
     }
@@ -479,6 +480,25 @@ export const backfillNameSearch = internalMutation({
         updated += 1;
       }
     }
+    return updated;
+  },
+});
+
+/** Internal mutation to ensure all users have an explicit isGod boolean (treat unset as false). */
+export const backfillIsGodFlag = internalMutation({
+  args: {},
+  returns: v.number(),
+  handler: async (ctx) => {
+    const users = await ctx.db.query("users").collect();
+    let updated = 0;
+
+    for (const user of users) {
+      if (user.isGod === undefined) {
+        await ctx.db.patch(user._id, { isGod: false });
+        updated += 1;
+      }
+    }
+
     return updated;
   },
 });
