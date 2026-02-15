@@ -1,11 +1,12 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { cn } from "@/lib/utils";
 import { LessonPlaylistItem } from "./LessonPlaylistItem";
-import type { Doc } from "../../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../../convex/_generated/dataModel";
 
 type LessonDoc = Doc<"lessons">;
+type ChapterDoc = Doc<"chapters">;
 
 type CourseProgress = {
   completedLessonIds: string[];
@@ -15,6 +16,7 @@ type CourseProgress = {
 
 type LessonPlaylistProps = {
   lessons: LessonDoc[];
+  chapters: ChapterDoc[];
   activeLessonId: string | null;
   completedLessonIds: Set<string>;
   progressData: CourseProgress;
@@ -30,6 +32,7 @@ type LessonPlaylistProps = {
 
 export const LessonPlaylist = ({
   lessons,
+  chapters,
   activeLessonId,
   completedLessonIds,
   progressData,
@@ -42,6 +45,36 @@ export const LessonPlaylist = ({
   buttonsSectionRef,
   activeLessonRef,
 }: LessonPlaylistProps) => {
+  const lessonsByChapter = useMemo(() => {
+    const map = new Map<Id<"chapters"> | "uncategorized", LessonDoc[]>();
+    for (const lesson of lessons) {
+      const key = lesson.chapter_id ?? ("uncategorized" as const);
+      const list = map.get(key) ?? [];
+      list.push(lesson);
+      map.set(key, list);
+    }
+    const result: Array<{
+      chapter: ChapterDoc | { _id: "uncategorized"; title: string; title_ar: string };
+      lessons: LessonDoc[];
+    }> = [];
+    const sortedChapters = [...chapters].sort((a, b) => a.displayOrder - b.displayOrder);
+    for (const chapter of sortedChapters) {
+      const chLessons = map.get(chapter._id) ?? [];
+      result.push({ chapter, lessons: chLessons });
+    }
+    const uncategorized = map.get("uncategorized");
+    if (uncategorized?.length) {
+      result.push({
+        chapter: {
+          _id: "uncategorized",
+          title: "Course Content",
+          title_ar: "محتوى الدورة",
+        },
+        lessons: uncategorized,
+      });
+    }
+    return result;
+  }, [lessons, chapters]);
   const playlistCardRef = useRef<HTMLDivElement>(null);
   const playlistScrollRef = useRef<HTMLDivElement>(null);
   const [playlistCardHeight, setPlaylistCardHeight] = useState<string | undefined>(undefined);
@@ -128,28 +161,37 @@ export const LessonPlaylist = ({
             {t("publishLessons")}
           </div>
         ) : (
-          lessons.map((lesson, index) => {
-            const isActive = activeLessonId === lesson._id;
-            const isCompleted = completedLessonIds.has(lesson._id);
-            const lessonTitle = language === "ar" ? lesson.title_ar : lesson.title;
+          lessonsByChapter.map(({ chapter, lessons: chLessons }) => (
+            <div key={chapter._id} className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                {language === "ar" ? chapter.title_ar : chapter.title}
+              </p>
+              <div className="space-y-1">
+                {chLessons.map((lesson, index) => {
+                  const isActive = activeLessonId === lesson._id;
+                  const isCompleted = completedLessonIds.has(lesson._id);
+                  const lessonTitle = language === "ar" ? lesson.title_ar : lesson.title;
 
-            return (
-              <LessonPlaylistItem
-                key={`${lesson._id}-${index}`}
-                ref={isActive ? activeLessonRef : null}
-                lesson={lesson}
-                index={index}
-                isActive={isActive}
-                isCompleted={isCompleted}
-                lessonTitle={lessonTitle}
-                duration={lesson.duration}
-                onClick={() => onLessonClick(lesson._id)}
-                isRTL={isRTL}
-                t={t}
-                formatDuration={formatDuration}
-              />
-            );
-          })
+                  return (
+                    <LessonPlaylistItem
+                      key={`${lesson._id}-${index}`}
+                      ref={isActive ? activeLessonRef : null}
+                      lesson={lesson}
+                      index={index}
+                      isActive={isActive}
+                      isCompleted={isCompleted}
+                      lessonTitle={lessonTitle}
+                      duration={lesson.duration}
+                      onClick={() => onLessonClick(lesson._id)}
+                      isRTL={isRTL}
+                      t={t}
+                      formatDuration={formatDuration}
+                    />
+                  );
+                })}
+              </div>
+            </div>
+          ))
         )}
       </CardContent>
     </Card>

@@ -68,6 +68,10 @@ const CoursePreview = () => {
     api.lesson.listLessonsByCourse,
     courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
   );
+  const chapters = useQuery(
+    api.chapter.listChaptersByCourse,
+    courseId && canAccessProtectedContent ? { courseId } : undefined,
+  );
   const progress = useQuery(
     api.lessonProgress.getCourseProgress,
     courseId && canAccessProtectedContent ? { courseId } : undefined,
@@ -246,7 +250,7 @@ const CoursePreview = () => {
     );
   }
 
-  if (lessons === undefined || progress === undefined) {
+  if (lessons === undefined || chapters === undefined || progress === undefined) {
     return (
       <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <p className="text-muted-foreground">{t("loadingCourse")}</p>
@@ -370,6 +374,7 @@ const CoursePreview = () => {
         <div className="min-w-0 space-y-4">
           <LessonPlaylist
             lessons={lessonList}
+            chapters={chapters ?? []}
             activeLessonId={activeLessonId}
             completedLessonIds={completedLessonSet}
             progressData={progressData}

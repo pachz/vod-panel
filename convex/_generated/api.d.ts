@@ -12,6 +12,7 @@ import type * as ResendOTPPasswordReset from "../ResendOTPPasswordReset.js";
 import type * as activityLog from "../activityLog.js";
 import type * as auth from "../auth.js";
 import type * as category from "../category.js";
+import type * as chapter from "../chapter.js";
 import type * as coach from "../coach.js";
 import type * as course from "../course.js";
 import type * as crons from "../crons.js";
@@ -44,6 +45,7 @@ declare const fullApi: ApiFromModules<{
   activityLog: typeof activityLog;
   auth: typeof auth;
   category: typeof category;
+  chapter: typeof chapter;
   coach: typeof coach;
   course: typeof course;
   crons: typeof crons;

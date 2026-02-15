@@ -81,7 +81,7 @@ const validateLessonUpdateInput = (input: LessonUpdateInput) => {
 };
 
 /**
- * List all lessons for a course, ordered by priority.
+ * List all lessons for a course, ordered by chapter displayOrder then lesson priority.
  * No pagination - returns the full array. Use for course detail reordering and course preview.
  */
 export const listLessonsByCourse = query({
@@ -107,6 +107,7 @@ export const listLessonsByCourse = query({
       learning_objectives: v.optional(v.string()),
       learning_objectives_ar: v.optional(v.string()),
       course_id: v.id("courses"),
+      chapter_id: v.optional(v.id("chapters")),
       duration: v.optional(v.number()),
       type: v.union(v.literal("video"), v.literal("article")),
       status: v.union(
@@ -151,7 +152,23 @@ export const listLessonsByCourse = query({
         .collect();
     }
 
-    lessons.sort((a, b) => a.priority - b.priority);
+    // Order by chapter displayOrder, then by lesson priority within chapter
+    const chapters = await ctx.db
+      .query("chapters")
+      .withIndex("course_id", (q) =>
+        q.eq("course_id", courseId).eq("deletedAt", undefined)
+      )
+      .collect();
+    const chapterOrder = new Map(chapters.sort((a, b) => a.displayOrder - b.displayOrder).map((c, i) => [c._id, i]));
+
+    lessons.sort((a, b) => {
+      const idA = a.chapter_id;
+      const idB = b.chapter_id;
+      const orderA = idA !== undefined ? (chapterOrder.get(idA) ?? 999) : 999;
+      const orderB = idB !== undefined ? (chapterOrder.get(idB) ?? 999) : 999;
+      if (orderA !== orderB) return orderA - orderB;
+      return a.priority - b.priority;
+    });
     return lessons;
   },
 });
@@ -307,11 +324,12 @@ export const createLesson = mutation({
     shortReview: v.string(),
     shortReviewAr: v.string(),
     courseId: v.id("courses"),
+    chapterId: v.id("chapters"),
     type: v.union(v.literal("video"), v.literal("article")),
   },
   handler: async (
     ctx,
-    { title, titleAr, shortReview, shortReviewAr, courseId, type },
+    { title, titleAr, shortReview, shortReviewAr, courseId, chapterId, type },
   ) => {
     await requireUser(ctx);
 
@@ -321,6 +339,7 @@ export const createLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
+      chapterId,
       type,
     });
 
@@ -333,16 +352,30 @@ export const createLesson = mutation({
       });
     }
 
-    // Get the highest priority for this course to add new lesson at the end
-    const existingLessons = await ctx.db
+    const chapter = await ctx.db.get(chapterId);
+    if (!chapter || chapter.deletedAt !== undefined) {
+      throw new ConvexError({
+        code: "INVALID_CHAPTER",
+        message: "Selected chapter does not exist.",
+      });
+    }
+    if (chapter.course_id !== courseId) {
+      throw new ConvexError({
+        code: "INVALID_CHAPTER",
+        message: "Selected chapter does not belong to this course.",
+      });
+    }
+
+    // Get the highest priority within this chapter to add new lesson at the end
+    const existingLessonsInChapter = await ctx.db
       .query("lessons")
-      .withIndex("course_id", (q) =>
-        q.eq("course_id", courseId).eq("deletedAt", undefined)
+      .withIndex("chapter_id", (q) =>
+        q.eq("chapter_id", chapterId).eq("deletedAt", undefined)
       )
       .collect();
-    
-    const maxPriority = existingLessons.length > 0
-      ? Math.max(...existingLessons.map(l => l.priority))
+
+    const maxPriority = existingLessonsInChapter.length > 0
+      ? Math.max(...existingLessonsInChapter.map((l) => l.priority))
       : -1;
 
     const now = Date.now();
@@ -355,6 +388,7 @@ export const createLesson = mutation({
       short_review: validated.shortReview,
       short_review_ar: validated.shortReviewAr,
       course_id: courseId,
+      chapter_id: chapterId,
       duration: undefined,
       type: validated.type,
       status: "draft",
@@ -405,6 +439,7 @@ export const updateLesson = mutation({
     shortReview: v.string(),
     shortReviewAr: v.string(),
     courseId: v.id("courses"),
+    chapterId: v.id("chapters"),
     type: v.union(v.literal("video"), v.literal("article")),
     status: v.union(
       v.literal("draft"),
@@ -434,6 +469,7 @@ export const updateLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
+      chapterId,
       type,
       status,
       videoUrl,
@@ -462,6 +498,7 @@ export const updateLesson = mutation({
       shortReview,
       shortReviewAr,
       courseId,
+      chapterId,
       type,
       status,
       videoUrl,
@@ -479,6 +516,20 @@ export const updateLesson = mutation({
       throw new ConvexError({
         code: "INVALID_COURSE",
         message: "Selected course does not exist.",
+      });
+    }
+
+    const chapter = await ctx.db.get(chapterId);
+    if (!chapter || chapter.deletedAt !== undefined) {
+      throw new ConvexError({
+        code: "INVALID_CHAPTER",
+        message: "Selected chapter does not exist.",
+      });
+    }
+    if (chapter.course_id !== courseId) {
+      throw new ConvexError({
+        code: "INVALID_CHAPTER",
+        message: "Selected chapter does not belong to this course.",
       });
     }
 
@@ -549,6 +600,7 @@ export const updateLesson = mutation({
       learning_objectives: validated.learningObjectives,
       learning_objectives_ar: validated.learningObjectivesAr,
       course_id: courseId,
+      chapter_id: chapterId,
       type: validated.type,
       status: effectiveStatus,
       // If we had to downgrade status due to missing duration, remember the
@@ -814,9 +866,10 @@ export const restoreLesson = mutation({
 export const reorderLessons = mutation({
   args: {
     courseId: v.id("courses"),
+    chapterId: v.id("chapters"),
     lessonIds: v.array(v.id("lessons")),
   },
-  handler: async (ctx, { courseId, lessonIds }) => {
+  handler: async (ctx, { courseId, chapterId, lessonIds }) => {
     await requireUser(ctx);
 
     const course = await ctx.db.get(courseId);
@@ -828,7 +881,15 @@ export const reorderLessons = mutation({
       });
     }
 
-    // Verify all lessons belong to this course and exist
+    const chapter = await ctx.db.get(chapterId);
+    if (!chapter || chapter.deletedAt !== undefined || chapter.course_id !== courseId) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Chapter not found or does not belong to this course.",
+      });
+    }
+
+    // Verify all lessons belong to this chapter and exist
     const lessons = await Promise.all(
       lessonIds.map((id) => ctx.db.get(id))
     );
@@ -841,16 +902,15 @@ export const reorderLessons = mutation({
           message: `Lesson at index ${i} not found.`,
         });
       }
-      if (lesson.course_id !== courseId) {
+      if (lesson.chapter_id !== chapterId) {
         throw new ConvexError({
           code: "INVALID_INPUT",
-          message: `Lesson at index ${i} does not belong to this course.`,
+          message: `Lesson at index ${i} does not belong to this chapter. Lessons cannot be moved between chapters via drag-and-drop.`,
         });
       }
     }
 
     // Update priorities based on the new order
-    // Priority starts at 0 and increments by 1
     for (let i = 0; i < lessonIds.length; i++) {
       await ctx.db.patch(lessonIds[i], {
         priority: i,

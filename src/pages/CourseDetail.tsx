@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { ArrowLeft, Trash2, GripVertical, Video, FileText, Eye } from "lucide-react";
+import { ArrowLeft, Trash2, GripVertical, Video, FileText, Eye, Plus, Pencil } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import {
   DndContext,
@@ -43,6 +43,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Separator } from "@/components/ui/separator";
@@ -53,6 +61,7 @@ import { cn } from "@/lib/utils";
 import { RichTextarea } from "@/components/RichTextarea";
 import { VideoUrlInput } from "@/components/VideoUrlInput";
 import { courseUpdateSchema } from "../../shared/validation/course";
+import { chapterInputSchema } from "../../shared/validation/chapter";
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
 import { PdfDropzone, type PdfUploadState } from "@/components/PdfDropzone";
 
@@ -60,6 +69,7 @@ type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
 type CoachDoc = Doc<"coaches">;
 type LessonDoc = Doc<"lessons">;
+type ChapterDoc = Doc<"chapters">;
 
 /** Duration is stored in seconds; format as time for course display (0:10 or 01:10:10). */
 const formatDurationTime = (seconds: number | undefined | null) => {
@@ -124,6 +134,63 @@ const statusLabels: Record<CourseDoc["status"], string> = {
   draft: "Draft",
   published: "Published",
   archived: "Archived",
+};
+
+type SortableChapterItemProps = {
+  chapter: ChapterDoc;
+  index: number;
+  onEdit: (chapter: ChapterDoc) => void;
+};
+
+const SortableChapterItem = ({ chapter, index, onEdit }: SortableChapterItemProps) => {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: chapter._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <div
+      ref={setNodeRef}
+      style={style}
+      className={cn(
+        "flex items-center gap-2 rounded-md border bg-card px-3 py-2 transition-shadow hover:bg-accent/50",
+        isDragging && "shadow-md opacity-50"
+      )}
+    >
+      <div
+        {...attributes}
+        {...listeners}
+        className="cursor-grab active:cursor-grabbing touch-none p-1 -ml-1"
+      >
+        <GripVertical className="h-4 w-4 text-muted-foreground" />
+      </div>
+      <span className="text-xs font-medium text-muted-foreground w-6 shrink-0">
+        #{index + 1}
+      </span>
+      <span className="text-sm font-medium flex-1 truncate">
+        {chapter.title}
+        <span className="text-muted-foreground ml-1">/ {chapter.title_ar}</span>
+      </span>
+      <Button
+        variant="ghost"
+        size="icon"
+        className="h-7 w-7 shrink-0"
+        onClick={() => onEdit(chapter)}
+      >
+        <Pencil className="h-3.5 w-3.5" />
+      </Button>
+    </div>
+  );
 };
 
 type SortableLessonItemProps = {
@@ -216,12 +283,19 @@ const CourseDetail = () => {
   );
   const categories = useQuery(api.category.listCategories);
   const coaches = useQuery(api.coach.listCoaches);
+  const chapters = useQuery(
+    api.chapter.listChaptersByCourse,
+    courseId ? { courseId } : undefined,
+  );
   const lessons = useQuery(
     api.lesson.listLessonsByCourse,
     courseId ? { courseId } : undefined,
   );
 
   const updateCourse = useMutation(api.course.updateCourse);
+  const createChapter = useMutation(api.chapter.createChapter);
+  const updateChapter = useMutation(api.chapter.updateChapter);
+  const reorderChapters = useMutation(api.chapter.reorderChapters);
   const deleteCourse = useMutation(api.course.deleteCourse);
   const generateImageUploadUrl = useMutation(api.course.generateImageUploadUrl);
   const updateCourseImages = useMutation(api.course.updateCourseImages);
@@ -229,6 +303,13 @@ const CourseDetail = () => {
   const generateThumbnail = useAction(api.image.generateThumbnail);
   const convertToJpeg = useAction(api.image.convertToJpeg);
   const reorderLessons = useMutation(api.lesson.reorderLessons);
+
+  const [isCreateChapterDialogOpen, setIsCreateChapterDialogOpen] = useState(false);
+  const [chapterToEdit, setChapterToEdit] = useState<ChapterDoc | null>(null);
+  const [createChapterForm, setCreateChapterForm] = useState({ title: "", titleAr: "" });
+  const [editChapterForm, setEditChapterForm] = useState({ title: "", titleAr: "" });
+  const [isCreatingChapter, setIsCreatingChapter] = useState(false);
+  const [isUpdatingChapter, setIsUpdatingChapter] = useState(false);
 
   const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
@@ -258,6 +339,32 @@ const CourseDetail = () => {
     if (!lessons) return [];
     return lessons;
   }, [lessons]);
+
+  const chapterList = useMemo<ChapterDoc[]>(() => chapters ?? [], [chapters]);
+
+  /** Group lessons by chapter_id, preserving chapter order */
+  const lessonsByChapter = useMemo(() => {
+    const map = new Map<Id<"chapters"> | "uncategorized", LessonDoc[]>();
+    for (const lesson of lessonList) {
+      const key = lesson.chapter_id ?? ("uncategorized" as const);
+      const list = map.get(key) ?? [];
+      list.push(lesson);
+      map.set(key, list);
+    }
+    const result: Array<{ chapter: ChapterDoc; lessons: LessonDoc[] }> = [];
+    const defaultChapter = chapterList.find(
+      (c) => course?.default_chapter_id === c._id
+    ) ?? chapterList[0];
+    for (const chapter of chapterList) {
+      let chLessons = map.get(chapter._id) ?? [];
+      if (chapter._id === defaultChapter?._id) {
+        const uncategorized = map.get("uncategorized") ?? [];
+        chLessons = [...chLessons, ...uncategorized];
+      }
+      result.push({ chapter, lessons: chLessons });
+    }
+    return result;
+  }, [lessonList, chapterList, course?.default_chapter_id]);
   const isLoading = course === undefined || categories === undefined || coaches === undefined;
 
   const sensors = useSensors(
@@ -267,7 +374,11 @@ const CourseDetail = () => {
     })
   );
 
-  const handleDragEnd = async (event: DragEndEvent) => {
+  const handleLessonDragEnd = async (
+    event: DragEndEvent,
+    chapterId: Id<"chapters">,
+    chapterLessons: LessonDoc[]
+  ) => {
     const { active, over } = event;
 
     if (!over || !courseId) {
@@ -278,19 +389,20 @@ const CourseDetail = () => {
       return;
     }
 
-    const oldIndex = lessonList.findIndex((lesson) => lesson._id === active.id);
-    const newIndex = lessonList.findIndex((lesson) => lesson._id === over.id);
+    const oldIndex = chapterLessons.findIndex((lesson) => lesson._id === active.id);
+    const newIndex = chapterLessons.findIndex((lesson) => lesson._id === over.id);
 
     if (oldIndex === -1 || newIndex === -1) {
       return;
     }
 
-    const newOrder = arrayMove(lessonList, oldIndex, newIndex);
+    const newOrder = arrayMove(chapterLessons, oldIndex, newIndex);
     const lessonIds = newOrder.map((lesson) => lesson._id);
 
     try {
       await reorderLessons({
         courseId,
+        chapterId,
         lessonIds,
       });
       toast.success("Lessons reordered successfully");
@@ -302,6 +414,45 @@ const CourseDetail = () => {
           : error instanceof Error
             ? error.message
             : "Failed to reorder lessons. Please try again.";
+      toast.error(errorMessage);
+    }
+  };
+
+  const handleChapterDragEnd = async (event: DragEndEvent) => {
+    const { active, over } = event;
+
+    if (!over || !courseId || !chapters) {
+      return;
+    }
+
+    if (active.id === over.id) {
+      return;
+    }
+
+    const oldIndex = chapterList.findIndex((ch) => ch._id === active.id);
+    const newIndex = chapterList.findIndex((ch) => ch._id === over.id);
+
+    if (oldIndex === -1 || newIndex === -1) {
+      return;
+    }
+
+    const newOrder = arrayMove(chapterList, oldIndex, newIndex);
+    const chapterIds = newOrder.map((ch) => ch._id);
+
+    try {
+      await reorderChapters({
+        courseId,
+        chapterIds,
+      });
+      toast.success("Chapters reordered successfully");
+    } catch (error) {
+      console.error(error);
+      const errorMessage =
+        error && typeof error === "object" && "data" in error
+          ? (error as { data?: { message?: string } }).data?.message
+          : error instanceof Error
+            ? error.message
+            : "Failed to reorder chapters. Please try again.";
       toast.error(errorMessage);
     }
   };
@@ -903,6 +1054,14 @@ const CourseDetail = () => {
       <Tabs defaultValue="details" className="space-y-6">
         <TabsList>
           <TabsTrigger value="details">Details</TabsTrigger>
+          <TabsTrigger value="chapters" className="gap-2">
+            Chapters
+            {chapterList.length > 0 && (
+              <span className="ml-1 rounded-full bg-secondary px-1.5 py-0.5 text-xs font-medium">
+                {chapterList.length}
+              </span>
+            )}
+          </TabsTrigger>
           <TabsTrigger value="lessons" className="gap-2">
             Lessons
             {lessonList.length > 0 && (
@@ -1261,12 +1420,76 @@ const CourseDetail = () => {
       </form>
         </TabsContent>
 
+        <TabsContent value="chapters" className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-xl font-semibold">Chapters</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Drag and drop to reorder chapters. Define the order of content in your course.
+              </p>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                setCreateChapterForm({ title: "", titleAr: "" });
+                setIsCreateChapterDialogOpen(true);
+              }}
+            >
+              <Plus className="h-4 w-4 mr-1" />
+              Add Chapter
+            </Button>
+          </div>
+
+          {chapters === undefined ? (
+            <div className="flex items-center justify-center py-12">
+              <p className="text-sm text-muted-foreground">Loading chapters…</p>
+            </div>
+          ) : chapterList.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-12 text-center border rounded-lg">
+              <p className="text-sm text-muted-foreground mb-4">
+                No chapters yet. Add a chapter above or create lessons to use the default chapter.
+              </p>
+            </div>
+          ) : (
+            <div className="border rounded-lg p-4 bg-muted/30">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleChapterDragEnd}
+              >
+                <SortableContext
+                  items={chapterList.map((ch) => ch._id)}
+                  strategy={verticalListSortingStrategy}
+                >
+                  <div className="space-y-2">
+                    {chapterList.map((ch, index) => (
+                      <SortableChapterItem
+                        key={ch._id}
+                        chapter={ch}
+                        index={index}
+                        onEdit={(chapter) => {
+                          setChapterToEdit(chapter);
+                          setEditChapterForm({
+                            title: chapter.title,
+                            titleAr: chapter.title_ar,
+                          });
+                        }}
+                      />
+                    ))}
+                  </div>
+                </SortableContext>
+              </DndContext>
+            </div>
+          )}
+        </TabsContent>
+
         <TabsContent value="lessons" className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
               <h2 className="text-xl font-semibold">Lessons</h2>
               <p className="text-sm text-muted-foreground mt-1">
-                Drag and drop to reorder lessons
+                Drag and drop to reorder lessons within each chapter. To move a lesson to another chapter, edit it in the Lesson Detail view.
               </p>
             </div>
             <Button
@@ -1294,32 +1517,215 @@ const CourseDetail = () => {
               </Button>
             </div>
           ) : (
-            <div className="border rounded-lg p-4 bg-muted/30">
-              <DndContext
-                sensors={sensors}
-                collisionDetection={closestCenter}
-                onDragEnd={handleDragEnd}
-              >
-                <SortableContext
-                  items={lessonList.map((lesson) => lesson._id)}
-                  strategy={verticalListSortingStrategy}
-                >
-                <div className="space-y-1.5">
-                  {lessonList.map((lesson, index) => (
-                    <SortableLessonItem
-                      key={lesson._id}
-                      lesson={lesson}
-                      index={index}
-                      onView={(id) => navigate(`/lessons/${id}`)}
-                    />
-                  ))}
+            <div className="space-y-6">
+              {lessonsByChapter.map(({ chapter, lessons: chLessons }) => (
+                <div key={chapter._id} className="border rounded-lg p-4 bg-muted/30">
+                  <h3 className="text-sm font-semibold text-muted-foreground mb-3">
+                    {chapter.title}
+                    <span className="font-normal ml-1">/ {chapter.title_ar}</span>
+                  </h3>
+                  <DndContext
+                    key={chapter._id}
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={(e) => handleLessonDragEnd(e, chapter._id, chLessons)}
+                  >
+                    <SortableContext
+                      items={chLessons.map((l) => l._id)}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <div className="space-y-1.5">
+                        {chLessons.map((lesson, index) => (
+                          <SortableLessonItem
+                            key={lesson._id}
+                            lesson={lesson}
+                            index={index}
+                            onView={(id) => navigate(`/lessons/${id}`)}
+                          />
+                        ))}
+                      </div>
+                    </SortableContext>
+                  </DndContext>
                 </div>
-                </SortableContext>
-              </DndContext>
+              ))}
             </div>
           )}
         </TabsContent>
       </Tabs>
+
+      <Dialog open={isCreateChapterDialogOpen} onOpenChange={setIsCreateChapterDialogOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Add Chapter</DialogTitle>
+            <DialogDescription>
+              Add a new chapter to organize your course content. Both English and Arabic titles are required.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const result = chapterInputSchema.safeParse(createChapterForm);
+              if (!result.success) {
+                toast.error(result.error.errors[0]?.message ?? "Please check the form.");
+                return;
+              }
+              if (!courseId) return;
+              setIsCreatingChapter(true);
+              try {
+                await createChapter({
+                  courseId,
+                  title: result.data.title,
+                  titleAr: result.data.titleAr,
+                });
+                setCreateChapterForm({ title: "", titleAr: "" });
+                setIsCreateChapterDialogOpen(false);
+                toast.success("Chapter created");
+              } catch (err) {
+                toast.error(getErrorMessage(err));
+              } finally {
+                setIsCreatingChapter(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="create-chapter-title">Title (EN)</Label>
+              <Input
+                id="create-chapter-title"
+                value={createChapterForm.title}
+                onChange={(e) =>
+                  setCreateChapterForm((prev) => ({ ...prev, title: e.target.value }))
+                }
+                placeholder="e.g. Introduction"
+                maxLength={128}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                {createChapterForm.title.length}/128 characters
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="create-chapter-title-ar">Title (AR)</Label>
+              <Input
+                id="create-chapter-title-ar"
+                value={createChapterForm.titleAr}
+                onChange={(e) =>
+                  setCreateChapterForm((prev) => ({ ...prev, titleAr: e.target.value }))
+                }
+                placeholder="مثال: المقدمة"
+                maxLength={128}
+                dir="rtl"
+                className="text-right"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                {createChapterForm.titleAr.length}/128 characters
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setIsCreateChapterDialogOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="cta" disabled={isCreatingChapter}>
+                {isCreatingChapter ? "Creating…" : "Create Chapter"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog
+        open={chapterToEdit !== null}
+        onOpenChange={(open) => {
+          if (!open) setChapterToEdit(null);
+        }}
+      >
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>Edit Chapter</DialogTitle>
+            <DialogDescription>
+              Update the chapter titles. Both English and Arabic are required.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={async (e) => {
+              e.preventDefault();
+              const result = chapterInputSchema.safeParse(editChapterForm);
+              if (!result.success) {
+                toast.error(result.error.errors[0]?.message ?? "Please check the form.");
+                return;
+              }
+              if (!chapterToEdit) return;
+              setIsUpdatingChapter(true);
+              try {
+                await updateChapter({
+                  id: chapterToEdit._id,
+                  title: result.data.title,
+                  titleAr: result.data.titleAr,
+                });
+                setChapterToEdit(null);
+                toast.success("Chapter updated");
+              } catch (err) {
+                toast.error(getErrorMessage(err));
+              } finally {
+                setIsUpdatingChapter(false);
+              }
+            }}
+            className="space-y-4"
+          >
+            <div className="space-y-2">
+              <Label htmlFor="edit-chapter-title">Title (EN)</Label>
+              <Input
+                id="edit-chapter-title"
+                value={editChapterForm.title}
+                onChange={(e) =>
+                  setEditChapterForm((prev) => ({ ...prev, title: e.target.value }))
+                }
+                placeholder="e.g. Introduction"
+                maxLength={128}
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                {editChapterForm.title.length}/128 characters
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="edit-chapter-title-ar">Title (AR)</Label>
+              <Input
+                id="edit-chapter-title-ar"
+                value={editChapterForm.titleAr}
+                onChange={(e) =>
+                  setEditChapterForm((prev) => ({ ...prev, titleAr: e.target.value }))
+                }
+                placeholder="مثال: المقدمة"
+                maxLength={128}
+                dir="rtl"
+                className="text-right"
+                required
+              />
+              <p className="text-xs text-muted-foreground">
+                {editChapterForm.titleAr.length}/128 characters
+              </p>
+            </div>
+            <DialogFooter>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setChapterToEdit(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" variant="cta" disabled={isUpdatingChapter}>
+                {isUpdatingChapter ? "Saving…" : "Save Changes"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <AlertDialogContent>

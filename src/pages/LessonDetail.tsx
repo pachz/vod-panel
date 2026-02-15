@@ -47,6 +47,7 @@ type FormValues = {
   learningObjectives: string;
   learningObjectivesAr: string;
   courseId: string;
+  chapterId: string;
   status: LessonDoc["status"];
   videoUrl: string;
 };
@@ -59,6 +60,7 @@ const initialFormValues: FormValues = {
   learningObjectives: "",
   learningObjectivesAr: "",
   courseId: "",
+  chapterId: "",
   status: "draft",
   videoUrl: "",
 };
@@ -90,17 +92,25 @@ const LessonDetail = () => {
   const navigate = useNavigate();
   const lessonId = id as Id<"lessons"> | undefined;
 
+  const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
+
   const lesson = useQuery(
     api.lesson.getLesson,
     lessonId ? { id: lessonId } : undefined,
   );
   const courses = useQuery(api.course.listCourses, {});
+  const defaultChapterForSelectedCourse = useQuery(
+    api.course.getDefaultChapterForCourse,
+    formValues.courseId ? { courseId: formValues.courseId as Id<"courses"> } : "skip",
+  );
+  const chapters = useQuery(
+    api.chapter.listChaptersByCourse,
+    formValues.courseId ? { courseId: formValues.courseId as Id<"courses"> } : "skip",
+  );
 
   const updateLesson = useMutation(api.lesson.updateLesson);
   const validateVideoUrl = useAction(api.image.validateVideoUrl);
   const deleteLesson = useMutation(api.lesson.deleteLesson);
-
-  const [formValues, setFormValues] = useState<FormValues>(initialFormValues);
   const [initialValues, setInitialValues] = useState<FormValues | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -113,6 +123,20 @@ const LessonDetail = () => {
     return courses.page ?? [];
   }, [courses]);
   const isLoading = lesson === undefined || courses === undefined;
+
+  // When user changes course, preselect default chapter if we have it
+  useEffect(() => {
+    if (
+      formValues.courseId &&
+      !formValues.chapterId &&
+      defaultChapterForSelectedCourse
+    ) {
+      setFormValues((prev) => ({
+        ...prev,
+        chapterId: defaultChapterForSelectedCourse,
+      }));
+    }
+  }, [formValues.courseId, formValues.chapterId, defaultChapterForSelectedCourse]);
 
   useEffect(() => {
     if (!lessonId || !lesson) {
@@ -127,6 +151,7 @@ const LessonDetail = () => {
       learningObjectives: lesson.learning_objectives ?? "",
       learningObjectivesAr: lesson.learning_objectives_ar ?? "",
       courseId: lesson.course_id,
+      chapterId: lesson.chapter_id ?? "",
       status: lesson.status,
       videoUrl: lesson.video_url ?? "",
     };
@@ -195,6 +220,7 @@ const LessonDetail = () => {
       learningObjectives: formValues.learningObjectives,
       learningObjectivesAr: formValues.learningObjectivesAr,
       courseId: formValues.courseId,
+      chapterId: formValues.chapterId,
       type: "video",
       status: formValues.status,
       videoUrl: formValues.videoUrl,
@@ -216,6 +242,7 @@ const LessonDetail = () => {
       learningObjectives,
       learningObjectivesAr,
       courseId,
+      chapterId,
       status,
       videoUrl,
     } = validation.data;
@@ -252,6 +279,7 @@ const LessonDetail = () => {
         learningObjectives,
         learningObjectivesAr,
         courseId: courseId as Id<"courses">,
+        chapterId: chapterId as Id<"chapters">,
         type: "video",
         status,
         videoUrl,
@@ -274,6 +302,7 @@ const LessonDetail = () => {
         learningObjectives: learningObjectives ?? "",
         learningObjectivesAr: learningObjectivesAr ?? "",
         courseId,
+        chapterId,
         status,
         videoUrl: videoUrl ?? "",
       };
@@ -424,11 +453,41 @@ const LessonDetail = () => {
                 <CourseCombobox
                   courses={courseList}
                   value={formValues.courseId}
-                  onValueChange={(value) =>
-                    setFormValues((prev) => ({ ...prev, courseId: value }))
-                  }
+                  onValueChange={(value) => {
+                    setFormValues((prev) => {
+                      const next = { ...prev, courseId: value };
+                      const course = value ? courseList.find((c) => c._id === value) : null;
+                      next.chapterId = course?.default_chapter_id ?? "";
+                      return next;
+                    });
+                  }}
                   placeholder="Select course"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="chapterId">Chapter (required)</Label>
+                <Select
+                  value={formValues.chapterId}
+                  onValueChange={(value) =>
+                    setFormValues((prev) => ({ ...prev, chapterId: value }))
+                  }
+                  required
+                  disabled={!formValues.courseId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select chapter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(chapters ?? []).map((ch) => (
+                      <SelectItem key={ch._id} value={ch._id}>
+                        {ch.title} / {ch.title_ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Each lesson must belong to a chapter.
+                </p>
               </div>
               <div className="space-y-2">
                 <Label htmlFor="status">Status</Label>

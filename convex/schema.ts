@@ -46,6 +46,17 @@ export default defineSchema({
     .index("name", ["name", "deletedAt"])
     .index("slug", ["slug"]),
 
+  chapters: defineTable({
+    course_id: v.id("courses"),
+    title: v.string(),
+    title_ar: v.string(),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("course_id", ["course_id", "deletedAt"])
+    .index("course_id_displayOrder", ["course_id", "deletedAt", "displayOrder"]),
+
   courses: defineTable({
     name: v.string(),
     name_ar: v.string(),
@@ -67,6 +78,7 @@ export default defineSchema({
     instructor: v.optional(v.string()),
     lesson_count: v.number(),
     displayOrder: v.optional(v.number()),
+    default_chapter_id: v.optional(v.id("chapters")),
     pdf_material_storage_id: v.optional(v.id("_storage")),
     pdf_material_name: v.optional(v.string()),
     pdf_material_size: v.optional(v.number()),
@@ -97,6 +109,7 @@ export default defineSchema({
     learning_objectives: v.optional(v.string()),
     learning_objectives_ar: v.optional(v.string()),
     course_id: v.id("courses"),
+    chapter_id: v.optional(v.id("chapters")),
     duration: v.optional(v.number()),
     type: v.union(v.literal("video"), v.literal("article")),
     status: v.union(v.literal("draft"), v.literal("published"), v.literal("archived")),
@@ -116,6 +129,7 @@ export default defineSchema({
     deletedAt: v.optional(v.number()),
   })
     .index("course_id", ["course_id", "deletedAt"])
+    .index("chapter_id", ["chapter_id", "deletedAt"])
     .index("deletedAt_course_status", ["deletedAt", "course_id", "status"])
     .index("deletedAt_status", ["deletedAt", "status"])
     .index("deletedAt", ["deletedAt"])

@@ -48,6 +48,12 @@ export const lessonInputSchema = z.object({
     })
     .trim()
     .min(1, "Course is required."),
+  chapterId: z
+    .string({
+      required_error: "Chapter is required.",
+    })
+    .trim()
+    .min(1, "Chapter is required."),
   type: z.enum(["video", "article"]).default("video"),
 });
 

@@ -403,6 +403,16 @@ export const createCourse = mutation({
       updatedAt: now,
     });
 
+    // Create default chapter for the new course
+    const defaultChapterId = await ctx.db.insert("chapters", {
+      course_id: courseId,
+      title: "Course Content",
+      title_ar: "محتوى الدورة",
+      displayOrder: 0,
+      createdAt: now,
+    });
+    await ctx.db.patch(courseId, { default_chapter_id: defaultChapterId });
+
     // Update category course count
     await ctx.db.patch(categoryId, {
       course_count: category.course_count + 1,
@@ -423,6 +433,23 @@ export const createCourse = mutation({
     });
 
     return courseId;
+  },
+});
+
+/** Get the default chapter ID for a course. Used when creating lessons. */
+export const getDefaultChapterForCourse = query({
+  args: {
+    courseId: v.id("courses"),
+  },
+  returns: v.union(v.id("chapters"), v.null()),
+  handler: async (ctx, { courseId }) => {
+    await requireUser(ctx);
+
+    const course = await ctx.db.get(courseId);
+    if (!course || course.deletedAt !== undefined) {
+      return null;
+    }
+    return course.default_chapter_id ?? null;
   },
 });
 

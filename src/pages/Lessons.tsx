@@ -100,15 +100,25 @@ const Lessons = () => {
   );
 
   const courses = useQuery(api.course.listCourses, {});
-  const createLesson = useMutation(api.lesson.createLesson);
-  const deleteLesson = useMutation(api.lesson.deleteLesson);
-  const restoreLesson = useMutation(api.lesson.restoreLesson);
-
   const [formValues, setFormValues] = useState({
     title: "",
     titleAr: "",
     courseId: courseFilter || "",
+    chapterId: "",
   });
+
+  const selectedCourseId = courseFilter || formValues.courseId;
+  const defaultChapter = useQuery(
+    api.course.getDefaultChapterForCourse,
+    selectedCourseId ? { courseId: selectedCourseId as Id<"courses"> } : "skip",
+  );
+  const chapters = useQuery(
+    api.chapter.listChaptersByCourse,
+    formValues.courseId ? { courseId: formValues.courseId as Id<"courses"> } : "skip",
+  );
+  const createLesson = useMutation(api.lesson.createLesson);
+  const deleteLesson = useMutation(api.lesson.deleteLesson);
+  const restoreLesson = useMutation(api.lesson.restoreLesson);
 
   const courseList = useMemo<CourseDoc[]>(() => {
     if (!courses) return [];
@@ -165,17 +175,28 @@ const Lessons = () => {
     setCursor(continueCursor);
   }, [canLoadMore, continueCursor, filterKey, isLoadingMore]);
 
-  // Sync courseId with courseFilter when filter changes
+  // Sync courseId and chapterId with courseFilter when filter changes
   useEffect(() => {
     if (courseFilter) {
       setFormValues((prev) => {
         if (prev.courseId !== courseFilter) {
-          return { ...prev, courseId: courseFilter };
+          return {
+            ...prev,
+            courseId: courseFilter,
+            chapterId: "", // Will be set by next effect when defaultChapter loads
+          };
         }
         return prev;
       });
     }
   }, [courseFilter]);
+
+  // When course is selected (from filter or combobox), preselect default chapter
+  useEffect(() => {
+    if (formValues.courseId && !formValues.chapterId && defaultChapter) {
+      setFormValues((prev) => ({ ...prev, chapterId: defaultChapter }));
+    }
+  }, [formValues.courseId, formValues.chapterId, defaultChapter]);
 
   const handleSubmit = async (e: React.FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -186,6 +207,7 @@ const Lessons = () => {
       shortReview: "",
       shortReviewAr: "",
       courseId: formValues.courseId,
+      chapterId: formValues.chapterId,
       type: "video",
     });
 
@@ -210,6 +232,7 @@ const Lessons = () => {
       shortReview,
       shortReviewAr,
       courseId,
+      chapterId,
     } = validation.data;
 
     setIsCreating(true);
@@ -221,6 +244,7 @@ const Lessons = () => {
         shortReview,
         shortReviewAr,
         courseId: courseId as Id<"courses">,
+        chapterId: chapterId as Id<"chapters">,
         type: "video",
       });
 
@@ -230,6 +254,7 @@ const Lessons = () => {
         title: "",
         titleAr: "",
         courseId: courseFilter || "",
+        chapterId: defaultChapter ?? "",
       });
       navigate(`/lessons/${lessonId}`);
     } catch (error) {
@@ -495,6 +520,7 @@ const Lessons = () => {
                   title: "",
                   titleAr: "",
                   courseId: courseFilter || "",
+                  chapterId: defaultChapter ?? "",
                 });
               }}
               variant="cta"
@@ -541,13 +567,41 @@ const Lessons = () => {
                   <CourseCombobox
                     courses={courseList}
                     value={formValues.courseId}
-                    onValueChange={(value) =>
-                      setFormValues((prev) => ({ ...prev, courseId: value }))
-                    }
+                    onValueChange={(value) => {
+                      const course = courseList.find((c) => c._id === value);
+                      setFormValues((prev) => ({
+                        ...prev,
+                        courseId: value,
+                        chapterId: course?.default_chapter_id ?? "",
+                      }));
+                    }}
                     placeholder="Select course"
                   />
                 </div>
               )}
+
+              <div className="space-y-2">
+                <Label htmlFor="chapterId">Chapter (required)</Label>
+                <Select
+                  value={formValues.chapterId}
+                  onValueChange={(value) =>
+                    setFormValues((prev) => ({ ...prev, chapterId: value }))
+                  }
+                  required
+                  disabled={!formValues.courseId}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select chapter" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(chapters ?? []).map((ch) => (
+                      <SelectItem key={ch._id} value={ch._id}>
+                        {ch.title} / {ch.title_ar}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
 
               <Button
                 type="submit"
