@@ -344,15 +344,14 @@ const CourseCards = () => {
                     >
                       {categoryNameById[course.category_id] ?? t("uncategorized")}
                     </Badge>
-                    {(course.additional_category_ids ?? []).map((id) => (
+                    {(course.additional_category_ids ?? []).length > 0 && (
                       <Badge
-                        key={id}
                         variant="outline"
                         className="w-fit rounded-full border-muted-foreground/30 text-muted-foreground"
                       >
-                        {categoryNameById[id] ?? t("uncategorized")}
+                        +{(course.additional_category_ids ?? []).length}
                       </Badge>
-                    ))}
+                    )}
                   </div>
                   <CardTitle className="text-lg font-bold leading-tight">
                     {language === "ar" ? course.name_ar : course.name}
