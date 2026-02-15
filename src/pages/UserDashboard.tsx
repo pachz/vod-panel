@@ -198,7 +198,7 @@ const UserDashboard = () => {
                   Loading...
                 </div>
               ) : coursesInProgress.length === 0 ? (
-                <div className="text-center py-12 space-y-2">
+                <div className="py-12 space-y-2 text-center" dir={isRTL ? "rtl" : "ltr"}>
                   <p className="text-sm text-muted-foreground">
                     {t("noCoursesInProgress")}
                   </p>
@@ -212,10 +212,10 @@ const UserDashboard = () => {
                     const courseName = language === "ar" ? course.name_ar : course.name;
                     return (
                       <Card key={course._id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="pt-6">
+                        <CardContent className="pt-6" dir={isRTL ? "rtl" : "ltr"}>
                           <div className="space-y-4">
                             <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-2">
+                              <div className={cn("flex-1 space-y-2", isRTL && "text-right")}>
                                 <h3 className="font-semibold text-lg leading-tight">
                                   {courseName}
                                 </h3>
@@ -243,11 +243,11 @@ const UserDashboard = () => {
                               </Button>
                             </div>
                             <div className="space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className={cn("flex justify-between text-xs text-muted-foreground", isRTL && "flex-row-reverse")}>
                                 <span>{Math.round(progressPercentage)}%</span>
                                 <span>{completedCount} / {totalLessons}</span>
                               </div>
-                              <Progress value={progressPercentage} className="h-2" />
+                              <Progress value={progressPercentage} className="h-2" dir={isRTL ? "rtl" : "ltr"} />
                             </div>
                           </div>
                         </CardContent>
@@ -263,7 +263,7 @@ const UserDashboard = () => {
                   Loading...
                 </div>
               ) : coursesCompleted.length === 0 ? (
-                <div className="text-center py-12 space-y-2">
+                <div className="py-12 space-y-2 text-center" dir={isRTL ? "rtl" : "ltr"}>
                   <p className="text-sm text-muted-foreground">
                     {t("noCoursesCompleted")}
                   </p>
@@ -277,11 +277,11 @@ const UserDashboard = () => {
                     const courseName = language === "ar" ? course.name_ar : course.name;
                     return (
                       <Card key={course._id} className="hover:shadow-md transition-shadow">
-                        <CardContent className="pt-6">
+                        <CardContent className="pt-6" dir={isRTL ? "rtl" : "ltr"}>
                           <div className="space-y-4">
                             <div className="flex items-start justify-between gap-4">
-                              <div className="flex-1 space-y-2">
-                                <div className="flex items-center gap-2">
+                              <div className={cn("flex-1 space-y-2", isRTL && "text-right")}>
+                                <div className={cn("flex items-center gap-2", isRTL && "justify-end")}>
                                   <h3 className="font-semibold text-lg leading-tight">
                                     {courseName}
                                   </h3>
@@ -311,11 +311,11 @@ const UserDashboard = () => {
                               </Button>
                             </div>
                             <div className="space-y-2">
-                              <div className="flex justify-between text-xs text-muted-foreground">
+                              <div className={cn("flex justify-between text-xs text-muted-foreground", isRTL && "flex-row-reverse")}>
                                 <span>{Math.round(progressPercentage)}%</span>
                                 <span>{completedCount} / {totalLessons}</span>
                               </div>
-                              <Progress value={progressPercentage} className="h-2" />
+                              <Progress value={progressPercentage} className="h-2" dir={isRTL ? "rtl" : "ltr"} />
                             </div>
                           </div>
                         </CardContent>
