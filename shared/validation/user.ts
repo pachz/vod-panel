@@ -15,7 +15,8 @@ export const userInputSchema = z.object({
     .trim()
     .min(1, "Email is required.")
     .email("Please enter a valid email address.")
-    .max(255, "Email must be 255 characters or less."),
+    .max(255, "Email must be 255 characters or less.")
+    .transform((s) => s.toLowerCase()),
   phone: z
     .string()
     .trim()
@@ -45,7 +46,8 @@ export const userUpdateSchema = z.object({
     .trim()
     .min(1, "Email is required.")
     .email("Please enter a valid email address.")
-    .max(255, "Email must be 255 characters or less."),
+    .max(255, "Email must be 255 characters or less.")
+    .transform((s) => s.toLowerCase()),
   phone: z
     .string()
     .trim()

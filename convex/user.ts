@@ -336,24 +336,26 @@ export const checkAdmin = internalQuery({
     email: v.string(),
   },
   handler: async (ctx, { email }) => {
+    const normalizedEmail = email.trim().toLowerCase();
     const user = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", email).eq("deletedAt", undefined))
+      .withIndex("email", (q) => q.eq("email", normalizedEmail).eq("deletedAt", undefined))
       .first();
 
     return user && user.isGod ? user : null;
   },
 });
 
-// Internal query to get user by email
+// Internal query to get user by email (email is normalized to lowercase for case-insensitive lookup)
 export const getUserByEmail = internalQuery({
   args: {
     email: v.string(),
   },
   handler: async (ctx, { email }) => {
+    const normalizedEmail = email.trim().toLowerCase();
     const allUsers = await ctx.db
       .query("users")
-      .withIndex("email", (q) => q.eq("email", email))
+      .withIndex("email", (q) => q.eq("email", normalizedEmail))
       .collect();
     
     const existing = allUsers.find((u) => !u.deletedAt);

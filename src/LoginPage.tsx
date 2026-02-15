@@ -213,15 +213,16 @@ const LoginPage = () => {
 
     if (mode === "register") {
       try {
+        const normalizedEmail = email.trim().toLowerCase();
         await registerUser({
           name: name.trim(),
-          email: email.trim(),
+          email: normalizedEmail,
           password,
         });
         // After successful registration, sign in
         await signIn("password", {
           flow: "signIn",
-          email: email.trim(),
+          email: normalizedEmail,
           password,
         });
       } catch (cause: any) {
@@ -235,7 +236,7 @@ const LoginPage = () => {
       try {
         await signIn("password", {
           flow: "signIn",
-          email: email.trim(),
+          email: email.trim().toLowerCase(),
           password,
         });
       } catch (cause: any) {
@@ -306,17 +307,17 @@ const LoginPage = () => {
 
     const formData = new FormData(event.currentTarget);
     const emailValue = formData.get("email") as string;
-    const trimmedEmail = emailValue.trim();
+    const normalizedEmail = emailValue.trim().toLowerCase();
 
     try {
       await signIn("password", {
         flow: "reset",
-        email: trimmedEmail,
+        email: normalizedEmail,
       });
     } catch {
       // Do not reveal whether the email exists; always show the same success state
     } finally {
-      setPasswordResetStep({ email: trimmedEmail });
+      setPasswordResetStep({ email: normalizedEmail });
       setStatus("idle");
     }
   };
