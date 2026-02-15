@@ -60,7 +60,7 @@ export const LessonPlaylistItem = forwardRef<HTMLButtonElement, LessonPlaylistIt
           {lessonTitle}
         </p>
         <div
-          className={cn("mt-1 flex items-center gap-2 text-xs text-muted-foreground", isRTL ? "justify-end" : "justify-start")}
+          className="mt-1 flex items-center gap-2 text-xs text-muted-foreground justify-start"
           dir={isRTL ? "rtl" : "ltr"}
         >
           <span
