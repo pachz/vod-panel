@@ -192,6 +192,41 @@ All colors MUST be HSL.
   }
 }
 
+/* Playlist scrollbar - visible in both light and dark themes */
+.playlist-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: hsl(var(--muted-foreground) / 0.4) transparent;
+}
+
+.dark .playlist-scrollbar {
+  scrollbar-color: hsl(var(--muted-foreground) / 0.6) transparent;
+}
+
+.playlist-scrollbar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.playlist-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.playlist-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.4);
+  border-radius: 3px;
+}
+
+.dark .playlist-scrollbar::-webkit-scrollbar-thumb {
+  background: hsl(var(--muted-foreground) / 0.6);
+}
+
+.playlist-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.5);
+}
+
+.dark .playlist-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: hsl(var(--muted-foreground) / 0.75);
+}
+
 /* Sonner toast error styling */
 [data-sonner-toast][data-type="error"] {
   background-color: hsl(var(--destructive)) !important;

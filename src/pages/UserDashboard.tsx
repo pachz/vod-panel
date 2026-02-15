@@ -226,7 +226,16 @@ const UserDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => navigate(`/courses/preview/${course._id}`)}
+                                onClick={() => {
+                                  const searchParams = new URLSearchParams(location.search);
+                                  if (language === "ar") {
+                                    searchParams.set("lang", "ar");
+                                  } else {
+                                    searchParams.delete("lang");
+                                  }
+                                  const queryString = searchParams.toString();
+                                  navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                                }}
                                 className="shrink-0"
                               >
                                 {t("viewCourse")}
@@ -285,7 +294,16 @@ const UserDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => navigate(`/courses/preview/${course._id}`)}
+                                onClick={() => {
+                                  const searchParams = new URLSearchParams(location.search);
+                                  if (language === "ar") {
+                                    searchParams.set("lang", "ar");
+                                  } else {
+                                    searchParams.delete("lang");
+                                  }
+                                  const queryString = searchParams.toString();
+                                  navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                                }}
                                 className="shrink-0"
                               >
                                 {t("viewCourse")}

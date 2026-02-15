@@ -117,7 +117,7 @@ export const LessonPlaylist = ({
       </CardHeader>
       <CardContent
         ref={playlistScrollRef}
-        className="space-y-3 overflow-y-auto flex-1 min-h-0"
+        className="playlist-scrollbar space-y-3 overflow-y-auto flex-1 min-h-0"
         style={{
           scrollBehavior: 'smooth',
         }}
