@@ -29,8 +29,35 @@ export const backfillLessonsTitleSearch = migrations.define({
   },
 });
 
-/** Run both backfill migrations in order. */
+/**
+ * Normalize user emails to lowercase for case-insensitive login.
+ */
+export const normalizeUserEmails = migrations.define({
+  table: "users",
+  migrateOne: (_ctx, user) => {
+    const email = user.email;
+    if (!email || email === email.toLowerCase()) return;
+    return { email: email.toLowerCase() };
+  },
+});
+
+/**
+ * Normalize auth account providerAccountId (email) to lowercase for password provider.
+ */
+export const normalizeAuthAccountEmails = migrations.define({
+  table: "authAccounts",
+  migrateOne: (_ctx, account) => {
+    if (account.provider !== "password") return;
+    const id = account.providerAccountId;
+    if (!id || id === id.toLowerCase()) return;
+    return { providerAccountId: id.toLowerCase() };
+  },
+});
+
+/** Run all migrations in order. */
 export const runAll = migrations.runner([
   internal.migrations.backfillCoursesNameSearch,
   internal.migrations.backfillLessonsTitleSearch,
+  internal.migrations.normalizeUserEmails,
+  internal.migrations.normalizeAuthAccountEmails,
 ]);
