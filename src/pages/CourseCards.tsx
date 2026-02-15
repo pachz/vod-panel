@@ -17,7 +17,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useLanguage } from "@/hooks/use-language";
-import { markdownToPlainText } from "@/lib/utils";
+import { cn, markdownToPlainText } from "@/lib/utils";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
@@ -273,16 +273,31 @@ const CourseCards = () => {
               handleCoachSelect(value === "all" ? undefined : value)
             }
           >
-            <SelectTrigger className="w-[180px] shrink-0">
+            <SelectTrigger
+              className={cn(
+                "w-[180px] shrink-0",
+                isRTL && "text-right [&>span]:text-right"
+              )}
+              dir={isRTL ? "rtl" : undefined}
+            >
               <SelectValue placeholder={t("allCoaches")} />
             </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">{t("allCoaches")}</SelectItem>
+            <SelectContent className={isRTL ? "text-right" : undefined} dir={isRTL ? "rtl" : undefined}>
+              <SelectItem
+                value="all"
+                className={isRTL ? "pl-2 pr-8 [&>span:first-child]:left-auto [&>span:first-child]:right-2 text-right" : undefined}
+              >
+                {t("allCoaches")}
+              </SelectItem>
               {filterableCoaches.map((coach) => {
                 const coachName =
                   language === "ar" ? coach.name_ar : coach.name;
                 return (
-                  <SelectItem key={coach._id} value={coach._id}>
+                  <SelectItem
+                    key={coach._id}
+                    value={coach._id}
+                    className={isRTL ? "pl-2 pr-8 [&>span:first-child]:left-auto [&>span:first-child]:right-2 text-right" : undefined}
+                  >
                     {coachName}
                   </SelectItem>
                 );
