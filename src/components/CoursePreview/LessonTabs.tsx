@@ -33,11 +33,16 @@ export const LessonTabs = ({
 
   return (
     <Tabs defaultValue="overview" className="space-y-4">
-      <TabsList className="grid w-full grid-cols-2 rounded-full bg-muted/60 p-1">
-        <TabsTrigger value="overview" className="rounded-full">
+      <TabsList
+        className={cn(
+          "flex w-full rounded-full bg-muted/60 p-1",
+          isRTL && "flex-row-reverse"
+        )}
+      >
+        <TabsTrigger value="overview" className="flex-1 rounded-full">
           {t("overview")}
         </TabsTrigger>
-        <TabsTrigger value="objectives" className="rounded-full">
+        <TabsTrigger value="objectives" className="flex-1 rounded-full">
           {t("learningObjectives")}
         </TabsTrigger>
       </TabsList>
