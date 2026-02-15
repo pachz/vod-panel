@@ -57,7 +57,7 @@ export const CourseProgressCard = ({
           </span>
           <span>{completionPercent}%</span>
         </div>
-        <Progress value={completionPercent} className="h-3 rounded-xl bg-muted" />
+        <Progress value={completionPercent} dir={isRTL ? "rtl" : "ltr"} className="h-3 rounded-xl bg-muted" />
       </div>
     </div>
   );

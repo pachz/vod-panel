@@ -56,20 +56,25 @@ export const Paywall = ({
       <div className="w-full max-w-5xl space-y-6">
         <Card className="w-full overflow-hidden border border-border/40 dark:border-transparent bg-card/95 shadow-2xl">
           <div className="grid gap-0 lg:grid-cols-2">
-            <div className="relative h-64 w-full lg:h-full">
-              {courseImageUrl ? (
-                <img src={courseImageUrl} alt={`Preview of ${courseName}`} className="h-full w-full object-cover" />
-              ) : (
-                <div className="flex h-full w-full flex-col items-center justify-center gap-3 bg-gradient-to-br from-background via-muted to-background text-muted-foreground">
-                  <Video className="h-10 w-10" />
-                  <span className="text-sm font-medium">{t("premiumCourse")}</span>
-                </div>
-              )}
-              <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/10 to-transparent" />
-              <div className="absolute bottom-6 left-6 right-6 space-y-1 text-white">
-                <p className="text-xs uppercase tracking-[0.35em] text-white/70">{t("premiumCourse")}</p>
-                <p className="text-2xl font-semibold leading-snug">{courseName}</p>
-                <p className="text-sm text-white/80 line-clamp-2">
+            <div className="flex flex-col">
+              <div className="relative flex min-h-[200px] flex-1 items-center justify-center bg-gradient-to-br from-primary/10 via-muted/50 to-primary/5 p-6">
+                {courseImageUrl ? (
+                  <img
+                    src={courseImageUrl}
+                    alt={`Preview of ${courseName}`}
+                    className="max-h-64 w-full object-contain object-center"
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center gap-3 text-muted-foreground">
+                    <Video className="h-10 w-10" />
+                    <span className="text-sm font-medium">{t("premiumCourse")}</span>
+                  </div>
+                )}
+              </div>
+              <div className="space-y-1 border-t border-border/40 bg-card/50 px-6 py-4">
+                <p className="text-xs uppercase tracking-[0.35em] text-muted-foreground">{t("premiumCourse")}</p>
+                <p className="text-xl font-semibold leading-snug text-foreground">{courseName}</p>
+                <p className="text-sm text-muted-foreground line-clamp-2">
                   {courseDescription}
                 </p>
               </div>

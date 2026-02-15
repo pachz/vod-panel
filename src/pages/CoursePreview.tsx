@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams, useSearchParams } from "react-router-dom";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { toast } from "sonner";
 
@@ -316,7 +316,7 @@ const CoursePreview = () => {
           const currentLang = searchParams.get("lang");
           navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
         }}>
-          <ArrowLeft className="h-4 w-4" />
+          {isRTL ? <ArrowRight className="h-4 w-4" /> : <ArrowLeft className="h-4 w-4" />}
         </Button>
         {t("backToCourseList")}
       </div>
