@@ -37,11 +37,11 @@ export const LessonNavigationButtons = ({
             type="button"
             variant="outline"
             className="w-full justify-center gap-2"
-            onClick={onNext}
-            disabled={!nextLesson}
+            onClick={onPrevious}
+            disabled={!previousLesson}
           >
-            {t("nextLesson")}
-            <ChevronLeft className="h-4 w-4" />
+            <ChevronRight className="h-4 w-4" />
+            {t("previousLesson")}
           </Button>
           <Button
             type="button"
@@ -61,11 +61,11 @@ export const LessonNavigationButtons = ({
             type="button"
             variant="outline"
             className="w-full justify-center gap-2"
-            onClick={onPrevious}
-            disabled={!previousLesson}
+            onClick={onNext}
+            disabled={!nextLesson}
           >
-            <ChevronRight className="h-4 w-4" />
-            {t("previousLesson")}
+            {t("nextLesson")}
+            <ChevronLeft className="h-4 w-4" />
           </Button>
         </>
       ) : (
