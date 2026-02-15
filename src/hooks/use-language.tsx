@@ -257,7 +257,7 @@ const translations = {
     "courseUnavailable": "الدورة المحددة غير متاحة أو تم إزالتها.",
     "backToCourseListButton": "العودة إلى قائمة الدورات",
     "premiumCourse": "دورة مميزة",
-    "unlockFullProgram": "افتح البرنامج الكامل للوصول إلى كل درس.",
+    "unlockFullProgram": "اشتراكك يفتح لك جميع مواد الأنوثة وحب الذات مع رهام والانضمام إلى مجتمع رهام ديفا وحضور اللقاءات المباشرة مع رهام.",
     "membershipRequired": "عضوية مطلوبة",
     "unlock": "فتح",
     "yourInvestment": "استثمارك",
