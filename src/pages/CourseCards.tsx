@@ -400,7 +400,11 @@ const CourseCards = () => {
                 disabled={prevCursors.length === 0}
                 className="gap-1"
               >
-                <ChevronLeft className="h-4 w-4" aria-hidden />
+                {isRTL ? (
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                ) : (
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                )}
                 {t("previousPage")}
               </Button>
               <Button
@@ -411,7 +415,11 @@ const CourseCards = () => {
                 className="gap-1"
               >
                 {t("nextPage")}
-                <ChevronRight className="h-4 w-4" aria-hidden />
+                {isRTL ? (
+                  <ChevronLeft className="h-4 w-4" aria-hidden />
+                ) : (
+                  <ChevronRight className="h-4 w-4" aria-hidden />
+                )}
               </Button>
             </nav>
           )}
