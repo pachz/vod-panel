@@ -1137,7 +1137,7 @@ export const exportUserEmails = action({
     // Format as CSV
     const csvHeader = "Name,Email,Subscription Status\n";
     const csvRows = users
-      .map((user) => {
+      .map((user: { name: string; email: string; subscriptionStatus: string }) => {
         // Escape commas and quotes in CSV values
         const escapeCsv = (value: string | undefined) => {
           if (!value) return "";

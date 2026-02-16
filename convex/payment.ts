@@ -1,6 +1,8 @@
 "use node";
 
 import { action, internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
+import type { Id } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import Stripe from "stripe";
 import { requireUserAction } from "./utils/auth";
@@ -189,8 +191,8 @@ export const fetchStripeProducts = action({
     const { userId } = await requireUserAction(ctx);
     
     // Check if user is admin
-    const user = await ctx.runQuery((internal as any).paymentInternal.getUserById, {
-      userId: userId as any,
+    const user = await ctx.runQuery(internal.paymentInternal.getUserById, {
+      userId: userId as Id<"users">,
     });
     
     if (!user || !user.isGod) {
@@ -253,13 +255,13 @@ export const fetchStripeProducts = action({
  * Helper function to create a Stripe customer for a user
  */
 async function createStripeCustomerForUser(
-  ctx: any,
-  userId: string,
+  ctx: ActionCtx,
+  userId: Id<"users">,
   stripeSecretKey: string
 ): Promise<string> {
   // Get user email for Stripe customer
-  const userFull = await ctx.runQuery((internal as any).paymentInternal.getUserFull, {
-    userId: userId as any,
+  const userFull = await ctx.runQuery(internal.paymentInternal.getUserFull, {
+    userId,
   });
 
   if (!userFull) {
@@ -273,13 +275,13 @@ async function createStripeCustomerForUser(
     name: userFull.name || undefined,
     phone: userFull.phone || undefined,
     metadata: {
-      userId: userId,
+      userId,
     },
   });
 
   // Store customer ID in database
-  await ctx.runMutation((internal as any).paymentInternal.updateUserStripeCustomerId, {
-    userId: userId as any,
+  await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+    userId,
     stripeCustomerId: customer.id,
   });
 
@@ -293,9 +295,10 @@ async function createStripeCustomerForUser(
 export const getOrCreateStripeCustomer = action({
   args: {},
   returns: v.string(),
-  handler: async (ctx) => {
+  handler: async (ctx): Promise<string> => {
     // Require user to be authenticated
     const { userId } = await requireUserAction(ctx);
+    const userIdTyped = userId as Id<"users">;
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     
@@ -304,8 +307,8 @@ export const getOrCreateStripeCustomer = action({
     }
 
     // Get user info
-    const user = await ctx.runQuery((internal as any).paymentInternal.getUserById, {
-      userId: userId as any,
+    const user = await ctx.runQuery(internal.paymentInternal.getUserById, {
+      userId: userIdTyped,
     });
 
     if (!user) {
@@ -313,9 +316,10 @@ export const getOrCreateStripeCustomer = action({
     }
 
     // Check if user already has a Stripe customer ID
-    const userWithCustomer = await ctx.runQuery((internal as any).paymentInternal.getUserWithCustomer, {
-      userId: userId as any,
-    });
+    const userWithCustomer: { _id: Id<"users">; stripeCustomerId?: string } | null =
+      await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+        userId: userIdTyped,
+      });
 
     if (userWithCustomer?.stripeCustomerId) {
       // Verify customer still exists in Stripe
@@ -326,12 +330,12 @@ export const getOrCreateStripeCustomer = action({
       } catch (error) {
         // Customer doesn't exist in Stripe, create a new one
         console.log("Stripe customer not found, creating new one");
-        return await createStripeCustomerForUser(ctx, userId, stripeSecretKey);
+        return await createStripeCustomerForUser(ctx, userIdTyped, stripeSecretKey);
       }
     }
 
     // Create new customer
-    return await createStripeCustomerForUser(ctx, userId, stripeSecretKey);
+    return await createStripeCustomerForUser(ctx, userIdTyped, stripeSecretKey);
   },
 });
 
@@ -347,10 +351,11 @@ export const createCheckoutSession = action({
     priceId: v.optional(v.string()),
   },
   returns: v.string(),
-  handler: async (ctx, args) => {
+  handler: async (ctx, args): Promise<string> => {
     // Require user to be authenticated
     const { userId } = await requireUserAction(ctx);
-    
+    const userIdTyped = userId as Id<"users">;
+
     // Get Stripe secret key from environment
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     
@@ -360,8 +365,8 @@ export const createCheckoutSession = action({
 
     // Get or create Stripe customer
     // First check if user already has a customer ID
-    const userWithCustomer = await ctx.runQuery((internal as any).paymentInternal.getUserWithCustomer, {
-      userId: userId as any,
+    const userWithCustomer = await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+      userId: userIdTyped,
     });
 
     let customerId: string;
@@ -375,36 +380,39 @@ export const createCheckoutSession = action({
       } catch (error) {
         // Customer doesn't exist in Stripe, create a new one
         console.log("Stripe customer not found, creating new one");
-        customerId = await createStripeCustomerForUser(ctx, userId, stripeSecretKey);
+        customerId = await createStripeCustomerForUser(ctx, userIdTyped, stripeSecretKey);
       }
     } else {
       // Create new Stripe customer
-      customerId = await createStripeCustomerForUser(ctx, userId, stripeSecretKey);
+      customerId = await createStripeCustomerForUser(ctx, userIdTyped, stripeSecretKey);
     }
 
     // Get selected product/price from settings
-    const paymentSettings = await ctx.runQuery((internal as any).paymentInternal.getPaymentSettings);
+    const paymentSettings: {
+      selectedMonthlyPriceId: string;
+      selectedYearlyPriceId?: string;
+    } | null = await ctx.runQuery(internal.paymentInternal.getPaymentSettings);
 
     if (!paymentSettings) {
       throw new Error("No product/price configured. Please configure a product in the admin section.");
     }
 
     // Use provided priceId (yearly) or fall back to monthly (default)
-    const allowedPriceIds = [
+    const allowedPriceIds: string[] = [
       paymentSettings.selectedMonthlyPriceId,
       paymentSettings.selectedYearlyPriceId,
     ].filter((id): id is string => !!id);
-    const priceId =
+    const priceId: string =
       args.priceId && allowedPriceIds.includes(args.priceId)
         ? args.priceId
-        : paymentSettings.selectedMonthlyPriceId;
+        : paymentSettings.selectedMonthlyPriceId ?? "";
 
     // Initialize Stripe client
     const stripe = new Stripe(stripeSecretKey);
 
     try {
       // Create checkout session with selected price and customer
-      const session = await stripe.checkout.sessions.create({
+      const session: Stripe.Checkout.Session = await stripe.checkout.sessions.create({
         mode: "subscription",
         customer: customerId,
         payment_method_types: ["card"],
@@ -419,7 +427,7 @@ export const createCheckoutSession = action({
         cancel_url: `${process.env.PANEL_URL || "http://localhost:5173"}/payments?canceled=true`,
         // Store user ID in metadata for webhook processing
         metadata: {
-          userId: userId,
+          userId: userIdTyped,
         },
       });
 
@@ -428,10 +436,9 @@ export const createCheckoutSession = action({
       }
 
       // Store the checkout session in the database
-      // Using type assertion until API regenerates
-      await ctx.runMutation((internal as any).paymentInternal.storeCheckoutSession, {
+      await ctx.runMutation(internal.paymentInternal.storeCheckoutSession, {
         sessionId: session.id,
-        userId: userId,
+        userId: userIdTyped,
       });
 
       return session.url;
@@ -461,6 +468,7 @@ export const syncSubscriptionFromStripe = action({
   handler: async (ctx, args) => {
     // Require user to be authenticated
     const { userId } = await requireUserAction(ctx);
+    const userIdTyped = userId as Id<"users">;
 
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
     
@@ -477,8 +485,8 @@ export const syncSubscriptionFromStripe = action({
       });
 
       // Verify this subscription belongs to the user first
-      const userSubscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-        userId: userId,
+      const userSubscription = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+        userId: userIdTyped,
       });
 
       if (!userSubscription || userSubscription.subscriptionId !== args.subscriptionId) {
@@ -508,9 +516,9 @@ export const syncSubscriptionFromStripe = action({
       const intervalInfo = getSubscriptionInterval(subscription);
 
       // Update subscription in database with fresh data from Stripe
-      await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+      await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
         subscriptionId: subscription.id,
-        userId: userId as any,
+        userId: userId as Id<"users">,
         customerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
         status: subscription.status as any,
         currentPeriodStart: dates.currentPeriodStart,
@@ -550,7 +558,10 @@ export const adminSyncUserSubscriptionFromStripe = action({
     status: v.optional(v.string()),
     subscriptionId: v.optional(v.string()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{ success: boolean; message: string; status?: string; subscriptionId?: string }> => {
     // Require auth and admin privileges
     await requireUserAction(ctx);
     await ctx.runQuery(internal.user.requireAdminQuery);
@@ -563,10 +574,9 @@ export const adminSyncUserSubscriptionFromStripe = action({
     }
 
     // Ensure target user exists and has a Stripe customer ID
-    const targetUser = await ctx.runQuery(
-      (internal as any).paymentInternal.getUserWithCustomer,
-      { userId: args.userId as any },
-    );
+    const targetUser = await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+      userId: args.userId,
+    });
 
     if (!targetUser) {
       throw new Error("User not found");
@@ -582,12 +592,18 @@ export const adminSyncUserSubscriptionFromStripe = action({
     }
 
     // Get the most recent subscription for this user
-    const userSubscription = await ctx.runQuery(
-      (internal as any).paymentInternal.getMySubscriptionForUser,
-      {
-        userId: args.userId as any,
-      },
-    );
+    const userSubscription: {
+      subscriptionId: string;
+      status: string;
+      currentPeriodStart: number;
+      currentPeriodEnd: number;
+      cancelAtPeriodEnd: boolean;
+      canceledAt?: number;
+      interval?: string;
+      intervalCount?: number;
+    } | null = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+      userId: args.userId,
+    });
 
     if (!userSubscription) {
       return {
@@ -625,10 +641,10 @@ export const adminSyncUserSubscriptionFromStripe = action({
       const intervalInfo = getSubscriptionInterval(subscription);
 
       await ctx.runMutation(
-        (internal as any).paymentInternal.upsertSubscription,
+        internal.paymentInternal.upsertSubscription,
         {
           subscriptionId: subscription.id,
-          userId: args.userId as any,
+          userId: args.userId,
           customerId:
             typeof subscription.customer === "string"
               ? subscription.customer
@@ -759,7 +775,7 @@ export const syncSubscriptionStatus = action({
       });
 
       // Check if session exists in our database
-      const existingSession = await ctx.runQuery((internal as any).paymentInternal.getCheckoutSessionBySessionId, {
+      const existingSession = await ctx.runQuery(internal.paymentInternal.getCheckoutSessionBySessionId, {
         sessionId: args.sessionId,
       });
 
@@ -776,14 +792,14 @@ export const syncSubscriptionStatus = action({
       const customerId = typeof session.customer === "string" ? session.customer : session.customer?.id;
       if (customerId) {
         // Ensure customer ID is stored in user record
-        await ctx.runMutation((internal as any).paymentInternal.updateUserStripeCustomerId, {
-          userId: userId as any,
+        await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+          userId: userId as Id<"users">,
           stripeCustomerId: customerId,
         });
       }
 
       // Update checkout session status
-      await ctx.runMutation((internal as any).paymentInternal.updateCheckoutSession, {
+      await ctx.runMutation(internal.paymentInternal.updateCheckoutSession, {
         sessionId: session.id,
         customerId: customerId,
         subscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id,
@@ -801,7 +817,7 @@ export const syncSubscriptionStatus = action({
         });
 
         // Get existing subscription to use as fallback for dates
-        const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
+        const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
           userId: existingSession.userId,
         });
 
@@ -812,7 +828,7 @@ export const syncSubscriptionStatus = action({
         } : undefined);
         const intervalInfo = getSubscriptionInterval(subscription);
 
-        await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+        await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
           subscriptionId: subscription.id,
           userId: existingSession.userId,
           customerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
@@ -873,8 +889,8 @@ export const cancelSubscription = action({
 
     try {
       // Get user's active subscription
-      const subscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-        userId: userId,
+      const subscription = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+        userId: userId as Id<"users">,
       });
 
       if (!subscription) {
@@ -893,9 +909,9 @@ export const cancelSubscription = action({
       });
 
       // Update subscription in database (preserve interval so yearly stays yearly)
-      await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+      await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
         subscriptionId: updatedSubscription.id,
-        userId: userId as any,
+        userId: userId as Id<"users">,
         customerId: typeof updatedSubscription.customer === "string" 
           ? updatedSubscription.customer 
           : updatedSubscription.customer.id,
@@ -948,8 +964,8 @@ export const reactivateSubscription = action({
 
     try {
       // Get user's subscription (including canceled ones)
-      const subscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-        userId: userId,
+      const subscription = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+        userId: userId as Id<"users">,
       });
 
       if (!subscription) {
@@ -968,9 +984,9 @@ export const reactivateSubscription = action({
       });
 
       // Update subscription in database (preserve interval so yearly stays yearly)
-      await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+      await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
         subscriptionId: updatedSubscription.id,
-        userId: userId as any,
+        userId: userId as Id<"users">,
         customerId: typeof updatedSubscription.customer === "string" 
           ? updatedSubscription.customer 
           : updatedSubscription.customer.id,
@@ -1022,16 +1038,16 @@ export const createCustomerPortalSession = action({
 
     try {
       // Get user's Stripe customer ID
-      const userWithCustomer = await ctx.runQuery((internal as any).paymentInternal.getUserWithCustomer, {
-        userId: userId as any,
+      const userWithCustomer = await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+        userId: userId as Id<"users">,
       });
 
       let customerId: string;
 
       if (!userWithCustomer?.stripeCustomerId) {
         // Try to get from subscription if customer ID not stored
-        const subscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-          userId: userId,
+        const subscription = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+          userId: userId as Id<"users">,
         });
 
         if (!subscription) {
@@ -1050,8 +1066,8 @@ export const createCustomerPortalSession = action({
           : stripeSubscription.customer.id;
 
         // Store customer ID for future use
-        await ctx.runMutation((internal as any).paymentInternal.updateUserStripeCustomerId, {
-          userId: userId as any,
+        await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+          userId: userId as Id<"users">,
           stripeCustomerId: customerId,
         });
       } else {
@@ -1073,20 +1089,20 @@ export const createCustomerPortalSession = action({
         
         if (isNotFoundError) {
           // Don't reset admin-granted subscriptions when Stripe customer is missing
-          const subscription = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-            userId: userId,
+          const subscription = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+            userId: userId as Id<"users">,
           });
           if (subscription?.subscriptionId.startsWith(ADMIN_GRANT_SUBSCRIPTION_ID_PREFIX)) {
-            await ctx.runMutation((internal as any).paymentInternal.clearUserStripeCustomerId, {
-              userId: userId as any,
+            await ctx.runMutation(internal.paymentInternal.clearUserStripeCustomerId, {
+              userId: userId as Id<"users">,
             });
             throw new ConvexError({ code: "ADMIN_GRANTED_SUBSCRIPTION", message: "Your subscription was granted by an admin. To change it, contact support." });
           }
           // Customer not found - likely Stripe account/token changed
           // Reset subscription status and clear customer ID
           console.log(`Customer ${customerId} not found in Stripe. Resetting subscription status.`);
-          await ctx.runMutation((internal as any).paymentInternal.resetSubscriptionStatus, {
-            userId: userId as any,
+          await ctx.runMutation(internal.paymentInternal.resetSubscriptionStatus, {
+            userId: userId as Id<"users">,
           });
           throw new Error("Your subscription has been reset because the payment account was changed. Please subscribe again.");
         }
@@ -1321,15 +1337,15 @@ async function handleCheckoutSessionCompleted(
   
   // Store customer ID in user record if not already stored
   if (customerId) {
-    await ctx.runMutation((internal as any).paymentInternal.updateUserStripeCustomerId, {
-      userId: userId as any,
+    await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+      userId: userId as Id<"users">,
       stripeCustomerId: customerId,
     });
   }
 
   // Update checkout session
   // Using type assertion until API regenerates
-  await ctx.runMutation((internal as any).paymentInternal.updateCheckoutSession, {
+  await ctx.runMutation(internal.paymentInternal.updateCheckoutSession, {
     sessionId: session.id,
     customerId: customerId,
     subscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id,
@@ -1351,8 +1367,8 @@ async function handleCheckoutSessionCompleted(
     });
 
     // Get existing subscription to use as fallback for dates
-    const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-      userId: userId as any,
+    const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+      userId: userId as Id<"users">,
     });
 
     // Get dates safely
@@ -1363,9 +1379,9 @@ async function handleCheckoutSessionCompleted(
     const intervalInfo = getSubscriptionInterval(subscription);
 
     // Using type assertion until API regenerates
-    await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+    await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
       subscriptionId: subscription.id,
-      userId: userId as any,
+      userId: userId as Id<"users">,
       customerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
       status: subscription.status as any,
       currentPeriodStart: dates.currentPeriodStart,
@@ -1395,7 +1411,7 @@ async function handleSubscriptionUpdate(
     ? subscriptionExpanded.customer
     : subscriptionExpanded.customer.id;
 
-  const checkoutSessions = await ctx.runQuery((internal as any).paymentInternal.getCheckoutSessionByCustomerId, {
+  const checkoutSessions = await ctx.runQuery(internal.paymentInternal.getCheckoutSessionByCustomerId, {
     customerId,
   });
 
@@ -1406,8 +1422,8 @@ async function handleSubscriptionUpdate(
 
   const userId = checkoutSessions[0].userId;
 
-  const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-    userId: userId,
+  const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+    userId: userId as Id<"users">,
   });
 
   const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
@@ -1416,9 +1432,9 @@ async function handleSubscriptionUpdate(
   } : undefined);
   const intervalInfo = getSubscriptionInterval(subscriptionExpanded);
 
-  await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+  await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscriptionExpanded.id,
-    userId: userId,
+    userId: userId as Id<"users">,
     customerId: customerId,
     status: subscriptionExpanded.status as any,
     currentPeriodStart: dates.currentPeriodStart,
@@ -1447,7 +1463,7 @@ async function handleSubscriptionDeleted(
     ? subscriptionExpanded.customer
     : subscriptionExpanded.customer.id;
 
-  const checkoutSessions = await ctx.runQuery((internal as any).paymentInternal.getCheckoutSessionByCustomerId, {
+  const checkoutSessions = await ctx.runQuery(internal.paymentInternal.getCheckoutSessionByCustomerId, {
     customerId,
   });
 
@@ -1458,8 +1474,8 @@ async function handleSubscriptionDeleted(
 
   const userId = checkoutSessions[0].userId;
 
-  const existingSub = await ctx.runQuery((internal as any).paymentInternal.getMySubscriptionForUser, {
-    userId: userId,
+  const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+    userId: userId as Id<"users">,
   });
 
   const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
@@ -1468,9 +1484,9 @@ async function handleSubscriptionDeleted(
   } : undefined);
   const intervalInfo = getSubscriptionInterval(subscriptionExpanded);
 
-  await ctx.runMutation((internal as any).paymentInternal.upsertSubscription, {
+  await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscriptionExpanded.id,
-    userId: userId,
+    userId: userId as Id<"users">,
     customerId: customerId,
     status: "canceled" as const,
     currentPeriodStart: dates.currentPeriodStart,

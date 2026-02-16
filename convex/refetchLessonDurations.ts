@@ -2,9 +2,12 @@
 
 import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 import { v } from "convex/values";
 
 const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+type LessonWithVimeo = { lessonId: Id<"lessons">; videoUrl: string };
 
 /**
  * Internal action: refetch all lesson links (Vimeo oEmbed) and update durations.
@@ -21,10 +24,13 @@ export const refetchAllLessonDurationsFromVimeo = internalAction({
     updated: v.number(),
     errors: v.number(),
   }),
-  handler: async (ctx, { delayMs = 1000 }) => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- breaks circular type ref with lesson module
-    const lessonInternal = (internal as any).lesson;
-    const lessons = await ctx.runQuery(lessonInternal.listAllVideoLessonsWithVimeoUrl, {});
+  handler: async (ctx, { delayMs = 1000 }): Promise<{ processed: number; updated: number; errors: number }> => {
+    // Use type assertion to avoid circular type ref with lesson module
+    const lessonInternal = internal.lesson as {
+      listAllVideoLessonsWithVimeoUrl: typeof internal.lesson.listAllVideoLessonsWithVimeoUrl;
+      updateLessonDurationOnly: typeof internal.lesson.updateLessonDurationOnly;
+    };
+    const lessons: LessonWithVimeo[] = await ctx.runQuery(lessonInternal.listAllVideoLessonsWithVimeoUrl, {});
     let updated = 0;
     let errors = 0;
 
