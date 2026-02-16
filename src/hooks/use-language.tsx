@@ -278,7 +278,7 @@ const translations = {
     "trainingNotes": "المذكرات التدريبية",
     "subscriptionStatus": "اشتراكك محدد حاليًا كـ",
     "activateSubscription": "قم بتنشيطه لعرض كل درس لهذه الدورة.",
-    "activeSubscriptionDescription": "الاشتراك النشط يتيح لك بث كل درس وتتبع تقدمك وتنزيل الموارد الحصرية.",
+    "activeSubscriptionDescription": "اشتراكك يفتح لك جميع مواد الأنوثة وحب الذات مع رهام والانضمام إلى مجتمع رهام ديفا وحضور اللقاءات المباشرة مع رهام",
     "subscriptionPricing": "سيظهر تسعير الاشتراك هنا بمجرد التكوين. لا يزال بإمكانك إدارة خطتك في صفحة المدفوعات.",
     "publishLessonsToStart": "انشر الدروس للبدء.",
     "month": "شهر",
