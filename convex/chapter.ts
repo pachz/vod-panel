@@ -28,7 +28,8 @@ export const listChaptersByCourse = query({
     })
   ),
   handler: async (ctx, { courseId }) => {
-    await requireUser(ctx);
+    // No auth required: chapter list (titles/order) is safe for preview/paywall.
+    // Lessons and progress remain gated by listLessonsByCourse and getCourseProgress.
 
     const chapters = await ctx.db
       .query("chapters")
