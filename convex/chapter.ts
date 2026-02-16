@@ -13,7 +13,7 @@ const DEFAULT_CHAPTER_TITLE_AR = "محتوى الدورة";
  */
 export const listChaptersByCourse = query({
   args: {
-    courseId: v.id("courses"),
+    courseId: v.optional(v.id("courses")),
   },
   returns: v.array(
     v.object({
@@ -30,6 +30,10 @@ export const listChaptersByCourse = query({
   handler: async (ctx, { courseId }) => {
     // No auth required: chapter list (titles/order) is safe for preview/paywall.
     // Lessons and progress remain gated by listLessonsByCourse and getCourseProgress.
+
+    if (!courseId) {
+      return [];
+    }
 
     const chapters = await ctx.db
       .query("chapters")
