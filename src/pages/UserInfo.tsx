@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, CheckCircle2, XCircle, BookOpen, Gift, History, Loader2 } from "lucide-react";
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, BookOpen, Gift, History, Loader2 } from "lucide-react";
 import { useQuery, useMutation, useAction } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -221,24 +221,6 @@ const UserInfo = () => {
                   <Badge variant="default">Administrator</Badge>
                 ) : (
                   <Badge variant="secondary">User</Badge>
-                )}
-              </div>
-            </div>
-            <div className="space-y-1">
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                Email Status
-              </div>
-              <div>
-                {user.emailVerificationTime ? (
-                  <Badge variant="outline" className="gap-1">
-                    <CheckCircle2 className="h-3 w-3" />
-                    Verified
-                  </Badge>
-                ) : (
-                  <Badge variant="outline" className="opacity-50 gap-1">
-                    <XCircle className="h-3 w-3" />
-                    Unverified
-                  </Badge>
                 )}
               </div>
             </div>

@@ -642,7 +642,7 @@ const Users = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Subscription Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -677,12 +677,10 @@ const Users = () => {
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
                         <TableCell>
-                          {user.emailVerificationTime ? (
-                            <Badge variant="outline">Verified</Badge>
+                          {subscriptionStatus?.[user._id] === "active" ? (
+                            <Badge variant="default">Active</Badge>
                           ) : (
-                            <Badge variant="outline" className="opacity-50">
-                              Unverified
-                            </Badge>
+                            <Badge variant="secondary">Inactive</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">
@@ -778,7 +776,7 @@ const Users = () => {
                   <TableHead>Name</TableHead>
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHead>Subscription Status</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
@@ -812,15 +810,7 @@ const Users = () => {
                         <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
-                        <TableCell>
-                          {user.emailVerificationTime ? (
-                            <Badge variant="outline">Verified</Badge>
-                          ) : (
-                            <Badge variant="outline" className="opacity-50">
-                              Unverified
-                            </Badge>
-                          )}
-                        </TableCell>
+                        <TableCell className="text-muted-foreground">—</TableCell>
                         <TableCell className="text-right">
                           <div className="flex flex-wrap justify-end gap-2">
                             <Button
