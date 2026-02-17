@@ -46,13 +46,16 @@ type LocationState = {
 
 const queryClient = new QueryClient();
 
-const LoadingScreen = () => (
-  <div className="min-h-screen flex items-center justify-center bg-background">
-    <div className="rounded-3xl border border-border/40 bg-card/70 px-10 py-8 shadow-card">
-      <p className="text-muted-foreground">Loading...</p>
+const LoadingScreen = () => {
+  const { t, isRTL } = useLanguage();
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-background" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="rounded-3xl border border-border/40 bg-card/70 px-10 py-8 shadow-card">
+        <p className="text-muted-foreground">{t("loading")}</p>
+      </div>
     </div>
-  </div>
-);
+  );
+};
 
 const PrivateRoute = () => {
   const { isAuthenticated, isLoading } = useConvexAuth();

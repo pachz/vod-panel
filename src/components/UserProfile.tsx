@@ -9,6 +9,7 @@ import {
   GitCommit,
 } from "lucide-react";
 
+import { useLanguage } from "@/hooks/use-language";
 import { api } from "../../convex/_generated/api";
 import { Avatar, AvatarImage, AvatarFallback } from "@/components/ui/avatar";
 import {
@@ -40,6 +41,7 @@ const commitHash = import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA
   : "dev";
 
 export function UserProfile() {
+  const { t } = useLanguage();
   const currentUser = useQuery(api.user.getCurrentUser);
   const { signOut } = useAuthActions();
   const changeMyPassword = useAction(api.user.changeMyPassword);
@@ -89,35 +91,35 @@ export function UserProfile() {
 
   const handleChangePassword = useCallback(async () => {
     if (!newPassword || !confirmPassword) {
-      toast.error("Please fill in all password fields");
+      toast.error(t("pleaseFillPasswordFields"));
       return;
     }
 
     if (newPassword !== confirmPassword) {
-      toast.error("New passwords do not match");
+      toast.error(t("passwordsDoNotMatch"));
       return;
     }
 
     if (newPassword.length < 8) {
-      toast.error("Password must be at least 8 characters long");
+      toast.error(t("passwordMinLength"));
       return;
     }
 
     setIsChangingPassword(true);
     try {
       await changeMyPassword({ newPassword });
-      toast.success("Password changed successfully");
+      toast.success(t("passwordChangedSuccess"));
       setIsChangePasswordOpen(false);
       setNewPassword("");
       setConfirmPassword("");
     } catch (error) {
       console.error(error);
-      const errorMessage = error instanceof Error ? error.message : "Failed to change password. Please try again.";
+      const errorMessage = error instanceof Error ? error.message : t("failedToChangePassword");
       toast.error(errorMessage);
     } finally {
       setIsChangingPassword(false);
     }
-  }, [newPassword, confirmPassword, changeMyPassword]);
+  }, [newPassword, confirmPassword, changeMyPassword, t]);
 
   if (!currentUser) {
     return null;
@@ -132,7 +134,7 @@ export function UserProfile() {
             className="relative h-10 w-10 rounded-full border border-border/60"
           >
             <Avatar className="h-10 w-10">
-              <AvatarImage src={gravatarUrl || undefined} alt={currentUser.name || currentUser.email || "User"} />
+              <AvatarImage src={gravatarUrl || undefined} alt={currentUser.name || currentUser.email || t("user")} />
               <AvatarFallback className="bg-primary/10 text-primary font-semibold">
                 {userInitial}
               </AvatarFallback>
@@ -150,7 +152,7 @@ export function UserProfile() {
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">
-                {currentUser.name || "User"}
+                {currentUser.name || t("user")}
               </p>
               <p className="text-xs leading-none text-muted-foreground">
                 {currentUser.email}
@@ -163,17 +165,17 @@ export function UserProfile() {
             className="cursor-pointer"
           >
             <Key className="mr-2 h-4 w-4" />
-            <span>Change Password</span>
+            <span>{t("changePassword")}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <div className="px-2 py-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
               <Package className="h-3.5 w-3.5" />
-              <span>Version {version}</span>
+              <span>{t("version")} {version}</span>
             </div>
             <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
               <GitCommit className="h-3.5 w-3.5" />
-              <span>Build {commitHash}</span>
+              <span>{t("build")} {commitHash}</span>
             </div>
           </div>
           <DropdownMenuSeparator />
@@ -183,7 +185,7 @@ export function UserProfile() {
             className="cursor-pointer text-destructive focus:text-destructive"
           >
             <LogOut className="mr-2 h-4 w-4" />
-            <span>{isSigningOut ? "Signing out…" : "Sign out"}</span>
+            <span>{isSigningOut ? t("signingOut") : t("signOut")}</span>
           </DropdownMenuItem>
         </DropdownMenuContent>
       </DropdownMenu>
@@ -191,28 +193,28 @@ export function UserProfile() {
       <Dialog open={isChangePasswordOpen} onOpenChange={setIsChangePasswordOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Change Password</DialogTitle>
+            <DialogTitle>{t("changePassword")}</DialogTitle>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
-              <Label htmlFor="newPassword">New Password</Label>
+              <Label htmlFor="newPassword">{t("newPassword")}</Label>
               <Input
                 id="newPassword"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="Enter new password"
+                placeholder={t("enterNewPassword")}
                 autoComplete="new-password"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="confirmPassword">Confirm New Password</Label>
+              <Label htmlFor="confirmPassword">{t("confirmNewPassword")}</Label>
               <Input
                 id="confirmPassword"
                 type="password"
                 value={confirmPassword}
                 onChange={(e) => setConfirmPassword(e.target.value)}
-                placeholder="Confirm new password"
+                placeholder={t("confirmNewPasswordPlaceholder")}
                 autoComplete="new-password"
               />
             </div>
@@ -226,13 +228,13 @@ export function UserProfile() {
                 }}
                 disabled={isChangingPassword}
               >
-                Cancel
+                {t("cancel")}
               </Button>
               <Button
                 onClick={handleChangePassword}
                 disabled={isChangingPassword}
               >
-                {isChangingPassword ? "Changing…" : "Change Password"}
+                {isChangingPassword ? t("changing") : t("changePassword")}
               </Button>
             </div>
           </div>

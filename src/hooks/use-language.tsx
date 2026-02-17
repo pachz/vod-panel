@@ -109,6 +109,26 @@ const translations = {
     "home": "Home",
     "courses": "Courses",
     "subscription": "Subscription",
+    "loading": "Loading…",
+
+    // UserProfile dropdown
+    "user": "User",
+    "changePassword": "Change Password",
+    "version": "Version",
+    "build": "Build",
+    "signOut": "Sign out",
+    "signingOut": "Signing out…",
+    "newPassword": "New Password",
+    "confirmNewPassword": "Confirm New Password",
+    "enterNewPassword": "Enter new password",
+    "confirmNewPasswordPlaceholder": "Confirm new password",
+    "cancel": "Cancel",
+    "changing": "Changing…",
+    "pleaseFillPasswordFields": "Please fill in all password fields",
+    "passwordsDoNotMatch": "New passwords do not match",
+    "passwordMinLength": "Password must be at least 8 characters long",
+    "passwordChangedSuccess": "Password changed successfully",
+    "failedToChangePassword": "Failed to change password. Please try again.",
     
     // Payments
     "payments": "Payments",
@@ -314,7 +334,27 @@ const translations = {
     "home": "الرئيسية",
     "courses": "الدورات",
     "subscription": "الاشتراك",
-    
+    "loading": "جاري التحميل…",
+
+    // UserProfile dropdown
+    "user": "مستخدم",
+    "changePassword": "تغيير كلمة المرور",
+    "version": "الإصدار",
+    "build": "البناء",
+    "signOut": "تسجيل الخروج",
+    "signingOut": "جاري تسجيل الخروج…",
+    "newPassword": "كلمة المرور الجديدة",
+    "confirmNewPassword": "تأكيد كلمة المرور الجديدة",
+    "enterNewPassword": "أدخل كلمة المرور الجديدة",
+    "confirmNewPasswordPlaceholder": "أكد كلمة المرور الجديدة",
+    "cancel": "إلغاء",
+    "changing": "جاري التغيير…",
+    "pleaseFillPasswordFields": "يرجى تعبئة جميع حقول كلمة المرور",
+    "passwordsDoNotMatch": "كلمات المرور الجديدة غير متطابقة",
+    "passwordMinLength": "يجب أن تتكون كلمة المرور من 8 أحرف على الأقل",
+    "passwordChangedSuccess": "تم تغيير كلمة المرور بنجاح",
+    "failedToChangePassword": "فشل تغيير كلمة المرور. يرجى المحاولة مرة أخرى.",
+
     // Payments
     "payments": "المدفوعات",
     "manageSubscriptions": "إدارة الاشتراكات ومعالجة المدفوعات",
