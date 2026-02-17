@@ -153,6 +153,18 @@ const LoginPage = () => {
     return undefined;
   }, []);
 
+  // Login page is light-only: force light mode so inputs and layout aren't dark
+  // when navigating here from a panel that was in dark mode (theme is on document root).
+  useEffect(() => {
+    const root = document.documentElement;
+    root.classList.remove("dark");
+    root.classList.add("light");
+    return () => {
+      root.classList.remove("light");
+      // ThemeProvider will re-apply theme from localStorage after login
+    };
+  }, []);
+
   useEffect(() => {
     if (!authStateLoading && isAuthenticated) {
       setStatus("success");
