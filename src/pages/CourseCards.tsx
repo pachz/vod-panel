@@ -349,7 +349,7 @@ const CourseCards = () => {
                         variant="outline"
                         className="w-fit rounded-full border-muted-foreground/30 text-muted-foreground"
                       >
-                        +{(course.additional_category_ids ?? []).length}
+                        <span dir="ltr">+{(course.additional_category_ids ?? []).length}</span>
                       </Badge>
                     )}
                   </div>
