@@ -184,11 +184,11 @@ const UserDashboard = () => {
         </CardHeader>
         <CardContent>
           <Tabs defaultValue="in-progress" className="w-full">
-            <TabsList className="grid w-full grid-cols-2">
-              <TabsTrigger value="in-progress">
+            <TabsList className={cn("flex w-full", isRTL && "flex-row-reverse")}>
+              <TabsTrigger value="in-progress" className="flex-1">
                 {t("inProgressTab")} ({coursesInProgress.length})
               </TabsTrigger>
-              <TabsTrigger value="completed">
+              <TabsTrigger value="completed" className="flex-1">
                 {t("completedTab")} ({coursesCompleted.length})
               </TabsTrigger>
             </TabsList>
