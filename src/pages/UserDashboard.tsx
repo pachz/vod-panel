@@ -210,7 +210,7 @@ const UserDashboard = () => {
                 <div
                   className={cn(
                     "space-y-4 pr-1",
-                    coursesInProgress.length > 4 && "max-h-[32rem] overflow-y-auto"
+                    coursesInProgress.length > 4 && "max-h-[32rem] overflow-y-auto playlist-scrollbar"
                   )}
                 >
                   {coursesInProgress.map(({ course, completedCount, totalLessons, progressPercentage }) => {
@@ -288,7 +288,7 @@ const UserDashboard = () => {
                 <div
                   className={cn(
                     "space-y-4 pr-1",
-                    coursesCompleted.length > 4 && "max-h-[32rem] overflow-y-auto"
+                    coursesCompleted.length > 4 && "max-h-[32rem] overflow-y-auto playlist-scrollbar"
                   )}
                 >
                   {coursesCompleted.map(({ course, completedCount, totalLessons, progressPercentage }) => {
@@ -311,7 +311,7 @@ const UserDashboard = () => {
                       >
                         <CardContent className="pt-6" dir={isRTL ? "rtl" : "ltr"}>
                           <div className="space-y-4">
-                            <div className={cn("flex items-start justify-between gap-4", isRTL && "flex-row-reverse")}>
+                            <div className="flex items-start justify-between gap-4">
                               <div className={cn("flex-1 space-y-2 min-w-0", isRTL && "text-right")}>
                                 <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse justify-end")}>
                                   <h3 className={cn("font-semibold text-lg leading-tight", isRTL && "text-right")}>
