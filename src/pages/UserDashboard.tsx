@@ -192,7 +192,7 @@ const UserDashboard = () => {
                 {t("completedTab")} ({coursesCompleted.length})
               </TabsTrigger>
             </TabsList>
-            <TabsContent value="in-progress" className="space-y-4 mt-6">
+            <TabsContent value="in-progress" className="mt-6">
               {isLoading ? (
                 <div className="text-sm text-muted-foreground py-8 text-center">
                   Loading...
@@ -207,16 +207,35 @@ const UserDashboard = () => {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div
+                  className={cn(
+                    "space-y-4 pr-1",
+                    coursesInProgress.length > 4 && "max-h-[32rem] overflow-y-auto"
+                  )}
+                >
                   {coursesInProgress.map(({ course, completedCount, totalLessons, progressPercentage }) => {
                     const courseName = language === "ar" ? course.name_ar : course.name;
+                    const goToCourse = () => {
+                      const searchParams = new URLSearchParams(location.search);
+                      if (language === "ar") {
+                        searchParams.set("lang", "ar");
+                      } else {
+                        searchParams.delete("lang");
+                      }
+                      const queryString = searchParams.toString();
+                      navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                    };
                     return (
-                      <Card key={course._id} className="hover:shadow-md transition-shadow">
+                      <Card
+                        key={course._id}
+                        className="hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={goToCourse}
+                      >
                         <CardContent className="pt-6" dir={isRTL ? "rtl" : "ltr"}>
                           <div className="space-y-4">
                             <div className="flex items-start justify-between gap-4">
-                              <div className={cn("flex-1 space-y-2", isRTL && "text-right")}>
-                                <h3 className="font-semibold text-lg leading-tight">
+                              <div className={cn("flex-1 space-y-2 min-w-0", isRTL && "text-right")}>
+                                <h3 className={cn("font-semibold text-lg leading-tight", isRTL && "text-right")}>
                                   {courseName}
                                 </h3>
                                 <p className="text-sm text-muted-foreground">
@@ -226,17 +245,11 @@ const UserDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  const searchParams = new URLSearchParams(location.search);
-                                  if (language === "ar") {
-                                    searchParams.set("lang", "ar");
-                                  } else {
-                                    searchParams.delete("lang");
-                                  }
-                                  const queryString = searchParams.toString();
-                                  navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                                className="shrink-0 hidden md:inline-flex"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  goToCourse();
                                 }}
-                                className="shrink-0"
                               >
                                 {t("viewCourse")}
                                 <ArrowRight className={cn("ml-2 h-4 w-4", isRTL && "ml-0 mr-2 rotate-180")} />
@@ -257,7 +270,7 @@ const UserDashboard = () => {
                 </div>
               )}
             </TabsContent>
-            <TabsContent value="completed" className="space-y-4 mt-6">
+            <TabsContent value="completed" className="mt-6">
               {isLoading ? (
                 <div className="text-sm text-muted-foreground py-8 text-center">
                   Loading...
@@ -272,17 +285,36 @@ const UserDashboard = () => {
                   </p>
                 </div>
               ) : (
-                <div className="space-y-4">
+                <div
+                  className={cn(
+                    "space-y-4 pr-1",
+                    coursesCompleted.length > 4 && "max-h-[32rem] overflow-y-auto"
+                  )}
+                >
                   {coursesCompleted.map(({ course, completedCount, totalLessons, progressPercentage }) => {
                     const courseName = language === "ar" ? course.name_ar : course.name;
+                    const goToCourse = () => {
+                      const searchParams = new URLSearchParams(location.search);
+                      if (language === "ar") {
+                        searchParams.set("lang", "ar");
+                      } else {
+                        searchParams.delete("lang");
+                      }
+                      const queryString = searchParams.toString();
+                      navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                    };
                     return (
-                      <Card key={course._id} className="hover:shadow-md transition-shadow">
+                      <Card
+                        key={course._id}
+                        className="hover:shadow-md transition-shadow cursor-pointer"
+                        onClick={goToCourse}
+                      >
                         <CardContent className="pt-6" dir={isRTL ? "rtl" : "ltr"}>
                           <div className="space-y-4">
-                            <div className="flex items-start justify-between gap-4">
-                              <div className={cn("flex-1 space-y-2", isRTL && "text-right")}>
-                                <div className={cn("flex items-center gap-2", isRTL && "justify-end")}>
-                                  <h3 className="font-semibold text-lg leading-tight">
+                            <div className={cn("flex items-start justify-between gap-4", isRTL && "flex-row-reverse")}>
+                              <div className={cn("flex-1 space-y-2 min-w-0", isRTL && "text-right")}>
+                                <div className={cn("flex items-center gap-2", isRTL && "flex-row-reverse justify-end")}>
+                                  <h3 className={cn("font-semibold text-lg leading-tight", isRTL && "text-right")}>
                                     {courseName}
                                   </h3>
                                   <CheckCircle2 className="h-5 w-5 text-green-500 shrink-0" />
@@ -294,17 +326,11 @@ const UserDashboard = () => {
                               <Button
                                 variant="outline"
                                 size="sm"
-                                onClick={() => {
-                                  const searchParams = new URLSearchParams(location.search);
-                                  if (language === "ar") {
-                                    searchParams.set("lang", "ar");
-                                  } else {
-                                    searchParams.delete("lang");
-                                  }
-                                  const queryString = searchParams.toString();
-                                  navigate(`/courses/preview/${course._id}${queryString ? `?${queryString}` : ""}`);
+                                className="shrink-0 hidden md:inline-flex"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  goToCourse();
                                 }}
-                                className="shrink-0"
                               >
                                 {t("viewCourse")}
                                 <ArrowRight className={cn("ml-2 h-4 w-4", isRTL && "ml-0 mr-2 rotate-180")} />
