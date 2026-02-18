@@ -41,7 +41,7 @@ const commitHash = import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA
   : "dev";
 
 export function UserProfile() {
-  const { t } = useLanguage();
+  const { t, isRTL } = useLanguage();
   const currentUser = useQuery(api.user.getCurrentUser);
   const { signOut } = useAuthActions();
   const changeMyPassword = useAction(api.user.changeMyPassword);
@@ -142,13 +142,14 @@ export function UserProfile() {
           </Button>
         </DropdownMenuTrigger>
         <DropdownMenuContent
-          className="w-64"
-          align="end"
+          className={isRTL ? "w-64 text-right" : "w-64"}
+          align={isRTL ? "start" : "end"}
           side="bottom"
           sideOffset={6}
           collisionPadding={12}
           forceMount
         >
+          <div dir={isRTL ? "rtl" : "ltr"} className="contents">
           <DropdownMenuLabel className="font-normal">
             <div className="flex flex-col space-y-1">
               <p className="text-sm font-medium leading-none">
@@ -164,17 +165,17 @@ export function UserProfile() {
             onClick={() => setIsChangePasswordOpen(true)}
             className="cursor-pointer"
           >
-            <Key className="mr-2 h-4 w-4" />
+            <Key className={isRTL ? "ml-2 h-4 w-4" : "mr-2 h-4 w-4"} />
             <span>{t("changePassword")}</span>
           </DropdownMenuItem>
           <DropdownMenuSeparator />
           <div className="px-2 py-1.5">
             <div className="flex items-center gap-2 text-xs text-muted-foreground">
-              <Package className="h-3.5 w-3.5" />
+              <Package className="h-3.5 w-3.5 shrink-0" />
               <span>{t("version")} {version}</span>
             </div>
             <div className="flex items-center gap-2 mt-1.5 text-xs text-muted-foreground">
-              <GitCommit className="h-3.5 w-3.5" />
+              <GitCommit className="h-3.5 w-3.5 shrink-0" />
               <span>{t("build")} {commitHash}</span>
             </div>
           </div>
@@ -184,9 +185,10 @@ export function UserProfile() {
             disabled={isSigningOut}
             className="cursor-pointer text-destructive focus:text-destructive"
           >
-            <LogOut className="mr-2 h-4 w-4" />
+            <LogOut className={isRTL ? "ml-2 h-4 w-4" : "mr-2 h-4 w-4"} />
             <span>{isSigningOut ? t("signingOut") : t("signOut")}</span>
           </DropdownMenuItem>
+          </div>
         </DropdownMenuContent>
       </DropdownMenu>
 
