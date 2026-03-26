@@ -58,6 +58,8 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { toast } from "sonner";
 
 import { cn } from "@/lib/utils";
+import { pushGtmViewContent } from "@/lib/gtm";
+import { useLanguage } from "@/hooks/use-language";
 import { RichTextarea } from "@/components/RichTextarea";
 import { VideoUrlInput } from "@/components/VideoUrlInput";
 import { courseUpdateSchema } from "../../shared/validation/course";
@@ -275,6 +277,7 @@ const SortableLessonItem = ({ lesson, index, onView }: SortableLessonItemProps) 
 const CourseDetail = () => {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { language } = useLanguage();
   const courseId = id as Id<"courses"> | undefined;
 
   const course = useQuery(
@@ -282,6 +285,7 @@ const CourseDetail = () => {
     courseId ? { id: courseId } : undefined,
   );
   const categories = useQuery(api.category.listCategories);
+  const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const coaches = useQuery(api.coach.listCoaches);
   const chapters = useQuery(
     api.chapter.listChaptersByCourse,
@@ -366,6 +370,44 @@ const CourseDetail = () => {
     return result;
   }, [lessonList, chapterList, course?.default_chapter_id]);
   const isLoading = course === undefined || categories === undefined || coaches === undefined;
+
+  const viewContentSentKeyRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    viewContentSentKeyRef.current = null;
+  }, [courseId]);
+
+  useEffect(() => {
+    if (!course) {
+      return;
+    }
+    if (categories === undefined || paymentSettings === undefined) {
+      return;
+    }
+
+    const dedupeKey = `${course._id}:${language}`;
+    if (viewContentSentKeyRef.current === dedupeKey) {
+      return;
+    }
+    viewContentSentKeyRef.current = dedupeKey;
+
+    const category = categoryList.find((c) => c._id === course.category_id);
+    const content_category =
+      language === "ar"
+        ? (category?.name_ar ?? category?.name ?? "").trim()
+        : (category?.name ?? category?.name_ar ?? "").trim();
+
+    pushGtmViewContent({
+      content_id: course._id,
+      content_name: language === "ar" ? course.name_ar : course.name,
+      content_category: content_category || "Uncategorized",
+      value: paymentSettings ? paymentSettings.priceAmount / 100 : 0,
+      currency: paymentSettings
+        ? paymentSettings.priceCurrency.toUpperCase()
+        : "USD",
+      language,
+    });
+  }, [course, categories, paymentSettings, language, categoryList]);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
