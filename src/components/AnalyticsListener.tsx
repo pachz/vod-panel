@@ -12,6 +12,15 @@ import {
 
 const toPathKey = (pathname: string, search: string, hash: string) => `${pathname}${search}${hash}`;
 
+const pushGtmVirtualPageView = (pathname: string, search: string, hash: string) => {
+  window.dataLayer = window.dataLayer ?? [];
+  window.dataLayer.push({
+    event: "virtual_page_view",
+    page_path: `${pathname}${search}${hash}`,
+    page_title: document.title,
+  });
+};
+
 const AnalyticsListener = () => {
   const location = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
@@ -21,6 +30,7 @@ const AnalyticsListener = () => {
   const initAttemptedRef = useRef(false);
   const lastPathRef = useRef<string | null>(null);
   const identifiedUserRef = useRef<string | null>(null);
+  const gtmSkipInitialRouteRef = useRef(true);
 
   useEffect(() => {
     if (initAttemptedRef.current) {
@@ -32,6 +42,15 @@ const AnalyticsListener = () => {
       host: import.meta.env.VITE_POSTHOG_HOST,
     });
   }, []);
+
+  useEffect(() => {
+    if (gtmSkipInitialRouteRef.current) {
+      gtmSkipInitialRouteRef.current = false;
+      return;
+    }
+
+    pushGtmVirtualPageView(location.pathname, location.search, location.hash);
+  }, [location.hash, location.pathname, location.search]);
 
   const userLoaded = useMemo(() => {
     if (isAuthLoading || !isAuthenticated) {
