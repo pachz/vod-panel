@@ -2,6 +2,7 @@ import { Password } from "@convex-dev/auth/providers/Password";
 import Google from "@auth/core/providers/google";
 import { convexAuth, createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
 import { internalAction, MutationCtx } from "./_generated/server";
+import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { ResendOTPPasswordReset } from "./ResendOTPPasswordReset";
@@ -53,6 +54,10 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
           await ctx.db.patch(args.userId as Id<"users">, patch);
         }
       }
+
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: args.userId as Id<"users">,
+      });
     },
     // async createOrUpdateUser(ctx: MutationCtx, args) {
     //   // Helper function to update user image

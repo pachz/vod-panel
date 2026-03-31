@@ -1,6 +1,7 @@
 import { internalMutation, internalQuery, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireUser } from "./utils/auth";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
@@ -71,6 +72,12 @@ export const updateCheckoutSession = internalMutation({
       completedAt: args.status === "complete" ? Date.now() : undefined,
     });
 
+    if (args.status === "complete") {
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: session.userId,
+      });
+    }
+
     return session._id;
   },
 });
@@ -118,6 +125,9 @@ export const upsertSubscription = internalMutation({
         ...(args.intervalCount !== undefined && { intervalCount: args.intervalCount }),
         updatedAt: Date.now(),
       });
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: args.userId,
+      });
       return existing._id;
     } else {
       // Create new subscription
@@ -134,6 +144,9 @@ export const upsertSubscription = internalMutation({
         intervalCount: args.intervalCount,
         createdAt: Date.now(),
         updatedAt: Date.now(),
+      });
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: args.userId,
       });
       return subscriptionId;
     }

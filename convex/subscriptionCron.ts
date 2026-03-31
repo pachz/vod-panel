@@ -1,5 +1,6 @@
 import { internalMutation } from "./_generated/server";
 import { v } from "convex/values";
+import { internal } from "./_generated/api";
 
 /**
  * Expire subscriptions whose current period has ended: set status to "canceled"
@@ -22,6 +23,9 @@ export const expireEndedSubscriptions = internalMutation({
     for (const sub of [...active, ...trialing]) {
       if (sub.currentPeriodEnd < now) {
         await ctx.db.patch(sub._id, { status: "canceled", updatedAt: now });
+        await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+          userId: sub.userId,
+        });
       }
     }
     return null;

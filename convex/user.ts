@@ -443,6 +443,10 @@ export const createUserRecord = internalMutation({
         entityName: args.name || args.email,
       });
 
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: existing._id,
+      });
+
       return existing._id;
     }
 
@@ -463,6 +467,8 @@ export const createUserRecord = internalMutation({
       entityId: userId,
       entityName: args.name || args.email,
     });
+
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId });
 
     return userId;
   },
@@ -682,6 +688,8 @@ export const updateUser = mutation({
       isGod: validated.isAdmin ?? false,
     });
 
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId: id });
+
     await logActivity({
       ctx,
       entityType: "user",
@@ -725,6 +733,8 @@ export const updateUserRole = mutation({
     await ctx.db.patch(id, {
       isGod: isAdmin,
     });
+
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId: id });
 
     await logActivity({
       ctx,
@@ -770,6 +780,10 @@ export const changeMyPassword = action({
       password: validated.password,
       name: currentUser.name,
     });
+
+    await ctx.runMutation(internal.mailchimpInternal.scheduleMailchimpSync, {
+      userId: currentUser._id,
+    });
   },
 });
 
@@ -802,6 +816,8 @@ export const updateUserPassword = action({
       password: validated.password,
       name: user.name,
     });
+
+    await ctx.runMutation(internal.mailchimpInternal.scheduleMailchimpSync, { userId: id });
   },
 });
 
@@ -833,6 +849,8 @@ export const deleteUser = mutation({
     await ctx.db.patch(id, {
       deletedAt: Date.now(),
     });
+
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId: id });
 
     await logActivity({
       ctx,
