@@ -5,6 +5,12 @@ import { ConvexError } from "convex/values";
 import { api } from "../../../convex/_generated/api";
 import { toast } from "sonner";
 import { useLanguage } from "@/hooks/use-language";
+import {
+  buildBeginCheckoutGtmPayload,
+  GTM_PURCHASE_SESSION_KEY_PREFIX,
+  pushGtmBeginCheckout,
+  pushGtmPurchase,
+} from "@/lib/gtm";
 import type { CycleInfo } from "./utils";
 import { getCycleInfo, getDaysRemaining, hasValidPeriodDates } from "./utils";
 
@@ -90,6 +96,21 @@ export function usePayments() {
       setIsSyncing(true);
       syncSubscriptionStatus({ sessionId })
         .then((result) => {
+          if (result?.success && typeof sessionStorage !== "undefined") {
+            const dedupeKey = `${GTM_PURCHASE_SESSION_KEY_PREFIX}${sessionId}`;
+            if (!sessionStorage.getItem(dedupeKey)) {
+              sessionStorage.setItem(dedupeKey, "1");
+              pushGtmPurchase({
+                order_id: result.orderId,
+                transaction_id: result.transactionId,
+                content_ids: result.contentIds,
+                contents: result.contents,
+                num_items: result.numItems,
+                value: result.value,
+                currency: result.currency,
+              });
+            }
+          }
           if (result?.success) {
             toast.success(t("paymentSuccessfulActivated"));
           } else {
@@ -123,6 +144,12 @@ export function usePayments() {
     try {
       const checkoutUrl = await createCheckoutSession({ priceId });
       if (checkoutUrl) {
+        if (paymentSettings) {
+          const payload = buildBeginCheckoutGtmPayload(paymentSettings, priceId);
+          if (payload) {
+            pushGtmBeginCheckout(payload);
+          }
+        }
         window.location.href = checkoutUrl;
       } else {
         toast.error(t("failedToCreateCheckoutSession"));

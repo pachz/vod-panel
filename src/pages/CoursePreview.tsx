@@ -15,6 +15,10 @@ import { LessonTabs } from "@/components/CoursePreview/LessonTabs";
 import { LessonPlaylist } from "@/components/CoursePreview/LessonPlaylist";
 import { AboutCourseCard } from "@/components/CoursePreview/AboutCourseCard";
 import { Paywall } from "@/components/CoursePreview/Paywall";
+import {
+  buildBeginCheckoutGtmPayload,
+  pushGtmBeginCheckout,
+} from "@/lib/gtm";
 
 type LessonDoc = Doc<"lessons">;
 
@@ -215,6 +219,12 @@ const CoursePreview = () => {
     try {
       const checkoutUrl = await createCheckoutSession({ priceId });
       if (checkoutUrl) {
+        if (paymentSettings) {
+          const payload = buildBeginCheckoutGtmPayload(paymentSettings, priceId);
+          if (payload) {
+            pushGtmBeginCheckout(payload);
+          }
+        }
         window.location.href = checkoutUrl;
         return;
       }

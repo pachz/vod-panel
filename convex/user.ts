@@ -19,6 +19,11 @@ import { logActivity } from "./utils/activityLog";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
+type CreateUserRecordResult = {
+  userId: Id<"users">;
+  wasNewUser: boolean;
+};
+
 /** Build searchable string from name + email for full-text search. */
 function buildNameSearch(name?: string | null, email?: string | null): string | undefined {
   const parts = [(name ?? "").trim(), (email ?? "").trim()].filter(Boolean);
@@ -413,6 +418,10 @@ export const createUserRecord = internalMutation({
     phone: v.optional(v.string()),
     isAdmin: v.boolean(),
   },
+  returns: v.object({
+    userId: v.id("users"),
+    wasNewUser: v.boolean(),
+  }),
   handler: async (ctx, args) => {
     const phone = args.phone && args.phone.trim() ? args.phone.trim() : undefined;
 
@@ -447,7 +456,7 @@ export const createUserRecord = internalMutation({
         userId: existing._id,
       });
 
-      return existing._id;
+      return { userId: existing._id, wasNewUser: false };
     }
 
     // Create user in users table
@@ -470,7 +479,7 @@ export const createUserRecord = internalMutation({
 
     await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId });
 
-    return userId;
+    return { userId, wasNewUser: true };
   },
 });
 
@@ -518,6 +527,10 @@ export const registerUser = action({
     email: v.string(),
     password: v.string(),
   },
+  returns: v.object({
+    userId: v.id("users"),
+    wasNewUser: v.boolean(),
+  }),
   handler: async (ctx, { name, email, password }) => {
     const validated = validateUserInput({
       name,
@@ -559,14 +572,17 @@ export const registerUser = action({
     }
 
     // Create user in users table using internal mutation
-    const userId: Id<"users"> = await ctx.runMutation(internal.user.createUserRecord, {
-      name: validated.name,
-      email: validated.email,
-      phone: undefined,
-      isAdmin: false,
-    });
+    const userRecord: CreateUserRecordResult = await ctx.runMutation(
+      internal.user.createUserRecord,
+      {
+        name: validated.name,
+        email: validated.email,
+        phone: undefined,
+        isAdmin: false,
+      },
+    );
 
-    return userId;
+    return userRecord;
   },
 });
 
@@ -579,7 +595,8 @@ export const createUser = action({
     password: v.string(),
     isAdmin: v.optional(v.boolean()),
   },
-  handler: async (ctx, { name, email, phone, password, isAdmin }) => {
+  returns: v.id("users"),
+  handler: async (ctx, { name, email, phone, password, isAdmin }): Promise<Id<"users">> => {
     // Check auth and admin status
     await requireUserAction(ctx);
     await ctx.runQuery(internal.user.requireAdminQuery);
@@ -624,14 +641,17 @@ export const createUser = action({
     }
 
     // Create user in users table using internal mutation
-    const userId: Id<"users"> = await ctx.runMutation(internal.user.createUserRecord, {
-      name: validated.name,
-      email: validated.email,
-      phone: validated.phone,
-      isAdmin: validated.isAdmin,
-    });
+    const userRecord: CreateUserRecordResult = await ctx.runMutation(
+      internal.user.createUserRecord,
+      {
+        name: validated.name,
+        email: validated.email,
+        phone: validated.phone,
+        isAdmin: validated.isAdmin,
+      },
+    );
 
-    return userId;
+    return userRecord.userId;
   },
 });
 

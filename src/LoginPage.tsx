@@ -1,9 +1,13 @@
 import React, { FormEvent, useEffect, useMemo, useState } from "react";
 import { useAuthActions } from "@convex-dev/auth/react";
-import { useConvexAuth } from "convex/react";
+import { useConvexAuth, useAction, useQuery } from "convex/react";
 import { useLocation } from "react-router-dom";
-import { useAction } from "convex/react";
 import { api } from "../convex/_generated/api";
+import {
+  GTM_GOOGLE_OAUTH_PENDING_KEY,
+  pushGtmCompleteRegistration,
+} from "@/lib/gtm";
+import { useLanguage } from "@/hooks/use-language";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -107,11 +111,16 @@ const parseAuthError = (error: any): string => {
   return "An unexpected error occurred. Please try again.";
 };
 
+/** Heuristic: OAuth just created this user (not a returning login). */
+const GTM_NEW_GOOGLE_USER_MAX_AGE_MS = 5 * 60 * 1000;
+
 const LoginPage = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading: authStateLoading } = useConvexAuth();
   const location = useLocation();
+  const { language } = useLanguage();
   const registerUser = useAction(api.user.registerUser);
+  const currentUser = useQuery(api.user.getCurrentUser, isAuthenticated ? {} : "skip");
 
   const [mode, setMode] = useState<Mode>("login");
   const [passwordResetStep, setPasswordResetStep] = useState<PasswordResetStep | null>(null);
@@ -176,6 +185,29 @@ const LoginPage = () => {
     return undefined;
   }, [authStateLoading, isAuthenticated, redirectPath]);
 
+  useEffect(() => {
+    if (!isAuthenticated || authStateLoading || currentUser === undefined || currentUser === null) {
+      return;
+    }
+    if (typeof sessionStorage === "undefined") {
+      return;
+    }
+    if (sessionStorage.getItem(GTM_GOOGLE_OAUTH_PENDING_KEY) !== "1") {
+      return;
+    }
+    const age = Date.now() - currentUser._creationTime;
+    sessionStorage.removeItem(GTM_GOOGLE_OAUTH_PENDING_KEY);
+    if (age > GTM_NEW_GOOGLE_USER_MAX_AGE_MS) {
+      return;
+    }
+    pushGtmCompleteRegistration({
+      user_id: currentUser._id,
+      registration_method: "google",
+      user_status: "active",
+      language,
+    });
+  }, [isAuthenticated, authStateLoading, currentUser, language]);
+
   const isProcessing = useMemo(() => {
     if (status === "success") {
       return true;
@@ -206,10 +238,16 @@ const LoginPage = () => {
     setStatus("submitting");
 
     try {
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.setItem(GTM_GOOGLE_OAUTH_PENDING_KEY, "1");
+      }
       await signIn("google");
     } catch (cause: any) {
       console.error(cause);
       const errorMessage = parseAuthError(cause);
+      if (typeof sessionStorage !== "undefined") {
+        sessionStorage.removeItem(GTM_GOOGLE_OAUTH_PENDING_KEY);
+      }
       setError(errorMessage || "Failed to sign in with Google. Please try again.");
       setStatus("idle");
     }
@@ -226,11 +264,19 @@ const LoginPage = () => {
     if (mode === "register") {
       try {
         const normalizedEmail = email.trim().toLowerCase();
-        await registerUser({
+        const registration = await registerUser({
           name: name.trim(),
           email: normalizedEmail,
           password,
         });
+        if (registration.wasNewUser) {
+          pushGtmCompleteRegistration({
+            user_id: registration.userId,
+            registration_method: "password",
+            user_status: "active",
+            language,
+          });
+        }
         // After successful registration, sign in
         await signIn("password", {
           flow: "signIn",

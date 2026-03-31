@@ -739,6 +739,90 @@ export const syncAllSubscriptionsFromStripe = internalAction({
   },
 });
 
+function stripeResourceId(
+  resource: string | { id?: string } | null | undefined,
+): string | undefined {
+  if (!resource) return undefined;
+  if (typeof resource === "string") return resource;
+  if (typeof resource === "object" && typeof resource.id === "string") {
+    return resource.id;
+  }
+  return undefined;
+}
+
+/** Prefer PaymentIntent id; fallback to invoice id, subscription id, or checkout session id. */
+function resolveTransactionIdFromCheckoutSession(session: Stripe.Checkout.Session): string {
+  const pi = stripeResourceId(session.payment_intent as string | { id?: string } | null);
+  if (pi) return pi;
+
+  const inv = session.invoice;
+  if (inv && typeof inv === "object" && "payment_intent" in inv) {
+    const pip = (inv as { payment_intent?: string | { id?: string } | null }).payment_intent;
+    const pipId = stripeResourceId(pip as string | { id?: string } | null);
+    if (pipId) return pipId;
+  }
+  if (typeof inv === "string") return inv;
+
+  const sub = session.subscription;
+  const subId = stripeResourceId(sub as string | { id?: string } | null);
+  if (subId) return subId;
+
+  return session.id;
+}
+
+function buildPurchaseAnalyticsFromLineItems(
+  session: Stripe.Checkout.Session,
+  lineItems: Stripe.LineItem[],
+): {
+  orderId: string;
+  transactionId: string;
+  contentIds: string[];
+  contents: Array<{ id: string; quantity: number; item_price: number }>;
+  numItems: number;
+  value: number;
+  currency: string;
+} {
+  const orderId = session.id;
+  const transactionId = resolveTransactionIdFromCheckoutSession(session);
+
+  const contentIds: string[] = [];
+  const contents: Array<{ id: string; quantity: number; item_price: number }> = [];
+  let totalMinor = 0;
+  let numItems = 0;
+  let currency = "usd";
+
+  for (const li of lineItems) {
+    const price = li.price;
+    if (!price) continue;
+    const priceObj = typeof price === "string" ? null : price;
+    if (!priceObj || !("id" in priceObj)) continue;
+    const pid = priceObj.id;
+    const qty = li.quantity ?? 1;
+    const unitMinor = priceObj.unit_amount ?? 0;
+    totalMinor += unitMinor * qty;
+    numItems += qty;
+    contentIds.push(pid);
+    contents.push({
+      id: pid,
+      quantity: qty,
+      item_price: unitMinor / 100,
+    });
+    if (priceObj.currency) {
+      currency = priceObj.currency.toLowerCase();
+    }
+  }
+
+  return {
+    orderId,
+    transactionId,
+    contentIds,
+    contents,
+    numItems,
+    value: totalMinor / 100,
+    currency,
+  };
+}
+
 /**
  * Manually sync subscription status from Stripe
  * Useful when webhooks are not set up yet
@@ -748,14 +832,24 @@ export const syncSubscriptionStatus = action({
   args: {
     sessionId: v.string(),
   },
-  returns: v.union(
-    v.object({
-      success: v.boolean(),
-      subscriptionId: v.optional(v.string()),
-      status: v.optional(v.string()),
-    }),
-    v.null()
-  ),
+  returns: v.object({
+    success: v.boolean(),
+    subscriptionId: v.optional(v.string()),
+    status: v.optional(v.string()),
+    orderId: v.string(),
+    transactionId: v.string(),
+    contentIds: v.array(v.string()),
+    contents: v.array(
+      v.object({
+        id: v.string(),
+        quantity: v.number(),
+        item_price: v.number(),
+      }),
+    ),
+    numItems: v.number(),
+    value: v.number(),
+    currency: v.string(),
+  }),
   handler: async (ctx, args) => {
     // Require user to be authenticated
     const { userId } = await requireUserAction(ctx);
@@ -769,9 +863,9 @@ export const syncSubscriptionStatus = action({
     const stripe = new Stripe(stripeSecretKey);
 
     try {
-      // Retrieve the checkout session from Stripe
+      // Retrieve the checkout session from Stripe (expand for GTM transaction id resolution)
       const session = await stripe.checkout.sessions.retrieve(args.sessionId, {
-        expand: ["subscription"],
+        expand: ["subscription", "payment_intent", "invoice", "invoice.payment_intent"],
       });
 
       // Check if session exists in our database
@@ -805,6 +899,12 @@ export const syncSubscriptionStatus = action({
         subscriptionId: typeof session.subscription === "string" ? session.subscription : session.subscription?.id,
         status: session.payment_status === "paid" ? "complete" : "expired",
       });
+
+      const { data: checkoutLineItems } = await stripe.checkout.sessions.listLineItems(args.sessionId, {
+        limit: 100,
+        expand: ["data.price"],
+      });
+      const purchase = buildPurchaseAnalyticsFromLineItems(session, checkoutLineItems);
 
       // If there's a subscription, fetch and update it
       if (session.subscription) {
@@ -845,6 +945,7 @@ export const syncSubscriptionStatus = action({
           success: true,
           subscriptionId: subscription.id,
           status: subscription.status,
+          ...purchase,
         };
       }
 
@@ -852,6 +953,7 @@ export const syncSubscriptionStatus = action({
         success: true,
         subscriptionId: undefined,
         status: undefined,
+        ...purchase,
       };
     } catch (error) {
       console.error("Error syncing subscription status:", error);
