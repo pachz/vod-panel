@@ -74,72 +74,18 @@ function buildTagBodies(payload: {
   });
 }
 
-/**
- * Mailchimp rejects POST /members/.../tags when setting status "inactive" for a tag
- * that was never on the contact. GET current tags first, then only send:
- * - "active" for every tag that should be on
- * - "inactive" only for managed tags that exist on the contact but should be removed
- */
-async function applyMemberTags(
+/** Single POST to set all managed tags (Mailchimp creates tags as needed). */
+async function postMemberTags(
   config: { apiKey: string; server: string },
   memberTagsPath: string,
-  desired: { name: string; status: "active" | "inactive" }[],
-): Promise<{ ok: boolean; status: number; text: string; changeCount: number }> {
-  const getRes = await mailchimpFetch(config, memberTagsPath, { method: "GET" });
-  let currentNames = new Set<string>();
-
-  if (getRes.ok) {
-    const data = (await getRes.json()) as { tags?: { name: string }[] };
-    currentNames = new Set((data.tags ?? []).map((t) => t.name));
-    console.log("mailchimp: GET tags", {
-      path: memberTagsPath,
-      status: getRes.status,
-      currentTagNames: [...currentNames],
-    });
-  } else if (getRes.status === 404) {
-    currentNames = new Set();
-    console.log("mailchimp: GET tags 404 (no tags yet)", { path: memberTagsPath });
-  } else {
-    const text = await getRes.text();
-    console.error("mailchimp: GET tags failed", getRes.status, text);
-    return { ok: false, status: getRes.status, text, changeCount: 0 };
-  }
-
-  const changes: { name: string; status: "active" | "inactive" }[] = [];
-  for (const t of desired) {
-    if (t.status === "active") {
-      changes.push({ name: t.name, status: "active" });
-    } else if (t.status === "inactive" && currentNames.has(t.name)) {
-      changes.push({ name: t.name, status: "inactive" });
-    }
-  }
-
-  console.log("mailchimp: tag changes to POST", {
-    changeCount: changes.length,
-    changes,
-  });
-
-  if (changes.length === 0) {
-    console.log("mailchimp: no tag POST needed (desired state already matches or only inactive-for-absent)");
-    return { ok: true, status: 200, text: "", changeCount: 0 };
-  }
-
+  tags: { name: string; status: "active" | "inactive" }[],
+): Promise<{ ok: boolean; status: number; text: string }> {
   const postRes = await mailchimpFetch(config, memberTagsPath, {
     method: "POST",
-    body: JSON.stringify({ tags: changes }),
+    body: JSON.stringify({ tags }),
   });
   const text = await postRes.text();
-  console.log("mailchimp: POST tags", {
-    status: postRes.status,
-    bodyPreview: text.slice(0, 500),
-  });
-
-  return {
-    ok: postRes.ok,
-    status: postRes.status,
-    text,
-    changeCount: changes.length,
-  };
+  return { ok: postRes.ok, status: postRes.status, text };
 }
 
 const mailchimpSyncResultValidator = v.object({
@@ -187,17 +133,6 @@ async function executeSyncUserToMailchimp(
     const listId = config.audienceId;
     const path = `/lists/${listId}/members/${hash}`;
 
-    console.log("mailchimp: sync start", {
-      userId,
-      email: payload.email,
-      isDeleted: payload.isDeleted,
-      roleIsAdmin: payload.roleIsAdmin,
-      hasPassword: payload.hasPassword,
-      hasGoogle: payload.hasGoogle,
-      hasSuccessfulPayment: payload.hasSuccessfulPayment,
-      hasActiveSubscription: payload.hasActiveSubscription,
-    });
-
     const tagsPath = `${path}/tags`;
 
     if (payload.isDeleted) {
@@ -209,7 +144,6 @@ async function executeSyncUserToMailchimp(
         }),
       });
       const putText = await putRes.text();
-      console.log("mailchimp: PUT member (unsubscribed)", { status: putRes.status, bodyPreview: putText.slice(0, 300) });
       if (!putRes.ok) {
         console.error("mailchimp: unsubscribe failed", putRes.status, putText);
         return {
@@ -224,7 +158,7 @@ async function executeSyncUserToMailchimp(
         name,
         status: "inactive" as const,
       }));
-      const tagResult = await applyMemberTags(config, tagsPath, desiredAllInactive);
+      const tagResult = await postMemberTags(config, tagsPath, desiredAllInactive);
       if (!tagResult.ok) {
         console.error("mailchimp: clear tags failed", tagResult.status, tagResult.text);
         return {
@@ -234,7 +168,7 @@ async function executeSyncUserToMailchimp(
           putStatus: putRes.status,
           tagsStatus: tagResult.status,
           tagsDetail: tagResult.text.slice(0, 400),
-          tagChangesCount: tagResult.changeCount,
+          tagChangesCount: desiredAllInactive.length,
         };
       }
 
@@ -243,7 +177,7 @@ async function executeSyncUserToMailchimp(
         skipped: false,
         putStatus: putRes.status,
         tagsStatus: tagResult.status,
-        tagChangesCount: tagResult.changeCount,
+        tagChangesCount: desiredAllInactive.length,
       };
     }
 
@@ -261,7 +195,6 @@ async function executeSyncUserToMailchimp(
       body: JSON.stringify(putBody),
     });
     const putText = await putRes.text();
-    console.log("mailchimp: PUT member (subscribed)", { status: putRes.status, bodyPreview: putText.slice(0, 300) });
 
     if (!putRes.ok) {
       console.error("mailchimp: upsert member failed", putRes.status, putText);
@@ -281,7 +214,7 @@ async function executeSyncUserToMailchimp(
       hasActiveSubscription: payload.hasActiveSubscription,
     });
 
-    const tagResult = await applyMemberTags(config, tagsPath, tagBodies);
+    const tagResult = await postMemberTags(config, tagsPath, tagBodies);
     if (!tagResult.ok) {
       console.error("mailchimp: update tags failed", tagResult.status, tagResult.text);
       return {
@@ -291,7 +224,7 @@ async function executeSyncUserToMailchimp(
         putStatus: putRes.status,
         tagsStatus: tagResult.status,
         tagsDetail: tagResult.text.slice(0, 400),
-        tagChangesCount: tagResult.changeCount,
+        tagChangesCount: tagBodies.length,
       };
     }
 
@@ -300,7 +233,7 @@ async function executeSyncUserToMailchimp(
       skipped: false,
       putStatus: putRes.status,
       tagsStatus: tagResult.status,
-      tagChangesCount: tagResult.changeCount,
+      tagChangesCount: tagBodies.length,
     };
 }
 
@@ -334,7 +267,6 @@ export const processMailchimpBackfillPage = internalAction({
   handler: async (ctx, args) => {
     const config = getMailchimpConfig();
     if (!config) {
-      console.warn("mailchimp backfill: skipped (not configured)");
       return null;
     }
 

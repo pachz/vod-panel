@@ -1,7 +1,7 @@
 import { Password } from "@convex-dev/auth/providers/Password";
 import Google from "@auth/core/providers/google";
 import { convexAuth, createAccount, modifyAccountCredentials } from "@convex-dev/auth/server";
-import { internalAction, MutationCtx } from "./_generated/server";
+import { internalAction } from "./_generated/server";
 import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
@@ -59,7 +59,7 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         userId: args.userId as Id<"users">,
       });
     },
-    // async createOrUpdateUser(ctx: MutationCtx, args) {
+    // async createOrUpdateUser(ctx, args) {
     //   // Helper function to update user image
     //   const updateUserImage = async (userId: Id<"users">) => {
     //     if (args.type === "oauth" && args.profile.image) {

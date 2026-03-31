@@ -19,7 +19,7 @@ crons.cron(
   {},
 );
 
-// Re-sync entire audience to Mailchimp weekly (safety net; real-time sync runs on user/subscription changes)
+// Full Mailchimp audience resync weekly (safety net alongside real-time sync)
 crons.cron(
   "mailchimp-audience-resync",
   "0 3 * * 0",
