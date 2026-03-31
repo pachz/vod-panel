@@ -1,8 +1,10 @@
 "use node";
 
 import crypto from "node:crypto";
-import { internalAction } from "./_generated/server";
+import type { ActionCtx } from "./_generated/server";
+import { action, internalAction } from "./_generated/server";
 import { v } from "convex/values";
+import type { Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { MAILCHIMP_MANAGED_TAGS } from "./mailchimpInternal";
 
@@ -72,16 +74,96 @@ function buildTagBodies(payload: {
   });
 }
 
-export const syncUserToMailchimp = internalAction({
-  args: {
-    userId: v.id("users"),
-  },
-  returns: v.object({
-    ok: v.boolean(),
-    skipped: v.boolean(),
-    error: v.optional(v.string()),
-  }),
-  handler: async (ctx, args) => {
+/**
+ * Mailchimp rejects POST /members/.../tags when setting status "inactive" for a tag
+ * that was never on the contact. GET current tags first, then only send:
+ * - "active" for every tag that should be on
+ * - "inactive" only for managed tags that exist on the contact but should be removed
+ */
+async function applyMemberTags(
+  config: { apiKey: string; server: string },
+  memberTagsPath: string,
+  desired: { name: string; status: "active" | "inactive" }[],
+): Promise<{ ok: boolean; status: number; text: string; changeCount: number }> {
+  const getRes = await mailchimpFetch(config, memberTagsPath, { method: "GET" });
+  let currentNames = new Set<string>();
+
+  if (getRes.ok) {
+    const data = (await getRes.json()) as { tags?: { name: string }[] };
+    currentNames = new Set((data.tags ?? []).map((t) => t.name));
+    console.log("mailchimp: GET tags", {
+      path: memberTagsPath,
+      status: getRes.status,
+      currentTagNames: [...currentNames],
+    });
+  } else if (getRes.status === 404) {
+    currentNames = new Set();
+    console.log("mailchimp: GET tags 404 (no tags yet)", { path: memberTagsPath });
+  } else {
+    const text = await getRes.text();
+    console.error("mailchimp: GET tags failed", getRes.status, text);
+    return { ok: false, status: getRes.status, text, changeCount: 0 };
+  }
+
+  const changes: { name: string; status: "active" | "inactive" }[] = [];
+  for (const t of desired) {
+    if (t.status === "active") {
+      changes.push({ name: t.name, status: "active" });
+    } else if (t.status === "inactive" && currentNames.has(t.name)) {
+      changes.push({ name: t.name, status: "inactive" });
+    }
+  }
+
+  console.log("mailchimp: tag changes to POST", {
+    changeCount: changes.length,
+    changes,
+  });
+
+  if (changes.length === 0) {
+    console.log("mailchimp: no tag POST needed (desired state already matches or only inactive-for-absent)");
+    return { ok: true, status: 200, text: "", changeCount: 0 };
+  }
+
+  const postRes = await mailchimpFetch(config, memberTagsPath, {
+    method: "POST",
+    body: JSON.stringify({ tags: changes }),
+  });
+  const text = await postRes.text();
+  console.log("mailchimp: POST tags", {
+    status: postRes.status,
+    bodyPreview: text.slice(0, 500),
+  });
+
+  return {
+    ok: postRes.ok,
+    status: postRes.status,
+    text,
+    changeCount: changes.length,
+  };
+}
+
+const mailchimpSyncResultValidator = v.object({
+  ok: v.boolean(),
+  skipped: v.boolean(),
+  error: v.optional(v.string()),
+  putStatus: v.optional(v.number()),
+  tagsStatus: v.optional(v.number()),
+  tagsDetail: v.optional(v.string()),
+  tagChangesCount: v.optional(v.number()),
+});
+
+async function executeSyncUserToMailchimp(
+  ctx: ActionCtx,
+  userId: Id<"users">,
+): Promise<{
+  ok: boolean;
+  skipped: boolean;
+  error?: string;
+  putStatus?: number;
+  tagsStatus?: number;
+  tagsDetail?: string;
+  tagChangesCount?: number;
+}> {
     const config = getMailchimpConfig();
     if (!config) {
       return { ok: false, skipped: true, error: "Mailchimp not configured" };
@@ -89,17 +171,34 @@ export const syncUserToMailchimp = internalAction({
 
     const nowMs = Date.now();
     const payload = await ctx.runQuery(internal.mailchimpInternal.buildMailchimpSyncPayload, {
-      userId: args.userId,
+      userId,
       nowMs,
     });
 
     if (!payload) {
-      return { ok: true, skipped: true };
+      return {
+        ok: true,
+        skipped: true,
+        error: "User missing or has no email",
+      };
     }
 
     const hash = md5SubscriberHash(payload.email);
     const listId = config.audienceId;
     const path = `/lists/${listId}/members/${hash}`;
+
+    console.log("mailchimp: sync start", {
+      userId,
+      email: payload.email,
+      isDeleted: payload.isDeleted,
+      roleIsAdmin: payload.roleIsAdmin,
+      hasPassword: payload.hasPassword,
+      hasGoogle: payload.hasGoogle,
+      hasSuccessfulPayment: payload.hasSuccessfulPayment,
+      hasActiveSubscription: payload.hasActiveSubscription,
+    });
+
+    const tagsPath = `${path}/tags`;
 
     if (payload.isDeleted) {
       const putRes = await mailchimpFetch(config, path, {
@@ -109,28 +208,43 @@ export const syncUserToMailchimp = internalAction({
           status: "unsubscribed",
         }),
       });
+      const putText = await putRes.text();
+      console.log("mailchimp: PUT member (unsubscribed)", { status: putRes.status, bodyPreview: putText.slice(0, 300) });
       if (!putRes.ok) {
-        const text = await putRes.text();
-        console.error("mailchimp: unsubscribe failed", putRes.status, text);
-        return { ok: false, skipped: false, error: text.slice(0, 200) };
+        console.error("mailchimp: unsubscribe failed", putRes.status, putText);
+        return {
+          ok: false,
+          skipped: false,
+          error: putText.slice(0, 200),
+          putStatus: putRes.status,
+        };
       }
 
-      const tagsRes = await mailchimpFetch(config, `${path}/tags`, {
-        method: "POST",
-        body: JSON.stringify({
-          tags: MAILCHIMP_MANAGED_TAGS.map((name) => ({
-            name,
-            status: "inactive",
-          })),
-        }),
-      });
-      if (!tagsRes.ok) {
-        const text = await tagsRes.text();
-        console.error("mailchimp: clear tags failed", tagsRes.status, text);
-        return { ok: false, skipped: false, error: text.slice(0, 200) };
+      const desiredAllInactive = MAILCHIMP_MANAGED_TAGS.map((name) => ({
+        name,
+        status: "inactive" as const,
+      }));
+      const tagResult = await applyMemberTags(config, tagsPath, desiredAllInactive);
+      if (!tagResult.ok) {
+        console.error("mailchimp: clear tags failed", tagResult.status, tagResult.text);
+        return {
+          ok: false,
+          skipped: false,
+          error: tagResult.text.slice(0, 200),
+          putStatus: putRes.status,
+          tagsStatus: tagResult.status,
+          tagsDetail: tagResult.text.slice(0, 400),
+          tagChangesCount: tagResult.changeCount,
+        };
       }
 
-      return { ok: true, skipped: false };
+      return {
+        ok: true,
+        skipped: false,
+        putStatus: putRes.status,
+        tagsStatus: tagResult.status,
+        tagChangesCount: tagResult.changeCount,
+      };
     }
 
     const putBody = {
@@ -146,11 +260,17 @@ export const syncUserToMailchimp = internalAction({
       method: "PUT",
       body: JSON.stringify(putBody),
     });
+    const putText = await putRes.text();
+    console.log("mailchimp: PUT member (subscribed)", { status: putRes.status, bodyPreview: putText.slice(0, 300) });
 
     if (!putRes.ok) {
-      const text = await putRes.text();
-      console.error("mailchimp: upsert member failed", putRes.status, text);
-      return { ok: false, skipped: false, error: text.slice(0, 200) };
+      console.error("mailchimp: upsert member failed", putRes.status, putText);
+      return {
+        ok: false,
+        skipped: false,
+        error: putText.slice(0, 200),
+        putStatus: putRes.status,
+      };
     }
 
     const tagBodies = buildTagBodies({
@@ -161,18 +281,46 @@ export const syncUserToMailchimp = internalAction({
       hasActiveSubscription: payload.hasActiveSubscription,
     });
 
-    const tagsRes = await mailchimpFetch(config, `${path}/tags`, {
-      method: "POST",
-      body: JSON.stringify({ tags: tagBodies }),
-    });
-
-    if (!tagsRes.ok) {
-      const text = await tagsRes.text();
-      console.error("mailchimp: update tags failed", tagsRes.status, text);
-      return { ok: false, skipped: false, error: text.slice(0, 200) };
+    const tagResult = await applyMemberTags(config, tagsPath, tagBodies);
+    if (!tagResult.ok) {
+      console.error("mailchimp: update tags failed", tagResult.status, tagResult.text);
+      return {
+        ok: false,
+        skipped: false,
+        error: tagResult.text.slice(0, 200),
+        putStatus: putRes.status,
+        tagsStatus: tagResult.status,
+        tagsDetail: tagResult.text.slice(0, 400),
+        tagChangesCount: tagResult.changeCount,
+      };
     }
 
-    return { ok: true, skipped: false };
+    return {
+      ok: true,
+      skipped: false,
+      putStatus: putRes.status,
+      tagsStatus: tagResult.status,
+      tagChangesCount: tagResult.changeCount,
+    };
+}
+
+export const syncUserToMailchimp = internalAction({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: mailchimpSyncResultValidator,
+  handler: async (ctx, args) => executeSyncUserToMailchimp(ctx, args.userId),
+});
+
+/** Admin-only: run Mailchimp sync for one user (e.g. testing). */
+export const runMailchimpSyncForUser = action({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: mailchimpSyncResultValidator,
+  handler: async (ctx, args) => {
+    await ctx.runQuery(internal.user.requireAdminQuery);
+    return await executeSyncUserToMailchimp(ctx, args.userId);
   },
 });
 

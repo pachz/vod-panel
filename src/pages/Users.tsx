@@ -4,7 +4,7 @@ import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift, Search, Loader2 } from
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
-import type { Doc } from "../../convex/_generated/dataModel";
+import type { Doc, Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -111,6 +111,7 @@ const Users = () => {
   const updateUserPassword = useAction(api.user.updateUserPassword);
   const deleteUser = useMutation(api.user.deleteUser);
   const exportUserEmails = useAction(api.user.exportUserEmails);
+  const runMailchimpSyncForUser = useAction(api.mailchimp.runMailchimpSyncForUser);
 
   const regularUsers = useMemo(
     () =>
@@ -150,6 +151,7 @@ const Users = () => {
   });
   const [roleUpdating, setRoleUpdating] = useState<Record<string, boolean>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [mailchimpSyncingId, setMailchimpSyncingId] = useState<Id<"users"> | null>(null);
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -457,6 +459,37 @@ const Users = () => {
     }
   };
 
+  const handleMailchimpSyncUser = async (userId: Id<"users">) => {
+    setMailchimpSyncingId(userId);
+    try {
+      const r = await runMailchimpSyncForUser({ userId });
+      if (r.skipped) {
+        if (r.ok) {
+          toast.message("Mailchimp skipped", {
+            description: r.error ?? "No email on user.",
+          });
+        } else {
+          toast.error("Mailchimp not configured", {
+            description: r.error ?? "Set MAILCHIMP_API_KEY and MAILCHIMP_AUDIENCE_ID in Convex.",
+          });
+        }
+      } else if (r.ok) {
+        toast.success("Mailchimp synced", {
+          description: `Tag operations: ${r.tagChangesCount ?? 0}. Open the contact in Mailchimp → Tags.`,
+        });
+      } else {
+        toast.error("Mailchimp sync failed", {
+          description: r.error ?? r.tagsDetail ?? "Unknown error",
+        });
+      }
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setMailchimpSyncingId(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -723,6 +756,22 @@ const Users = () => {
                             >
                               <Lock className="h-4 w-4" />
                             </Button>
+                            {currentUser?.isGod ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs shrink-0"
+                                onClick={() => handleMailchimpSyncUser(user._id)}
+                                disabled={mailchimpSyncingId === user._id}
+                                title="Sync this user to Mailchimp (admin)"
+                              >
+                                {mailchimpSyncingId === user._id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  "Sync MC"
+                                )}
+                              </Button>
+                            ) : null}
                             {/* Delete button hidden for now */}
                             {/* <Button
                               variant="ghost"
@@ -851,6 +900,22 @@ const Users = () => {
                             >
                               <Lock className="h-4 w-4" />
                             </Button>
+                            {currentUser?.isGod ? (
+                              <Button
+                                variant="outline"
+                                size="sm"
+                                className="h-8 px-2 text-xs shrink-0"
+                                onClick={() => handleMailchimpSyncUser(user._id)}
+                                disabled={mailchimpSyncingId === user._id}
+                                title="Sync this user to Mailchimp (admin)"
+                              >
+                                {mailchimpSyncingId === user._id ? (
+                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                ) : (
+                                  "Sync MC"
+                                )}
+                              </Button>
+                            ) : null}
                             {/* Delete button hidden for now */}
                             {/* <Button
                               variant="ghost"
