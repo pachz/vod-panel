@@ -674,3 +674,54 @@ export const resetSubscriptionStatus = internalMutation({
   },
 });
 
+/**
+ * Ranks users by completed Stripe checkout sessions (`checkoutSessions` with status "complete").
+ * Run from the dashboard: Functions → paymentInternal → topUsersBySuccessfulCheckoutCount, or
+ * `npx convex run paymentInternal:topUsersBySuccessfulCheckoutCount '{"limit":10}'`.
+ * Note: recurring subscription renewals are not necessarily represented as extra checkout rows.
+ */
+export const topUsersBySuccessfulCheckoutCount = internalQuery({
+  args: {
+    limit: v.optional(v.number()),
+  },
+  returns: v.array(
+    v.object({
+      userId: v.id("users"),
+      successfulCheckoutCount: v.number(),
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const rawLimit = args.limit ?? 10;
+    const limit = Math.min(100, Math.max(1, Math.floor(rawLimit)));
+
+    const counts = new Map<Id<"users">, number>();
+    for await (const row of ctx.db
+      .query("checkoutSessions")
+      .withIndex("status", (q) => q.eq("status", "complete"))) {
+      counts.set(row.userId, (counts.get(row.userId) ?? 0) + 1);
+    }
+
+    const ranked = [...counts.entries()].sort((a, b) => b[1] - a[1]).slice(0, limit);
+
+    const out: Array<{
+      userId: Id<"users">;
+      successfulCheckoutCount: number;
+      email?: string;
+      name?: string;
+    }> = [];
+
+    for (const [userId, successfulCheckoutCount] of ranked) {
+      const user = await ctx.db.get(userId);
+      out.push({
+        userId,
+        successfulCheckoutCount,
+        email: user?.email,
+        name: user?.name,
+      });
+    }
+
+    return out;
+  },
+});
