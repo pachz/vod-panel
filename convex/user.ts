@@ -16,6 +16,7 @@ import { createAccount, modifyAccountCredentials } from "@convex-dev/auth/server
 import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUser, requireUserAction } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
+import { pickPrimarySubscriptionForUserDisplay } from "./paymentInternal";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
@@ -259,13 +260,19 @@ export const getSubscriptionStatusForUsers = query({
     await requireUser(ctx, { requireGod: true });
 
     const result: Record<string, "active" | "none"> = {};
+    const nowMs = Date.now();
     for (const userId of args.userIds) {
-      const sub = await ctx.db
+      const subs = await ctx.db
         .query("subscriptions")
         .withIndex("userId", (q) => q.eq("userId", userId))
-        .order("desc")
-        .first();
-      result[userId] = sub && ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) ? "active" : "none";
+        .collect();
+      const sub = pickPrimarySubscriptionForUserDisplay(subs, nowMs);
+      result[userId] =
+        sub &&
+        ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) &&
+        sub.currentPeriodEnd >= nowMs
+          ? "active"
+          : "none";
     }
     return result;
   },
@@ -898,19 +905,15 @@ export const getUserInfo = query({
       });
     }
 
-    // Get subscription info (most recent)
-    const subscription = await ctx.db
-      .query("subscriptions")
-      .withIndex("userId", (q) => q.eq("userId", id))
-      .order("desc")
-      .first();
-
     // All subscriptions for this user (history), newest first
     const allSubscriptions = await ctx.db
       .query("subscriptions")
       .withIndex("userId", (q) => q.eq("userId", id))
       .order("desc")
       .collect();
+
+    const nowMs = Date.now();
+    const subscription = pickPrimarySubscriptionForUserDisplay(allSubscriptions, nowMs);
 
     const subscriptionHistory = allSubscriptions.map((sub) => ({
       subscriptionId: sub.subscriptionId,
@@ -1081,16 +1084,17 @@ export const adminGrantSubscription = mutation({
       });
     }
 
-    const latest = await ctx.db
+    const allSubs = await ctx.db
       .query("subscriptions")
       .withIndex("userId", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
+      .collect();
+    const nowMs = Date.now();
+    const primary = pickPrimarySubscriptionForUserDisplay(allSubs, nowMs);
 
     const hasActiveSubscription =
-      latest &&
-      ACTIVE_SUBSCRIPTION_STATUSES.has(latest.status) &&
-      latest.currentPeriodEnd >= Date.now();
+      primary &&
+      ACTIVE_SUBSCRIPTION_STATUSES.has(primary.status) &&
+      primary.currentPeriodEnd >= nowMs;
 
     if (hasActiveSubscription) {
       throw new ConvexError({
@@ -1100,7 +1104,6 @@ export const adminGrantSubscription = mutation({
     }
 
     const days = args.durationDays ?? 365;
-    const nowMs = Date.now();
     const periodEndMs = nowMs + days * 86400 * 1000;
     const subscriptionId = `admin-grant-${args.userId}-${Date.now()}`;
     const customerId = `admin-grant-${args.userId}`;
@@ -1138,16 +1141,20 @@ export const getAllUsersForExport = internalQuery({
     const normalUsers = users.filter((user) => user.deletedAt === undefined && !user.isGod);
     
     // Get subscription status for each user
+    const nowMs = Date.now();
     const usersWithSubscription = await Promise.all(
       normalUsers.map(async (user) => {
-        // Get the most recent subscription for this user
-        const subscription = await ctx.db
+        const subs = await ctx.db
           .query("subscriptions")
           .withIndex("userId", (q) => q.eq("userId", user._id))
-          .order("desc")
-          .first();
-        
-        const subscriptionStatus = subscription?.status === "active" ? "Active" : "Not Active";
+          .collect();
+        const subscription = pickPrimarySubscriptionForUserDisplay(subs, nowMs);
+        const subscriptionStatus =
+          subscription &&
+          ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
+          subscription.currentPeriodEnd >= nowMs
+            ? "Active"
+            : "Not Active";
         
         return {
           name: user.name ?? "",

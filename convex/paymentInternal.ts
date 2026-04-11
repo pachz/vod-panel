@@ -5,6 +5,46 @@ import { internal } from "./_generated/api";
 import { requireUser } from "./utils/auth";
 import { getAuthUserId } from "@convex-dev/auth/server";
 
+const ACTIVE_SUBSCRIPTION_STATUSES_FOR_PICK = new Set(["active", "trialing"]);
+
+/**
+ * Pick the subscription row that best reflects current access (not newest Convex row).
+ * Used by admin user info, users table badges, and the subscriber payments page.
+ */
+export function pickPrimarySubscriptionForUserDisplay(
+  subs: Array<Doc<"subscriptions">>,
+  nowMs: number,
+): Doc<"subscriptions"> | null {
+  if (subs.length === 0) {
+    return null;
+  }
+  const accessTier = (s: Doc<"subscriptions">) => {
+    const end = s.currentPeriodEnd;
+    const accessLike = ACTIVE_SUBSCRIPTION_STATUSES_FOR_PICK.has(s.status);
+    if (accessLike && end >= nowMs) {
+      return 4;
+    }
+    if (accessLike) {
+      return 3;
+    }
+    if (s.status === "past_due") {
+      return 2;
+    }
+    return 1;
+  };
+  const sorted = [...subs].sort((a, b) => {
+    const d = accessTier(b) - accessTier(a);
+    if (d !== 0) {
+      return d;
+    }
+    if (b.currentPeriodEnd !== a.currentPeriodEnd) {
+      return b.currentPeriodEnd - a.currentPeriodEnd;
+    }
+    return b._creationTime - a._creationTime;
+  });
+  return sorted[0] ?? null;
+}
+
 /**
  * Internal query to get user ID from email
  */
@@ -667,18 +707,14 @@ export const getMySubscription = query({
       return null;
     }
 
-    // Get subscription - include active or trialing (even if scheduled to cancel)
-    const subscription = await ctx.db
+    const allForUser = await ctx.db
       .query("subscriptions")
       .withIndex("userId", (q) => q.eq("userId", userId as Id<"users">))
-      .filter((q) => 
-        q.or(
-          q.eq(q.field("status"), "active"),
-          q.eq(q.field("status"), "trialing")
-        )
-      )
-      .order("desc")
-      .first();
+      .collect();
+    const candidates = allForUser.filter(
+      (s) => s.status === "active" || s.status === "trialing",
+    );
+    const subscription = pickPrimarySubscriptionForUserDisplay(candidates, Date.now());
 
     if (!subscription) {
       return null;
