@@ -114,6 +114,13 @@ function normalizeStripeSubscriptionStatusForConvex(
 
 /** Stripe period fields are Unix seconds; only null/undefined/0 is "missing" (avoid `!` on timestamps). */
 function coercePositiveUnixSeconds(value: unknown): number | null {
+  if (typeof value === "bigint") {
+    const n = Number(value);
+    if (!Number.isNaN(n) && n > 0) {
+      return n;
+    }
+    return null;
+  }
   if (typeof value === "number" && value > 0) {
     return value;
   }
@@ -127,6 +134,71 @@ function coercePositiveUnixSeconds(value: unknown): number | null {
 }
 
 /**
+ * Stripe often puts billing period on each subscription item; newer API shapes may omit
+ * top-level `current_period_*` on the subscription. Read both so sync does not fall back
+ * to stale DB dates.
+ */
+function extractCurrentPeriodUnixFromStripeSubscription(subscription: any): {
+  start: number | null;
+  end: number | null;
+  source: "subscription" | "subscription_item_first" | "subscription_items_aggregate" | "none";
+} {
+  const topStart = coercePositiveUnixSeconds(
+    subscription?.current_period_start ?? subscription?.currentPeriodStart,
+  );
+  const topEnd = coercePositiveUnixSeconds(
+    subscription?.current_period_end ?? subscription?.currentPeriodEnd,
+  );
+  if (topStart !== null && topEnd !== null) {
+    return { start: topStart, end: topEnd, source: "subscription" };
+  }
+
+  const items = subscription?.items?.data;
+  if (!Array.isArray(items) || items.length === 0) {
+    return { start: topStart, end: topEnd, source: "none" };
+  }
+
+  const first = items[0];
+  const firstStart = coercePositiveUnixSeconds(
+    first?.current_period_start ?? first?.currentPeriodStart,
+  );
+  const firstEnd = coercePositiveUnixSeconds(
+    first?.current_period_end ?? first?.currentPeriodEnd,
+  );
+  if (firstStart !== null && firstEnd !== null) {
+    return {
+      start: firstStart,
+      end: firstEnd,
+      source: "subscription_item_first",
+    };
+  }
+
+  let minStart: number | null = null;
+  let maxEnd: number | null = null;
+  for (const it of items) {
+    const s = coercePositiveUnixSeconds(
+      it?.current_period_start ?? it?.currentPeriodStart,
+    );
+    const e = coercePositiveUnixSeconds(it?.current_period_end ?? it?.currentPeriodEnd);
+    if (s !== null && (minStart === null || s < minStart)) {
+      minStart = s;
+    }
+    if (e !== null && (maxEnd === null || e > maxEnd)) {
+      maxEnd = e;
+    }
+  }
+  if (minStart !== null && maxEnd !== null) {
+    return {
+      start: minStart,
+      end: maxEnd,
+      source: "subscription_items_aggregate",
+    };
+  }
+
+  return { start: topStart, end: topEnd, source: "none" };
+}
+
+/**
  * Helper function to safely get subscription dates from Stripe subscription object
  * Handles missing dates gracefully by using fallback values.
  * When fallback is used, respects billing interval (e.g. yearly = 365 days, not 30).
@@ -135,19 +207,20 @@ function getSubscriptionDates(
   subscription: any,
   existingDates?: { currentPeriodStart?: number; currentPeriodEnd?: number }
 ): { currentPeriodStart: number; currentPeriodEnd: number } {
-  const currentPeriodStart = coercePositiveUnixSeconds(
-    subscription.current_period_start ?? subscription.currentPeriodStart,
-  );
-  const currentPeriodEnd = coercePositiveUnixSeconds(
-    subscription.current_period_end ?? subscription.currentPeriodEnd,
-  );
+  const extracted = extractCurrentPeriodUnixFromStripeSubscription(subscription);
+  const currentPeriodStart = extracted.start;
+  const currentPeriodEnd = extracted.end;
 
   // If dates are missing, use fallback logic
   if (currentPeriodStart === null || currentPeriodEnd === null) {
-    console.warn("Subscription missing period dates, using fallback", {
+    console.warn("Subscription missing period dates (subscription + items), using fallback", {
       subscriptionId: subscription.id,
       status: subscription.status,
       hasExistingDates: !!existingDates,
+      periodSourceAttempted: extracted.source,
+      itemCount: Array.isArray(subscription?.items?.data)
+        ? subscription.items.data.length
+        : 0,
     });
 
     // Try to use existing dates from database if they're valid
@@ -690,13 +763,11 @@ export const adminSyncUserSubscriptionFromStripe = action({
 });
 
 function stripeSubscriptionPeriodEndMs(sub: Stripe.Subscription): number | null {
-  const cpe = coercePositiveUnixSeconds(
-    (sub as { current_period_end?: unknown }).current_period_end,
-  );
-  if (cpe === null) {
+  const { end } = extractCurrentPeriodUnixFromStripeSubscription(sub as any);
+  if (end === null) {
     return null;
   }
-  return cpe * 1000;
+  return end * 1000;
 }
 
 function stripeCustomerIdFromSubscription(sub: Stripe.Subscription): string | null {
@@ -756,8 +827,8 @@ async function reboundToBetterStripeSubscriptionOnCustomer(
 
   const score = (s: Stripe.Subscription) => {
     const statusWeight = s.status === "active" ? 2 : s.status === "trialing" ? 1 : 0;
-    const cpe = (s as { current_period_end?: number }).current_period_end;
-    const periodEnd = typeof cpe === "number" ? cpe : 0;
+    const { end } = extractCurrentPeriodUnixFromStripeSubscription(s as any);
+    const periodEnd = end ?? 0;
     return statusWeight * 1e12 + periodEnd;
   };
 
