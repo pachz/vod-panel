@@ -3,7 +3,7 @@ import { internal } from "./_generated/api";
 
 const crons = cronJobs();
 
-// Run subscription expiry daily at 00:00 UTC (marks active/trialing as canceled when period ended)
+// Run subscription expiry daily at 00:00 UTC (admin-granted / non-Stripe only; Stripe `sub_*` uses Stripe sync)
 crons.cron(
   "expire-subscriptions",
   "0 0 * * *",

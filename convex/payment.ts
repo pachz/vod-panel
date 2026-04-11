@@ -683,6 +683,91 @@ export const adminSyncUserSubscriptionFromStripe = action({
 });
 
 /**
+ * When the subscription id we have on file is canceled in Stripe, the customer may have
+ * a newer active subscription (e.g. resubscribe / replacement billing). Prefer that
+ * subscription so nightly sync can attach the live subscription without a webhook.
+ */
+async function resolveStripeSubscriptionForSync(
+  stripe: Stripe,
+  subscriptionId: string,
+): Promise<Stripe.Subscription> {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ["items.data.price"],
+  });
+
+  if (subscription.status !== "canceled") {
+    console.log("[resolveStripeSubscriptionForSync]", {
+      inputSubscriptionId: subscriptionId,
+      fixed: false,
+      reason: "stripe_subscription_not_canceled",
+      stripeStatus: subscription.status,
+    });
+    return subscription;
+  }
+
+  const customerRaw = subscription.customer;
+  const customerId =
+    typeof customerRaw === "string" ? customerRaw : customerRaw?.id;
+  if (!customerId) {
+    console.log("[resolveStripeSubscriptionForSync]", {
+      inputSubscriptionId: subscriptionId,
+      fixed: false,
+      reason: "canceled_but_no_stripe_customer_id",
+    });
+    return subscription;
+  }
+
+  const [activeList, trialingList] = await Promise.all([
+    stripe.subscriptions.list({ customer: customerId, status: "active", limit: 20 }),
+    stripe.subscriptions.list({ customer: customerId, status: "trialing", limit: 20 }),
+  ]);
+
+  const candidates = [...activeList.data, ...trialingList.data];
+  if (candidates.length === 0) {
+    console.log("[resolveStripeSubscriptionForSync]", {
+      inputSubscriptionId: subscriptionId,
+      fixed: false,
+      reason: "canceled_no_active_or_trialing_for_customer",
+      customerId,
+    });
+    return subscription;
+  }
+
+  const score = (s: Stripe.Subscription) => {
+    const statusWeight = s.status === "active" ? 2 : s.status === "trialing" ? 1 : 0;
+    const cpe = (s as { current_period_end?: number }).current_period_end;
+    const periodEnd = typeof cpe === "number" ? cpe : 0;
+    return statusWeight * 1e12 + periodEnd;
+  };
+
+  candidates.sort((a, b) => score(b) - score(a));
+  const best = candidates[0];
+  if (!best || best.id === subscription.id) {
+    console.log("[resolveStripeSubscriptionForSync]", {
+      inputSubscriptionId: subscriptionId,
+      fixed: false,
+      reason: "canceled_best_candidate_same_as_input_or_missing",
+      customerId,
+      candidateCount: candidates.length,
+    });
+    return subscription;
+  }
+
+  const resolved = await stripe.subscriptions.retrieve(best.id, {
+    expand: ["items.data.price"],
+  });
+  console.log("[resolveStripeSubscriptionForSync]", {
+    inputSubscriptionId: subscriptionId,
+    fixed: true,
+    reason: "rebound_to_other_subscription_on_same_customer",
+    customerId,
+    resolvedSubscriptionId: resolved.id,
+    candidateCount: candidates.length,
+  });
+  return resolved;
+}
+
+/**
  * Internal action: sync all Stripe-backed subscription statuses from Stripe.
  * Used by the daily cron to keep subscription status, period dates, and cancel state in sync.
  */
@@ -703,9 +788,7 @@ export const syncAllSubscriptionsFromStripe = internalAction({
 
     for (const row of list) {
       try {
-        const subscription = await stripe.subscriptions.retrieve(row.subscriptionId, {
-          expand: ["items.data.price"],
-        });
+        const subscription = await resolveStripeSubscriptionForSync(stripe, row.subscriptionId);
         const dates = getSubscriptionDates(subscription, {
           currentPeriodStart: row.currentPeriodStart,
           currentPeriodEnd: row.currentPeriodEnd,
