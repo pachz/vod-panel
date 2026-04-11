@@ -84,6 +84,48 @@ function getSubscriptionInterval(subscription: any): { interval: string; interva
   };
 }
 
+type ConvexStripeSubscriptionStatus =
+  | "active"
+  | "canceled"
+  | "past_due"
+  | "unpaid"
+  | "incomplete"
+  | "trialing";
+
+function normalizeStripeSubscriptionStatusForConvex(
+  status: Stripe.Subscription.Status,
+): ConvexStripeSubscriptionStatus {
+  switch (status) {
+    case "active":
+    case "canceled":
+    case "past_due":
+    case "unpaid":
+    case "incomplete":
+    case "trialing":
+      return status;
+    case "incomplete_expired":
+      return "incomplete";
+    case "paused":
+      return "active";
+    default:
+      return "canceled";
+  }
+}
+
+/** Stripe period fields are Unix seconds; only null/undefined/0 is "missing" (avoid `!` on timestamps). */
+function coercePositiveUnixSeconds(value: unknown): number | null {
+  if (typeof value === "number" && value > 0) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim() !== "") {
+    const n = Number(value);
+    if (!Number.isNaN(n) && n > 0) {
+      return n;
+    }
+  }
+  return null;
+}
+
 /**
  * Helper function to safely get subscription dates from Stripe subscription object
  * Handles missing dates gracefully by using fallback values.
@@ -93,20 +135,15 @@ function getSubscriptionDates(
   subscription: any,
   existingDates?: { currentPeriodStart?: number; currentPeriodEnd?: number }
 ): { currentPeriodStart: number; currentPeriodEnd: number } {
-  // Try to get dates from Stripe subscription
-  let currentPeriodStart = subscription.current_period_start;
-  let currentPeriodEnd = subscription.current_period_end;
-  
-  // If not found, try camelCase
-  if (!currentPeriodStart) {
-    currentPeriodStart = subscription.currentPeriodStart;
-  }
-  if (!currentPeriodEnd) {
-    currentPeriodEnd = subscription.currentPeriodEnd;
-  }
+  const currentPeriodStart = coercePositiveUnixSeconds(
+    subscription.current_period_start ?? subscription.currentPeriodStart,
+  );
+  const currentPeriodEnd = coercePositiveUnixSeconds(
+    subscription.current_period_end ?? subscription.currentPeriodEnd,
+  );
 
   // If dates are missing, use fallback logic
-  if (!currentPeriodStart || !currentPeriodEnd) {
+  if (currentPeriodStart === null || currentPeriodEnd === null) {
     console.warn("Subscription missing period dates, using fallback", {
       subscriptionId: subscription.id,
       status: subscription.status,
@@ -591,79 +628,49 @@ export const adminSyncUserSubscriptionFromStripe = action({
       };
     }
 
-    // Get the most recent subscription for this user
-    const userSubscription: {
-      subscriptionId: string;
-      status: string;
-      currentPeriodStart: number;
-      currentPeriodEnd: number;
-      cancelAtPeriodEnd: boolean;
-      canceledAt?: number;
-      interval?: string;
-      intervalCount?: number;
-    } | null = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
-      userId: args.userId,
-    });
+    const anchor = await ctx.runQuery(
+      internal.paymentInternal.getStripeSubscriptionAnchorForAdminSync,
+      { userId: args.userId },
+    );
 
-    if (!userSubscription) {
+    if (!anchor) {
       return {
         success: false,
-        message: "No subscription found for this user.",
+        message: "No Stripe subscription record found for this user.",
         status: undefined,
         subscriptionId: undefined,
       };
     }
 
-    // Only Stripe-backed subscriptions can be refreshed via the API
-    if (!userSubscription.subscriptionId.startsWith("sub_")) {
+    if (!anchor.subscriptionId.startsWith("sub_")) {
       return {
         success: false,
         message: "This subscription is not managed by Stripe and cannot be refreshed.",
-        status: userSubscription.status,
-        subscriptionId: userSubscription.subscriptionId,
+        status: undefined,
+        subscriptionId: anchor.subscriptionId,
       };
     }
 
     const stripe = new Stripe(stripeSecretKey);
 
     try {
-      const subscription = await stripe.subscriptions.retrieve(
-        userSubscription.subscriptionId,
-        {
+      const subscription = await resolveStripeSubscriptionForSync(
+        stripe,
+        anchor.subscriptionId,
+      );
+
+      const existingDates = {
+        currentPeriodStart: anchor.currentPeriodStart,
+        currentPeriodEnd: anchor.currentPeriodEnd,
+      };
+      await persistStripeSubscriptionForConvex(ctx, subscription, args.userId, existingDates);
+
+      if (subscription.id !== anchor.subscriptionId) {
+        const original = await stripe.subscriptions.retrieve(anchor.subscriptionId, {
           expand: ["items.data.price"],
-        },
-      );
-
-      const dates = getSubscriptionDates(subscription, {
-        currentPeriodStart: userSubscription.currentPeriodStart,
-        currentPeriodEnd: userSubscription.currentPeriodEnd,
-      });
-      const intervalInfo = getSubscriptionInterval(subscription);
-
-      await ctx.runMutation(
-        internal.paymentInternal.upsertSubscription,
-        {
-          subscriptionId: subscription.id,
-          userId: args.userId,
-          customerId:
-            typeof subscription.customer === "string"
-              ? subscription.customer
-              : subscription.customer.id,
-          status: subscription.status as any,
-          currentPeriodStart: dates.currentPeriodStart,
-          currentPeriodEnd: dates.currentPeriodEnd,
-          cancelAtPeriodEnd:
-            (subscription as any).cancel_at_period_end || false,
-          canceledAt: (subscription as any).canceled_at
-            ? convertStripeTimestamp(
-                (subscription as any).canceled_at,
-                "canceled_at",
-              )
-            : undefined,
-          interval: intervalInfo?.interval,
-          intervalCount: intervalInfo?.intervalCount,
-        },
-      );
+        });
+        await persistStripeSubscriptionForConvex(ctx, original, args.userId, existingDates);
+      }
 
       return {
         success: true,
@@ -682,37 +689,50 @@ export const adminSyncUserSubscriptionFromStripe = action({
   },
 });
 
-/**
- * When the subscription id we have on file is canceled in Stripe, the customer may have
- * a newer active subscription (e.g. resubscribe / replacement billing). Prefer that
- * subscription so nightly sync can attach the live subscription without a webhook.
- */
-async function resolveStripeSubscriptionForSync(
-  stripe: Stripe,
-  subscriptionId: string,
-): Promise<Stripe.Subscription> {
-  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
-    expand: ["items.data.price"],
-  });
-
-  if (subscription.status !== "canceled") {
-    console.log("[resolveStripeSubscriptionForSync]", {
-      inputSubscriptionId: subscriptionId,
-      fixed: false,
-      reason: "stripe_subscription_not_canceled",
-      stripeStatus: subscription.status,
-    });
-    return subscription;
+function stripeSubscriptionPeriodEndMs(sub: Stripe.Subscription): number | null {
+  const cpe = coercePositiveUnixSeconds(
+    (sub as { current_period_end?: unknown }).current_period_end,
+  );
+  if (cpe === null) {
+    return null;
   }
+  return cpe * 1000;
+}
 
-  const customerRaw = subscription.customer;
-  const customerId =
-    typeof customerRaw === "string" ? customerRaw : customerRaw?.id;
+function stripeCustomerIdFromSubscription(sub: Stripe.Subscription): string | null {
+  const customerRaw = sub.customer;
+  if (typeof customerRaw === "string") {
+    return customerRaw;
+  }
+  if (
+    customerRaw &&
+    typeof customerRaw === "object" &&
+    "id" in customerRaw &&
+    typeof (customerRaw as { id: unknown }).id === "string"
+  ) {
+    return (customerRaw as { id: string }).id;
+  }
+  return null;
+}
+
+/**
+ * If the subscription on file is not the customer's current billable one, pick the best
+ * active/trialing subscription on the same customer (new checkout after cancel, etc.).
+ * Also used when nightly sync or admin refresh runs without webhooks.
+ */
+async function reboundToBetterStripeSubscriptionOnCustomer(
+  stripe: Stripe,
+  subscription: Stripe.Subscription,
+  inputSubscriptionId: string,
+  triggerReason: string,
+): Promise<Stripe.Subscription> {
+  const customerId = stripeCustomerIdFromSubscription(subscription);
   if (!customerId) {
     console.log("[resolveStripeSubscriptionForSync]", {
-      inputSubscriptionId: subscriptionId,
+      inputSubscriptionId,
+      triggerReason,
       fixed: false,
-      reason: "canceled_but_no_stripe_customer_id",
+      reason: "missing_customer_on_subscription",
     });
     return subscription;
   }
@@ -725,9 +745,10 @@ async function resolveStripeSubscriptionForSync(
   const candidates = [...activeList.data, ...trialingList.data];
   if (candidates.length === 0) {
     console.log("[resolveStripeSubscriptionForSync]", {
-      inputSubscriptionId: subscriptionId,
+      inputSubscriptionId,
+      triggerReason,
       fixed: false,
-      reason: "canceled_no_active_or_trialing_for_customer",
+      reason: "no_active_or_trialing_for_customer",
       customerId,
     });
     return subscription;
@@ -744,9 +765,10 @@ async function resolveStripeSubscriptionForSync(
   const best = candidates[0];
   if (!best || best.id === subscription.id) {
     console.log("[resolveStripeSubscriptionForSync]", {
-      inputSubscriptionId: subscriptionId,
+      inputSubscriptionId,
+      triggerReason,
       fixed: false,
-      reason: "canceled_best_candidate_same_as_input_or_missing",
+      reason: "best_candidate_same_as_input_or_missing",
       customerId,
       candidateCount: candidates.length,
     });
@@ -757,7 +779,8 @@ async function resolveStripeSubscriptionForSync(
     expand: ["items.data.price"],
   });
   console.log("[resolveStripeSubscriptionForSync]", {
-    inputSubscriptionId: subscriptionId,
+    inputSubscriptionId,
+    triggerReason,
     fixed: true,
     reason: "rebound_to_other_subscription_on_same_customer",
     customerId,
@@ -768,8 +791,97 @@ async function resolveStripeSubscriptionForSync(
 }
 
 /**
+ * Prefer the subscription Stripe treats as current for this customer when the id we
+ * have is canceled, unpaid, past_due, or still "active"/trialing with a lapsed period.
+ */
+async function resolveStripeSubscriptionForSync(
+  stripe: Stripe,
+  subscriptionId: string,
+): Promise<Stripe.Subscription> {
+  const subscription = await stripe.subscriptions.retrieve(subscriptionId, {
+    expand: ["items.data.price"],
+  });
+
+  if (subscription.status === "canceled") {
+    return reboundToBetterStripeSubscriptionOnCustomer(
+      stripe,
+      subscription,
+      subscriptionId,
+      "input_canceled",
+    );
+  }
+
+  if (subscription.status === "past_due" || subscription.status === "unpaid") {
+    const rebounded = await reboundToBetterStripeSubscriptionOnCustomer(
+      stripe,
+      subscription,
+      subscriptionId,
+      "input_past_due_or_unpaid",
+    );
+    if (rebounded.id !== subscription.id) {
+      return rebounded;
+    }
+    console.log("[resolveStripeSubscriptionForSync]", {
+      inputSubscriptionId: subscriptionId,
+      fixed: false,
+      reason: "past_due_or_unpaid_no_other_subscription",
+      stripeStatus: subscription.status,
+    });
+    return subscription;
+  }
+
+  if (subscription.status === "active" || subscription.status === "trialing") {
+    const endMs = stripeSubscriptionPeriodEndMs(subscription);
+    if (endMs !== null && endMs < Date.now()) {
+      return reboundToBetterStripeSubscriptionOnCustomer(
+        stripe,
+        subscription,
+        subscriptionId,
+        "input_active_or_trialing_but_period_ended",
+      );
+    }
+    return subscription;
+  }
+
+  return subscription;
+}
+
+async function persistStripeSubscriptionForConvex(
+  ctx: ActionCtx,
+  subscription: Stripe.Subscription,
+  userId: Id<"users">,
+  existingDates?: { currentPeriodStart: number; currentPeriodEnd: number },
+): Promise<void> {
+  const customerId = stripeCustomerIdFromSubscription(subscription);
+  if (!customerId) {
+    throw new Error(`Stripe subscription ${subscription.id} has no customer id`);
+  }
+  const dates = getSubscriptionDates(subscription, existingDates);
+  const intervalInfo = getSubscriptionInterval(subscription);
+  const canceledAtRaw = (subscription as { canceled_at?: number }).canceled_at;
+  await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
+    subscriptionId: subscription.id,
+    userId,
+    customerId,
+    status: normalizeStripeSubscriptionStatusForConvex(subscription.status),
+    currentPeriodStart: dates.currentPeriodStart,
+    currentPeriodEnd: dates.currentPeriodEnd,
+    cancelAtPeriodEnd: (subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end ?? false,
+    canceledAt: canceledAtRaw
+      ? convertStripeTimestamp(canceledAtRaw, "canceled_at")
+      : undefined,
+    interval: intervalInfo?.interval,
+    intervalCount: intervalInfo?.intervalCount,
+  });
+}
+
+/**
  * Internal action: sync all Stripe-backed subscription statuses from Stripe.
  * Used by the daily cron to keep subscription status, period dates, and cancel state in sync.
+ *
+ * Phase 1: each distinct `sub_*` row in Convex (resolve → upsert; if rebound, also upsert the original id).
+ * Phase 2: every subscription on Stripe for each `users.stripeCustomerId` not already written this run
+ * (covers new checkouts before a subscription row existed).
  */
 export const syncAllSubscriptionsFromStripe = internalAction({
   args: {},
@@ -782,41 +894,89 @@ export const syncAllSubscriptionsFromStripe = internalAction({
     }
 
     const list = await ctx.runQuery(internal.paymentInternal.listStripeSubscriptionsForSync, {});
+    const customerPairs = await ctx.runQuery(
+      internal.paymentInternal.listUsersWithStripeCustomerIds,
+      {},
+    );
+
     const stripe = new Stripe(stripeSecretKey);
     let synced = 0;
     let errors = 0;
+    const subscriptionIdsSyncedThisRun = new Set<string>();
+
+    const recordOne = async (
+      subscription: Stripe.Subscription,
+      userId: Id<"users">,
+      existingDates?: { currentPeriodStart: number; currentPeriodEnd: number },
+    ) => {
+      await persistStripeSubscriptionForConvex(ctx, subscription, userId, existingDates);
+      subscriptionIdsSyncedThisRun.add(subscription.id);
+      synced += 1;
+    };
 
     for (const row of list) {
+      if (subscriptionIdsSyncedThisRun.has(row.subscriptionId)) {
+        continue;
+      }
       try {
-        const subscription = await resolveStripeSubscriptionForSync(stripe, row.subscriptionId);
-        const dates = getSubscriptionDates(subscription, {
+        const resolved = await resolveStripeSubscriptionForSync(stripe, row.subscriptionId);
+        await recordOne(resolved, row.userId, {
           currentPeriodStart: row.currentPeriodStart,
           currentPeriodEnd: row.currentPeriodEnd,
         });
-        const intervalInfo = getSubscriptionInterval(subscription);
-        await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
-          subscriptionId: subscription.id,
-          userId: row.userId,
-          customerId: typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id,
-          status: subscription.status as "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing",
-          currentPeriodStart: dates.currentPeriodStart,
-          currentPeriodEnd: dates.currentPeriodEnd,
-          cancelAtPeriodEnd: (subscription as { cancel_at_period_end?: boolean }).cancel_at_period_end ?? false,
-          canceledAt: (subscription as { canceled_at?: number }).canceled_at
-            ? convertStripeTimestamp((subscription as { canceled_at: number }).canceled_at, "canceled_at")
-            : undefined,
-          interval: intervalInfo?.interval,
-          intervalCount: intervalInfo?.intervalCount,
-        });
-        synced += 1;
+
+        if (resolved.id !== row.subscriptionId) {
+          const original = await stripe.subscriptions.retrieve(row.subscriptionId, {
+            expand: ["items.data.price"],
+          });
+          await recordOne(original, row.userId, {
+            currentPeriodStart: row.currentPeriodStart,
+            currentPeriodEnd: row.currentPeriodEnd,
+          });
+        }
       } catch (err) {
         console.error(`Failed to sync subscription ${row.subscriptionId}:`, err);
         errors += 1;
       }
     }
 
-    if (list.length > 0) {
-      console.log(`Subscription sync complete: ${synced} synced, ${errors} errors`);
+    for (const { userId, customerId } of customerPairs) {
+      try {
+        let startingAfter: string | undefined;
+        for (;;) {
+          const page = await stripe.subscriptions.list({
+            customer: customerId,
+            status: "all",
+            limit: 100,
+            ...(startingAfter ? { starting_after: startingAfter } : {}),
+          });
+          for (const thin of page.data) {
+            if (subscriptionIdsSyncedThisRun.has(thin.id)) {
+              continue;
+            }
+            const full = await stripe.subscriptions.retrieve(thin.id, {
+              expand: ["items.data.price"],
+            });
+            await recordOne(full, userId, undefined);
+          }
+          if (!page.has_more || page.data.length === 0) {
+            break;
+          }
+          startingAfter = page.data[page.data.length - 1]!.id;
+        }
+      } catch (err) {
+        console.error(
+          `Failed customer subscription scan for user ${userId} customer ${customerId}:`,
+          err,
+        );
+        errors += 1;
+      }
+    }
+
+    if (list.length > 0 || customerPairs.length > 0) {
+      console.log(
+        `[syncAllSubscriptionsFromStripe] complete: ${synced} upserts, ${subscriptionIdsSyncedThisRun.size} distinct Stripe subscription ids, ${errors} errors`,
+      );
     }
     return { synced, errors };
   },

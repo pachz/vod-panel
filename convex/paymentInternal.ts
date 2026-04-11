@@ -1,6 +1,6 @@
 import { internalMutation, internalQuery, query, mutation } from "./_generated/server";
 import { v } from "convex/values";
-import type { Id } from "./_generated/dataModel";
+import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
 import { requireUser } from "./utils/auth";
 import { getAuthUserId } from "@convex-dev/auth/server";
@@ -242,6 +242,90 @@ export const listStripeSubscriptionsForSync = internalQuery({
         currentPeriodStart: s.currentPeriodStart,
         currentPeriodEnd: s.currentPeriodEnd,
       }));
+  },
+});
+
+/**
+ * Users with a Stripe customer id (for syncAllSubscriptionsFromStripe phase 2).
+ * Bounded read so large deployments do not load the entire users table in one query.
+ */
+export const listUsersWithStripeCustomerIds = internalQuery({
+  args: {},
+  returns: v.array(
+    v.object({
+      userId: v.id("users"),
+      customerId: v.string(),
+    }),
+  ),
+  handler: async (ctx) => {
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .take(10_000);
+    return users
+      .filter((u) => u.stripeCustomerId && u.stripeCustomerId.length > 0)
+      .map((u) => ({
+        userId: u._id,
+        customerId: u.stripeCustomerId as string,
+      }));
+  },
+});
+
+/**
+ * Best-effort Stripe subscription row to use as the starting point for admin sync.
+ * Prefers a healthy active/trialing row (period end in the future), then other
+ * active/trialing, then past_due, so we do not always follow the newest DB row
+ * when the user has multiple Stripe subscription documents.
+ */
+export const getStripeSubscriptionAnchorForAdminSync = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.union(
+    v.object({
+      subscriptionId: v.string(),
+      currentPeriodStart: v.number(),
+      currentPeriodEnd: v.number(),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const subs = await ctx.db
+      .query("subscriptions")
+      .withIndex("userId", (q) => q.eq("userId", args.userId))
+      .collect();
+    const stripeSubs = subs.filter((s) => s.subscriptionId.startsWith("sub_"));
+    if (stripeSubs.length === 0) {
+      return null;
+    }
+    const now = Date.now();
+    const rank = (s: Doc<"subscriptions">) => {
+      const endsInFuture = s.currentPeriodEnd >= now;
+      if (
+        (s.status === "active" || s.status === "trialing") &&
+        endsInFuture
+      ) {
+        return 3;
+      }
+      if (s.status === "active" || s.status === "trialing") {
+        return 2;
+      }
+      if (s.status === "past_due") {
+        return 1;
+      }
+      return 0;
+    };
+    stripeSubs.sort((a, b) => {
+      const dr = rank(b) - rank(a);
+      if (dr !== 0) return dr;
+      return b.currentPeriodEnd - a.currentPeriodEnd;
+    });
+    const best = stripeSubs[0];
+    return {
+      subscriptionId: best.subscriptionId,
+      currentPeriodStart: best.currentPeriodStart,
+      currentPeriodEnd: best.currentPeriodEnd,
+    };
   },
 });
 
@@ -677,7 +761,8 @@ export const resetSubscriptionStatus = internalMutation({
 /**
  * Ranks users by completed Stripe checkout sessions (`checkoutSessions` with status "complete").
  * Run from the dashboard: Functions → paymentInternal → topUsersBySuccessfulCheckoutCount, or
- * `npx convex run paymentInternal:topUsersBySuccessfulCheckoutCount '{"limit":10}'`.
+ * `npx convex run paymentInternal:topUsersBySuccessfulCheckoutCount '{}'`
+ * (optional: `'{"limit":10}'`; capped at 100).
  * Note: recurring subscription renewals are not necessarily represented as extra checkout rows.
  */
 export const topUsersBySuccessfulCheckoutCount = internalQuery({
