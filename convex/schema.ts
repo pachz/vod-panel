@@ -202,6 +202,16 @@ export default defineSchema({
     .index("userId", ["userId"])
     .index("status", ["status"]),
 
+  stripeWebhookEvents: defineTable({
+    eventId: v.string(), // Stripe event id (evt_...)
+    eventType: v.string(),
+    source: v.union(v.literal("snapshot"), v.literal("thin")),
+    attemptCount: v.number(),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    processedAt: v.optional(v.number()),
+  }).index("eventId", ["eventId"]),
+
   subscriptions: defineTable({
     subscriptionId: v.string(), // Stripe subscription ID
     userId: v.id("users"),

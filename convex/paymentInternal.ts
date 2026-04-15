@@ -105,6 +105,9 @@ export const updateCheckoutSession = internalMutation({
       return null;
     }
 
+    const shouldTriggerCompletionSideEffects =
+      args.status === "complete" && session.status !== "complete";
+
     await ctx.db.patch(session._id, {
       status: args.status,
       customerId: args.customerId,
@@ -112,7 +115,7 @@ export const updateCheckoutSession = internalMutation({
       completedAt: args.status === "complete" ? Date.now() : undefined,
     });
 
-    if (args.status === "complete") {
+    if (shouldTriggerCompletionSideEffects) {
       await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
         userId: session.userId,
       });
@@ -204,7 +207,15 @@ export const getCheckoutSessionByCustomerId = internalQuery({
     _id: v.id("checkoutSessions"),
     userId: v.id("users"),
     sessionId: v.string(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("complete"),
+      v.literal("expired"),
+    ),
     customerId: v.optional(v.string()),
+    subscriptionId: v.optional(v.string()),
+    createdAt: v.number(),
+    completedAt: v.optional(v.number()),
   })),
   handler: async (ctx, args) => {
     const sessions = await ctx.db
@@ -216,8 +227,29 @@ export const getCheckoutSessionByCustomerId = internalQuery({
       _id: s._id,
       userId: s.userId,
       sessionId: s.sessionId,
+      status: s.status,
       customerId: s.customerId,
+      subscriptionId: s.subscriptionId,
+      createdAt: s.createdAt,
+      completedAt: s.completedAt,
     }));
+  },
+});
+
+/**
+ * Internal query to resolve a user from a Stripe customer id.
+ */
+export const getUserIdByStripeCustomerId = internalQuery({
+  args: {
+    customerId: v.string(),
+  },
+  returns: v.union(v.id("users"), v.null()),
+  handler: async (ctx, args) => {
+    const user = await ctx.db
+      .query("users")
+      .withIndex("stripeCustomerId", (q) => q.eq("stripeCustomerId", args.customerId))
+      .first();
+    return user?._id ?? null;
   },
 });
 
@@ -255,6 +287,58 @@ export const getCheckoutSessionBySessionId = internalQuery({
       customerId: session.customerId,
       subscriptionId: session.subscriptionId,
     };
+  },
+});
+
+/**
+ * Internal query to get checkout sessions created/completed since a timestamp.
+ * Used by hourly Stripe refresh cron while webhooks are not fully enabled.
+ */
+export const getCheckoutSessionsSince = internalQuery({
+  args: {
+    sinceMs: v.number(),
+  },
+  returns: v.array(
+    v.object({
+      sessionId: v.string(),
+      userId: v.id("users"),
+      status: v.union(
+        v.literal("pending"),
+        v.literal("complete"),
+        v.literal("expired"),
+      ),
+      customerId: v.optional(v.string()),
+      subscriptionId: v.optional(v.string()),
+      createdAt: v.number(),
+      completedAt: v.optional(v.number()),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    const sessions: Array<{
+      sessionId: string;
+      userId: Id<"users">;
+      status: "pending" | "complete" | "expired";
+      customerId?: string;
+      subscriptionId?: string;
+      createdAt: number;
+      completedAt?: number;
+    }> = [];
+
+    for await (const s of ctx.db.query("checkoutSessions")) {
+      if (s.createdAt >= args.sinceMs || (s.completedAt ?? 0) >= args.sinceMs) {
+        sessions.push({
+          sessionId: s.sessionId,
+          userId: s.userId,
+          status: s.status,
+          customerId: s.customerId,
+          subscriptionId: s.subscriptionId,
+          createdAt: s.createdAt,
+          completedAt: s.completedAt,
+        });
+      }
+    }
+
+    return sessions;
   },
 });
 
@@ -544,6 +628,80 @@ export const clearUserStripeCustomerId = internalMutation({
     if (user.stripeCustomerId) {
       await ctx.db.patch(args.userId, { stripeCustomerId: undefined });
     }
+    return null;
+  },
+});
+
+/**
+ * Mark a Stripe webhook event as being processed.
+ * Returns false for already-processed events and for very recent in-flight attempts.
+ */
+export const beginStripeWebhookEventProcessing = internalMutation({
+  args: {
+    eventId: v.string(),
+    eventType: v.string(),
+    source: v.union(v.literal("snapshot"), v.literal("thin")),
+  },
+  returns: v.boolean(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("stripeWebhookEvents")
+      .withIndex("eventId", (q) => q.eq("eventId", args.eventId))
+      .first();
+    const now = Date.now();
+
+    if (!existing) {
+      await ctx.db.insert("stripeWebhookEvents", {
+        eventId: args.eventId,
+        eventType: args.eventType,
+        source: args.source,
+        attemptCount: 1,
+        createdAt: now,
+        updatedAt: now,
+      });
+      return true;
+    }
+
+    if (existing.processedAt) {
+      return false;
+    }
+
+    // Keep duplicate near-simultaneous deliveries from running concurrently.
+    if (now - existing.updatedAt < 5 * 60 * 1000) {
+      return false;
+    }
+
+    await ctx.db.patch(existing._id, {
+      eventType: args.eventType,
+      source: args.source,
+      attemptCount: existing.attemptCount + 1,
+      updatedAt: now,
+    });
+    return true;
+  },
+});
+
+/**
+ * Mark a Stripe webhook event as processed.
+ */
+export const completeStripeWebhookEventProcessing = internalMutation({
+  args: {
+    eventId: v.string(),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    const existing = await ctx.db
+      .query("stripeWebhookEvents")
+      .withIndex("eventId", (q) => q.eq("eventId", args.eventId))
+      .first();
+    if (!existing) {
+      return null;
+    }
+
+    await ctx.db.patch(existing._id, {
+      processedAt: Date.now(),
+      updatedAt: Date.now(),
+    });
     return null;
   },
 });

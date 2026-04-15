@@ -19,6 +19,14 @@ crons.cron(
   {},
 );
 
+// Hourly fallback refresh for recent checkout sessions while webhook setup is in progress
+crons.interval(
+  "refresh-recent-checkout-sessions-hourly",
+  { hours: 1 },
+  internal.payment.refreshRecentCheckoutSessionsFromStripe,
+  {},
+);
+
 // Full Mailchimp audience resync weekly (safety net alongside real-time sync)
 crons.cron(
   "mailchimp-audience-resync",

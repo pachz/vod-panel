@@ -456,6 +456,76 @@ export const getOrCreateStripeCustomer = action({
  * Note: You'll need to set STRIPE_SECRET_KEY in your Convex environment variables.
  * For test mode, use a test key starting with sk_test_
  */
+type CheckoutRefreshResult = {
+  refreshedCount: number;
+  hasActiveSubscription: boolean;
+  activeSubscriptionId?: string;
+};
+
+async function refreshCustomerSubscriptionsForCheckout(
+  ctx: ActionCtx,
+  stripe: Stripe,
+  customerId: string,
+  userId: Id<"users">,
+): Promise<CheckoutRefreshResult> {
+  let startingAfter: string | undefined;
+  let refreshedCount = 0;
+  let hasActiveSubscription = false;
+  let activeSubscriptionId: string | undefined;
+  const nowMs = Date.now();
+
+  // Keep existing dates as fallback if Stripe returns incomplete period fields.
+  const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+    userId,
+  });
+  const existingDates = existingSub
+    ? {
+        currentPeriodStart: existingSub.currentPeriodStart,
+        currentPeriodEnd: existingSub.currentPeriodEnd,
+      }
+    : undefined;
+
+  for (;;) {
+    const page = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+      ...(startingAfter ? { starting_after: startingAfter } : {}),
+    });
+
+    for (const thin of page.data) {
+      const full = await stripe.subscriptions.retrieve(thin.id, {
+        expand: ["items.data.price"],
+      });
+      await persistStripeSubscriptionForConvex(ctx, full, userId, existingDates);
+      refreshedCount += 1;
+
+      const isAccessLikeStatus =
+        full.status === "active" || full.status === "trialing";
+      const periodEndMs = stripeSubscriptionPeriodEndMs(full);
+      const hasCurrentAccess =
+        isAccessLikeStatus && (periodEndMs === null || periodEndMs >= nowMs);
+      if (hasCurrentAccess) {
+        hasActiveSubscription = true;
+        if (!activeSubscriptionId) {
+          activeSubscriptionId = full.id;
+        }
+      }
+    }
+
+    if (!page.has_more || page.data.length === 0) {
+      break;
+    }
+    startingAfter = page.data[page.data.length - 1]!.id;
+  }
+
+  return {
+    refreshedCount,
+    hasActiveSubscription,
+    activeSubscriptionId,
+  };
+}
+
 export const createCheckoutSession = action({
   args: {
     priceId: v.optional(v.string()),
@@ -521,6 +591,19 @@ export const createCheckoutSession = action({
     const stripe = new Stripe(stripeSecretKey);
 
     try {
+      // Refresh Stripe-side subscriptions first so Convex state is up-to-date before checkout.
+      const checkoutRefresh = await refreshCustomerSubscriptionsForCheckout(
+        ctx,
+        stripe,
+        customerId,
+        userIdTyped,
+      );
+      if (checkoutRefresh.hasActiveSubscription) {
+        throw new Error(
+          `You already have an active Stripe subscription (${checkoutRefresh.activeSubscriptionId ?? "unknown"}). Please manage your current subscription first.`,
+        );
+      }
+
       // Create checkout session with selected price and customer
       const session: Stripe.Checkout.Session = await stripe.checkout.sessions.create({
         mode: "subscription",
@@ -1050,6 +1133,218 @@ export const syncAllSubscriptionsFromStripe = internalAction({
       );
     }
     return { synced, errors };
+  },
+});
+
+/**
+ * Internal action: refresh checkout sessions from the past hour against Stripe.
+ * Safety net while webhook handling is being finalized.
+ */
+export const refreshRecentCheckoutSessionsFromStripe = internalAction({
+  args: {},
+  returns: v.object({
+    sessionsSeen: v.number(),
+    sessionsUpdated: v.number(),
+    subscriptionsUpserted: v.number(),
+    errors: v.number(),
+  }),
+  handler: async (ctx): Promise<{
+    sessionsSeen: number;
+    sessionsUpdated: number;
+    subscriptionsUpserted: number;
+    errors: number;
+  }> => {
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      console.error(
+        "STRIPE_SECRET_KEY is not configured; skipping hourly checkout session refresh.",
+      );
+      return {
+        sessionsSeen: 0,
+        sessionsUpdated: 0,
+        subscriptionsUpserted: 0,
+        errors: 0,
+      };
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
+    const sinceMs = Date.now() - 60 * 60 * 1000;
+    const recentSessions: Array<{
+      sessionId: string;
+      userId: Id<"users">;
+      status: "pending" | "complete" | "expired";
+      customerId?: string;
+      subscriptionId?: string;
+      createdAt: number;
+      completedAt?: number;
+    }> = await ctx.runQuery(
+      internal.paymentInternal.getCheckoutSessionsSince,
+      { sinceMs },
+    );
+
+    let sessionsUpdated = 0;
+    let subscriptionsUpserted = 0;
+    let errors = 0;
+    const customerToUser = new Map<string, Id<"users">>();
+    const subscriptionIdsSynced = new Set<string>();
+
+    for (const row of recentSessions) {
+      try {
+        const session = await stripe.checkout.sessions.retrieve(row.sessionId, {
+          expand: ["subscription"],
+        });
+
+        const customerId =
+          typeof session.customer === "string"
+            ? session.customer
+            : session.customer?.id;
+        if (customerId) {
+          customerToUser.set(customerId, row.userId);
+          await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+            userId: row.userId,
+            stripeCustomerId: customerId,
+          });
+        }
+
+        await ctx.runMutation(internal.paymentInternal.updateCheckoutSession, {
+          sessionId: session.id,
+          customerId,
+          subscriptionId:
+            typeof session.subscription === "string"
+              ? session.subscription
+              : session.subscription?.id,
+          status: session.payment_status === "paid" ? "complete" : "expired",
+        });
+        sessionsUpdated += 1;
+
+        const sessionSubscriptionId =
+          typeof session.subscription === "string"
+            ? session.subscription
+            : session.subscription?.id;
+        if (!sessionSubscriptionId || subscriptionIdsSynced.has(sessionSubscriptionId)) {
+          continue;
+        }
+
+        const existing = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+          userId: row.userId,
+        });
+        const existingDates = existing
+          ? {
+              currentPeriodStart: existing.currentPeriodStart,
+              currentPeriodEnd: existing.currentPeriodEnd,
+            }
+          : undefined;
+
+        const resolved = await resolveStripeSubscriptionForSync(
+          stripe,
+          sessionSubscriptionId,
+        );
+        await persistStripeSubscriptionForConvex(
+          ctx,
+          resolved,
+          row.userId,
+          existingDates,
+        );
+        subscriptionIdsSynced.add(resolved.id);
+        subscriptionsUpserted += 1;
+
+        if (
+          resolved.id !== sessionSubscriptionId &&
+          !subscriptionIdsSynced.has(sessionSubscriptionId)
+        ) {
+          const original = await stripe.subscriptions.retrieve(sessionSubscriptionId, {
+            expand: ["items.data.price"],
+          });
+          await persistStripeSubscriptionForConvex(
+            ctx,
+            original,
+            row.userId,
+            existingDates,
+          );
+          subscriptionIdsSynced.add(original.id);
+          subscriptionsUpserted += 1;
+        }
+      } catch (err) {
+        console.error(
+          `[refreshRecentCheckoutSessionsFromStripe] failed for session ${row.sessionId}:`,
+          err,
+        );
+        errors += 1;
+      }
+    }
+
+    for (const [customerId, userId] of customerToUser.entries()) {
+      try {
+        const existing = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+          userId,
+        });
+        const existingDates = existing
+          ? {
+              currentPeriodStart: existing.currentPeriodStart,
+              currentPeriodEnd: existing.currentPeriodEnd,
+            }
+          : undefined;
+
+        let startingAfter: string | undefined;
+        for (;;) {
+          const page = await stripe.subscriptions.list({
+            customer: customerId,
+            status: "all",
+            limit: 100,
+            ...(startingAfter ? { starting_after: startingAfter } : {}),
+          });
+
+          for (const thin of page.data) {
+            if (subscriptionIdsSynced.has(thin.id)) {
+              continue;
+            }
+            try {
+              const full = await stripe.subscriptions.retrieve(thin.id, {
+                expand: ["items.data.price"],
+              });
+              await persistStripeSubscriptionForConvex(
+                ctx,
+                full,
+                userId,
+                existingDates,
+              );
+              subscriptionIdsSynced.add(full.id);
+              subscriptionsUpserted += 1;
+            } catch (err) {
+              console.error(
+                `[refreshRecentCheckoutSessionsFromStripe] failed syncing subscription ${thin.id}:`,
+                err,
+              );
+              errors += 1;
+            }
+          }
+
+          if (!page.has_more || page.data.length === 0) {
+            break;
+          }
+          startingAfter = page.data[page.data.length - 1]!.id;
+        }
+      } catch (err) {
+        console.error(
+          `[refreshRecentCheckoutSessionsFromStripe] failed scanning customer ${customerId}:`,
+          err,
+        );
+        errors += 1;
+      }
+    }
+
+    if (recentSessions.length > 0) {
+      console.log(
+        `[refreshRecentCheckoutSessionsFromStripe] complete: ${recentSessions.length} sessions seen, ${sessionsUpdated} sessions updated, ${subscriptionsUpserted} subscription upserts, ${errors} errors`,
+      );
+    }
+
+    return {
+      sessionsSeen: recentSessions.length,
+      sessionsUpdated,
+      subscriptionsUpserted,
+      errors,
+    };
   },
 });
 
@@ -1600,6 +1895,22 @@ export const handleStripeWebhook = internalAction({
       type: event.type,
     });
 
+    const shouldProcessEvent = await ctx.runMutation(
+      internal.paymentInternal.beginStripeWebhookEventProcessing,
+      {
+        eventId: event.id,
+        eventType: event.type,
+        source: "snapshot",
+      },
+    );
+    if (!shouldProcessEvent) {
+      console.log("Skipping already-processed or in-flight Stripe snapshot event", {
+        id: event.id,
+        type: event.type,
+      });
+      return { received: true };
+    }
+
     // Handle different event types
     switch (event.type) {
       // SNAPSHOT endpoint is configured in Stripe to send full resource objects,
@@ -1626,6 +1937,11 @@ export const handleStripeWebhook = internalAction({
       default:
         console.log(`Unhandled event type: ${event.type}`);
     }
+
+    await ctx.runMutation(
+      internal.paymentInternal.completeStripeWebhookEventProcessing,
+      { eventId: event.id },
+    );
 
     return { received: true };
   },
@@ -1675,6 +1991,22 @@ export const handleStripeThinWebhook = internalAction({
       id: event.id,
       type: event.type,
     });
+
+    const shouldProcessEvent = await ctx.runMutation(
+      internal.paymentInternal.beginStripeWebhookEventProcessing,
+      {
+        eventId: event.id,
+        eventType: event.type,
+        source: "thin",
+      },
+    );
+    if (!shouldProcessEvent) {
+      console.log("Skipping already-processed or in-flight Stripe THIN event", {
+        id: event.id,
+        type: event.type,
+      });
+      return { received: true };
+    }
 
     switch (event.type) {
       case "checkout.session.completed": {
@@ -1730,6 +2062,11 @@ export const handleStripeThinWebhook = internalAction({
       default:
         console.log(`Unhandled THIN event type: ${event.type}`);
     }
+
+    await ctx.runMutation(
+      internal.paymentInternal.completeStripeWebhookEventProcessing,
+      { eventId: event.id },
+    );
 
     return { received: true };
   },
@@ -1810,11 +2147,45 @@ async function handleCheckoutSessionCompleted(
   }
 }
 
+async function resolveUserIdForStripeCustomer(
+  ctx: ActionCtx,
+  customerId: string,
+): Promise<Id<"users"> | null> {
+  const userFromCustomer = await ctx.runQuery(
+    internal.paymentInternal.getUserIdByStripeCustomerId,
+    { customerId },
+  );
+  if (userFromCustomer) {
+    return userFromCustomer as Id<"users">;
+  }
+
+  const checkoutSessions = await ctx.runQuery(
+    internal.paymentInternal.getCheckoutSessionByCustomerId,
+    { customerId },
+  );
+
+  if (!checkoutSessions || checkoutSessions.length === 0) {
+    return null;
+  }
+
+  // Deterministic fallback: prefer most recently completed session, then newest created.
+  const sorted = [...checkoutSessions].sort((a, b) => {
+    const aTime = a.completedAt ?? a.createdAt;
+    const bTime = b.completedAt ?? b.createdAt;
+    if (bTime !== aTime) {
+      return bTime - aTime;
+    }
+    return b.sessionId.localeCompare(a.sessionId);
+  });
+
+  return (sorted[0]?.userId as Id<"users"> | undefined) ?? null;
+}
+
 /**
  * Handle subscription created/updated events
  */
 async function handleSubscriptionUpdate(
-  ctx: any,
+  ctx: ActionCtx,
   stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
@@ -1827,19 +2198,14 @@ async function handleSubscriptionUpdate(
     ? subscriptionExpanded.customer
     : subscriptionExpanded.customer.id;
 
-  const checkoutSessions = await ctx.runQuery(internal.paymentInternal.getCheckoutSessionByCustomerId, {
-    customerId,
-  });
-
-  if (!checkoutSessions || checkoutSessions.length === 0) {
-    console.error(`No checkout session found for customer ${customerId}`);
+  const userId = await resolveUserIdForStripeCustomer(ctx, customerId);
+  if (!userId) {
+    console.error(`No mapped user found for Stripe customer ${customerId}`);
     return;
   }
 
-  const userId = checkoutSessions[0].userId;
-
   const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
-    userId: userId as Id<"users">,
+    userId,
   });
 
   const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
@@ -1850,7 +2216,7 @@ async function handleSubscriptionUpdate(
 
   await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscriptionExpanded.id,
-    userId: userId as Id<"users">,
+    userId,
     customerId: customerId,
     status: subscriptionExpanded.status as any,
     currentPeriodStart: dates.currentPeriodStart,
@@ -1866,7 +2232,7 @@ async function handleSubscriptionUpdate(
  * Handle subscription deleted event
  */
 async function handleSubscriptionDeleted(
-  ctx: any,
+  ctx: ActionCtx,
   stripe: Stripe,
   subscription: Stripe.Subscription
 ) {
@@ -1879,19 +2245,14 @@ async function handleSubscriptionDeleted(
     ? subscriptionExpanded.customer
     : subscriptionExpanded.customer.id;
 
-  const checkoutSessions = await ctx.runQuery(internal.paymentInternal.getCheckoutSessionByCustomerId, {
-    customerId,
-  });
-
-  if (!checkoutSessions || checkoutSessions.length === 0) {
-    console.error(`No checkout session found for customer ${customerId}`);
+  const userId = await resolveUserIdForStripeCustomer(ctx, customerId);
+  if (!userId) {
+    console.error(`No mapped user found for Stripe customer ${customerId}`);
     return;
   }
 
-  const userId = checkoutSessions[0].userId;
-
   const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
-    userId: userId as Id<"users">,
+    userId,
   });
 
   const dates = getSubscriptionDates(subscriptionExpanded, existingSub ? {
@@ -1902,7 +2263,7 @@ async function handleSubscriptionDeleted(
 
   await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscriptionExpanded.id,
-    userId: userId as Id<"users">,
+    userId,
     customerId: customerId,
     status: "canceled" as const,
     currentPeriodStart: dates.currentPeriodStart,
