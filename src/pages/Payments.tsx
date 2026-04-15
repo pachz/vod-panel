@@ -1,9 +1,12 @@
 import { usePayments } from "./Payments/usePayments";
+import { useNavigate } from "react-router-dom";
 import { SubscriptionStatusCard } from "./Payments/SubscriptionStatusCard";
 import { AdminProductManagement } from "./Payments/AdminProductManagement";
+import { AdminMultipleActiveSubscriptions } from "./Payments/AdminMultipleActiveSubscriptions";
 import { SubscribeCard } from "./Payments/SubscribeCard";
 
 const Payments = () => {
+  const navigate = useNavigate();
   const {
     t,
     isRTL,
@@ -11,6 +14,7 @@ const Payments = () => {
     subscription,
     paymentSettings,
     isAdmin,
+    usersWithMultipleActiveSubscriptions,
     isLoading,
     isSyncing,
     isReactivating,
@@ -70,25 +74,31 @@ const Payments = () => {
       />
 
       {isAdmin && (
-        <AdminProductManagement
-          paymentSettings={paymentSettings}
-          stripeProducts={stripeProducts}
-          selectedProductId={selectedProductId}
-          setSelectedProductId={setSelectedProductId}
-          selectedMonthlyPriceId={selectedMonthlyPriceId}
-          setSelectedMonthlyPriceId={setSelectedMonthlyPriceId}
-          selectedYearlyPriceId={selectedYearlyPriceId}
-          setSelectedYearlyPriceId={setSelectedYearlyPriceId}
-          monthlyPrices={monthlyPrices}
-          yearlyPrices={yearlyPrices}
-          isFetchingProducts={isFetchingProducts}
-          isSavingSettings={isSavingSettings}
-          isRTL={isRTL}
-          t={t}
-          translateInterval={translateInterval}
-          onFetchProducts={handleFetchProducts}
-          onSaveSettings={handleSaveSettings}
-        />
+        <>
+          <AdminMultipleActiveSubscriptions
+            usersWithMultipleActiveSubscriptions={usersWithMultipleActiveSubscriptions}
+            onOpenUser={(userId) => navigate(`/users/${userId}/info`)}
+          />
+          <AdminProductManagement
+            paymentSettings={paymentSettings}
+            stripeProducts={stripeProducts}
+            selectedProductId={selectedProductId}
+            setSelectedProductId={setSelectedProductId}
+            selectedMonthlyPriceId={selectedMonthlyPriceId}
+            setSelectedMonthlyPriceId={setSelectedMonthlyPriceId}
+            selectedYearlyPriceId={selectedYearlyPriceId}
+            setSelectedYearlyPriceId={setSelectedYearlyPriceId}
+            monthlyPrices={monthlyPrices}
+            yearlyPrices={yearlyPrices}
+            isFetchingProducts={isFetchingProducts}
+            isSavingSettings={isSavingSettings}
+            isRTL={isRTL}
+            t={t}
+            translateInterval={translateInterval}
+            onFetchProducts={handleFetchProducts}
+            onSaveSettings={handleSaveSettings}
+          />
+        </>
       )}
 
       {subscription && subscription.status === "canceled" && (

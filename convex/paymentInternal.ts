@@ -734,6 +734,108 @@ export const getMySubscription = query({
 });
 
 /**
+ * Admin-only query to list users that currently have more than one active/trialing subscription.
+ * This helps identify duplicates that need cleanup or reimbursement.
+ */
+export const getUsersWithMultipleActiveSubscriptions = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      userId: v.id("users"),
+      email: v.optional(v.string()),
+      name: v.optional(v.string()),
+      activeSubscriptionCount: v.number(),
+      subscriptions: v.array(
+        v.object({
+          subscriptionId: v.string(),
+          status: v.union(v.literal("active"), v.literal("trialing")),
+          currentPeriodStart: v.number(),
+          currentPeriodEnd: v.number(),
+          cancelAtPeriodEnd: v.boolean(),
+          createdAt: v.number(),
+        }),
+      ),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const nowMs = Date.now();
+    const activeSubsByUser = new Map<
+      Id<"users">,
+      Array<{
+        subscriptionId: string;
+        status: "active" | "trialing";
+        currentPeriodStart: number;
+        currentPeriodEnd: number;
+        cancelAtPeriodEnd: boolean;
+        createdAt: number;
+      }>
+    >();
+
+    for await (const sub of ctx.db.query("subscriptions")) {
+      if (
+        (sub.status === "active" || sub.status === "trialing") &&
+        sub.currentPeriodEnd >= nowMs
+      ) {
+        const current = activeSubsByUser.get(sub.userId) ?? [];
+        current.push({
+          subscriptionId: sub.subscriptionId,
+          status: sub.status,
+          currentPeriodStart: sub.currentPeriodStart,
+          currentPeriodEnd: sub.currentPeriodEnd,
+          cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+          createdAt: sub.createdAt,
+        });
+        activeSubsByUser.set(sub.userId, current);
+      }
+    }
+
+    const result: Array<{
+      userId: Id<"users">;
+      email?: string;
+      name?: string;
+      activeSubscriptionCount: number;
+      subscriptions: Array<{
+        subscriptionId: string;
+        status: "active" | "trialing";
+        currentPeriodStart: number;
+        currentPeriodEnd: number;
+        cancelAtPeriodEnd: boolean;
+        createdAt: number;
+      }>;
+    }> = [];
+
+    for (const [userId, subscriptions] of activeSubsByUser.entries()) {
+      if (subscriptions.length <= 1) {
+        continue;
+      }
+      const user = await ctx.db.get(userId);
+      if (!user || user.deletedAt) {
+        continue;
+      }
+      subscriptions.sort((a, b) => b.currentPeriodEnd - a.currentPeriodEnd);
+      result.push({
+        userId,
+        email: user.email,
+        name: user.name,
+        activeSubscriptionCount: subscriptions.length,
+        subscriptions,
+      });
+    }
+
+    result.sort((a, b) => {
+      if (b.activeSubscriptionCount !== a.activeSubscriptionCount) {
+        return b.activeSubscriptionCount - a.activeSubscriptionCount;
+      }
+      return (a.email ?? "").localeCompare(b.email ?? "");
+    });
+
+    return result;
+  },
+});
+
+/**
  * Internal mutation to reset subscription status when Stripe customer is not found
  * Clears the stripeCustomerId from user and marks subscription as canceled
  */

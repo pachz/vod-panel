@@ -56,6 +56,21 @@ export type StripeProduct = {
   prices: StripePrice[];
 };
 
+export type UserWithMultipleActiveSubscriptions = {
+  userId: string;
+  email?: string;
+  name?: string;
+  activeSubscriptionCount: number;
+  subscriptions: Array<{
+    subscriptionId: string;
+    status: "active" | "trialing";
+    currentPeriodStart: number;
+    currentPeriodEnd: number;
+    cancelAtPeriodEnd: boolean;
+    createdAt: number;
+  }>;
+};
+
 export function usePayments() {
   const [searchParams, setSearchParams] = useSearchParams();
   const { t, isRTL, translateInterval } = useLanguage();
@@ -86,6 +101,10 @@ export function usePayments() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const isAdmin = currentUser?.isGod ?? false;
+  const usersWithMultipleActiveSubscriptions = useQuery(
+    api.paymentInternal.getUsersWithMultipleActiveSubscriptions,
+    isAdmin ? {} : "skip",
+  ) as UserWithMultipleActiveSubscriptions[] | undefined;
 
   useEffect(() => {
     const success = searchParams.get("success");
@@ -320,6 +339,7 @@ export function usePayments() {
     subscription,
     paymentSettings,
     isAdmin,
+    usersWithMultipleActiveSubscriptions,
     isLoading,
     isSyncing,
     isReactivating,
