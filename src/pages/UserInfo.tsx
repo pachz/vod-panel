@@ -83,7 +83,7 @@ const UserInfo = () => {
     subscription &&
     (subscription.status === "active" || subscription.status === "trialing") &&
     isPeriodActive(subscription.currentPeriodEnd);
-  const canGrantSubscription = !user.isGod && !hasActiveSubscription;
+  const canGrantSubscription = !user.isGod && !user.isTech && !hasActiveSubscription;
 
   const handleRefreshSubscription = async () => {
     if (!id) return;
@@ -217,11 +217,15 @@ const UserInfo = () => {
                 Role
               </div>
               <div>
-                {user.isGod ? (
-                  <Badge variant="default">Administrator</Badge>
-                ) : (
-                  <Badge variant="secondary">User</Badge>
-                )}
+                <div className="flex flex-wrap gap-2">
+                  {user.isGod && <Badge variant="default">Administrator</Badge>}
+                  {user.isTech && (
+                    <Badge variant="outline" className="uppercase tracking-wide text-[10px]">
+                      Tech
+                    </Badge>
+                  )}
+                  {!user.isGod && !user.isTech && <Badge variant="secondary">User</Badge>}
+                </div>
               </div>
             </div>
           </div>

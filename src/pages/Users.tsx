@@ -328,6 +328,7 @@ const Users = () => {
           phone?: string;
           password: string;
           isAdmin: boolean;
+          isTech: boolean;
         };
         await createUser({
           name: validated.name,
@@ -335,6 +336,7 @@ const Users = () => {
           phone: validated.phone,
           password: validated.password,
           isAdmin: validated.isAdmin,
+          isTech: validated.isTech,
         });
         toast.success("User created successfully");
       }

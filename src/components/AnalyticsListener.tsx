@@ -21,6 +21,12 @@ const pushGtmVirtualPageView = (pathname: string, search: string, hash: string) 
   });
 };
 
+const toAnalyticsRole = (user: { isGod?: boolean; isTech?: boolean }) => {
+  if (user.isTech) return "tech";
+  if (user.isGod) return "admin";
+  return "user";
+};
+
 const AnalyticsListener = () => {
   const location = useLocation();
   const { isAuthenticated, isLoading: isAuthLoading } = useConvexAuth();
@@ -65,12 +71,13 @@ const AnalyticsListener = () => {
       return;
     }
 
+    const role = toAnalyticsRole(currentUser);
     const ready = setPosthogUser({
       id: currentUser._id,
       email: currentUser.email,
       name: currentUser.name,
       phone: currentUser.phone,
-      role: currentUser.isGod ? "admin" : "user",
+      role,
     });
 
     if (ready && identifiedUserRef.current !== currentUser._id) {
@@ -79,7 +86,7 @@ const AnalyticsListener = () => {
           email: currentUser.email ?? undefined,
           name: currentUser.name ?? undefined,
           phone: currentUser.phone ?? undefined,
-          role: currentUser.isGod ? "admin" : "user",
+          role,
         },
       });
       identifiedUserRef.current = currentUser._id;

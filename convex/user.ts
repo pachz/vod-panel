@@ -96,6 +96,23 @@ export const listUsers = query(async (ctx) => {
 
 const PAGE_SIZE = 25;
 
+const userListItemValidator = v.object({
+  _id: v.id("users"),
+  _creationTime: v.number(),
+  name: v.optional(v.string()),
+  email: v.optional(v.string()),
+  name_search: v.optional(v.string()),
+  phone: v.optional(v.string()),
+  image: v.optional(v.string()),
+  emailVerificationTime: v.optional(v.number()),
+  phoneVerificationTime: v.optional(v.number()),
+  isAnonymous: v.optional(v.boolean()),
+  isGod: v.optional(v.boolean()),
+  isTech: v.optional(v.boolean()),
+  deletedAt: v.optional(v.number()),
+  stripeCustomerId: v.optional(v.string()),
+});
+
 /**
  * Paginated list of users (admin only). Uses index for scalability.
  * Pass isGod to filter by role: true = admins only, false = regular only, undefined = all.
@@ -107,23 +124,7 @@ export const listUsersPaginated = query({
     isGod: v.optional(v.boolean()),
   },
   returns: v.object({
-    page: v.array(
-      v.object({
-        _id: v.id("users"),
-        _creationTime: v.number(),
-        name: v.optional(v.string()),
-        email: v.optional(v.string()),
-        name_search: v.optional(v.string()),
-        phone: v.optional(v.string()),
-        image: v.optional(v.string()),
-        emailVerificationTime: v.optional(v.number()),
-        phoneVerificationTime: v.optional(v.number()),
-        isAnonymous: v.optional(v.boolean()),
-        isGod: v.optional(v.boolean()),
-        deletedAt: v.optional(v.number()),
-        stripeCustomerId: v.optional(v.string()),
-      }),
-    ),
+    page: v.array(userListItemValidator),
     isDone: v.boolean(),
     continueCursor: v.union(v.string(), v.null()),
   }),
@@ -210,23 +211,7 @@ export const searchUsers = query({
     searchTerm: v.string(),
     limit: v.optional(v.number()),
   },
-  returns: v.array(
-    v.object({
-      _id: v.id("users"),
-      _creationTime: v.number(),
-      name: v.optional(v.string()),
-      email: v.optional(v.string()),
-      name_search: v.optional(v.string()),
-      phone: v.optional(v.string()),
-      image: v.optional(v.string()),
-      emailVerificationTime: v.optional(v.number()),
-      phoneVerificationTime: v.optional(v.number()),
-      isAnonymous: v.optional(v.boolean()),
-      isGod: v.optional(v.boolean()),
-      deletedAt: v.optional(v.number()),
-      stripeCustomerId: v.optional(v.string()),
-    }),
-  ),
+  returns: v.array(userListItemValidator),
   handler: async (ctx, args) => {
     await requireUser(ctx, { requireGod: true });
 
@@ -434,6 +419,7 @@ export const createUserRecord = internalMutation({
     email: v.string(),
     phone: v.optional(v.string()),
     isAdmin: v.boolean(),
+    isTech: v.optional(v.boolean()),
   },
   returns: v.object({
     userId: v.id("users"),
@@ -457,6 +443,7 @@ export const createUserRecord = internalMutation({
         name_search: buildNameSearch(args.name, args.email),
         phone,
         isGod: args.isAdmin,
+        isTech: args.isTech ?? false,
         emailVerificationTime: existing.emailVerificationTime ?? Date.now(),
         deletedAt: undefined,
       });
@@ -483,6 +470,7 @@ export const createUserRecord = internalMutation({
       name_search: buildNameSearch(args.name, args.email),
       phone,
       isGod: args.isAdmin,
+      isTech: args.isTech ?? false,
       emailVerificationTime: Date.now(), // Auto-verify for admin-created users
     });
 
@@ -604,6 +592,7 @@ export const registerUser = action({
         email: validated.email,
         phone: undefined,
         isAdmin: false,
+        isTech: false,
       },
     );
 
@@ -619,9 +608,10 @@ export const createUser = action({
     phone: v.optional(v.string()),
     password: v.string(),
     isAdmin: v.optional(v.boolean()),
+    isTech: v.optional(v.boolean()),
   },
   returns: v.id("users"),
-  handler: async (ctx, { name, email, phone, password, isAdmin }): Promise<Id<"users">> => {
+  handler: async (ctx, { name, email, phone, password, isAdmin, isTech }): Promise<Id<"users">> => {
     // Check auth and admin status
     await requireUserAction(ctx);
     await ctx.runQuery(internal.user.requireAdminQuery);
@@ -632,7 +622,7 @@ export const createUser = action({
       phone,
       password,
       isAdmin: isAdmin ?? false,
-      isTech: false,
+      isTech: isTech ?? false,
     });
 
     // Check if user already exists before creating auth account
@@ -674,6 +664,7 @@ export const createUser = action({
         email: validated.email,
         phone: validated.phone,
         isAdmin: validated.isAdmin,
+        isTech: validated.isTech,
       },
     );
 
@@ -1060,6 +1051,7 @@ export const getUserInfo = query({
         email: user.email,
         phone: user.phone,
         isGod: user.isGod,
+        isTech: user.isTech,
         emailVerificationTime: user.emailVerificationTime,
         createdAt: user._creationTime,
         stripeCustomerId: user.stripeCustomerId,
@@ -1167,7 +1159,9 @@ export const getAllUsersForExport = internalQuery({
     const users = await ctx.db.query("users").collect();
     
     // Filter out deleted users and admins
-    const normalUsers = users.filter((user) => user.deletedAt === undefined && !user.isGod);
+    const normalUsers = users.filter(
+      (user) => user.deletedAt === undefined && !user.isGod && !user.isTech,
+    );
     
     // Get subscription status for each user
     const nowMs = Date.now();

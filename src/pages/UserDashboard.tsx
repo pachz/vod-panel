@@ -68,6 +68,10 @@ const UserDashboard = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
+  if (currentUser?.isTech) {
+    return <Navigate to="/subscription-plans" replace />;
+  }
+
   const hasNoCourses = !isLoading && userCourses && userCourses.length === 0;
 
   // Show loading state while data is being fetched
