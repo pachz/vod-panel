@@ -334,6 +334,16 @@ export const getCurrentUserInternal = internalQuery({
   },
 });
 
+// Internal query to check if user is tech staff (for subscription plans and related actions)
+export const requireTechQuery = internalQuery({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireTech: true });
+    return null;
+  },
+});
+
 // Internal query to check if user is admin (for use in actions)
 export const requireAdminQuery = internalQuery({
   handler: async (ctx) => {
@@ -508,7 +518,7 @@ export const backfillNameSearch = internalMutation({
   },
 });
 
-/** Internal mutation to ensure all users have an explicit isGod boolean (treat unset as false). */
+/** Internal mutation to ensure all users have explicit isGod/isTech booleans (treat unset as false). */
 export const backfillIsGodFlag = internalMutation({
   args: {},
   returns: v.number(),
@@ -517,8 +527,15 @@ export const backfillIsGodFlag = internalMutation({
     let updated = 0;
 
     for (const user of users) {
+      const patch: { isGod?: boolean; isTech?: boolean } = {};
       if (user.isGod === undefined) {
-        await ctx.db.patch(user._id, { isGod: false });
+        patch.isGod = false;
+      }
+      if (user.isTech === undefined) {
+        patch.isTech = false;
+      }
+      if (Object.keys(patch).length > 0) {
+        await ctx.db.patch(user._id, patch);
         updated += 1;
       }
     }
@@ -669,8 +686,9 @@ export const updateUser = mutation({
     email: v.string(),
     phone: v.optional(v.string()),
     isAdmin: v.optional(v.boolean()),
+    isTech: v.optional(v.boolean()),
   },
-  handler: async (ctx, { id, name, email, phone, isAdmin }) => {
+  handler: async (ctx, { id, name, email, phone, isAdmin, isTech }) => {
     const { user: currentUser } = (await requireUser(ctx, {
       requireGod: true,
     })) as { identity: any; user: any };
@@ -689,6 +707,7 @@ export const updateUser = mutation({
       email,
       phone,
       isAdmin: isAdmin ?? false,
+      isTech: isTech ?? false,
     });
 
     // Prevent email changes
@@ -707,12 +726,20 @@ export const updateUser = mutation({
       });
     }
 
+    if (user._id === currentUser._id && validated.isTech !== (user.isTech ?? false)) {
+      throw new ConvexError({
+        code: "CANNOT_CHANGE_SELF_ROLE",
+        message: "You cannot change your own tech status.",
+      });
+    }
+
     await ctx.db.patch(id, {
       name: validated.name,
       email: validated.email,
       name_search: buildNameSearch(validated.name, validated.email),
       phone: validated.phone && validated.phone.trim() ? validated.phone.trim() : undefined,
       isGod: validated.isAdmin ?? false,
+      isTech: validated.isTech ?? false,
     });
 
     await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId: id });

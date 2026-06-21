@@ -1,13 +1,14 @@
+import { useMemo } from "react";
 import {
   LayoutDashboard,
   FolderTree,
   BookOpen,
   GraduationCap,
-  PlayCircle,
   Users,
   CreditCard,
   UserRound,
   PanelsTopLeft,
+  Layers,
 } from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -17,11 +18,9 @@ import {
   SidebarContent,
   SidebarGroup,
   SidebarGroupContent,
-  SidebarGroupLabel,
   SidebarMenu,
   SidebarMenuButton,
   SidebarMenuItem,
-  SidebarTrigger,
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
@@ -39,9 +38,12 @@ const adminMenuItems: MenuItem[] = [
   { title: "Courses", url: "/courses", icon: BookOpen },
   { title: "Lessons", url: "/lessons", icon: GraduationCap },
   { title: "Coaches", url: "/coaches", icon: UserRound },
-  // { title: "Video Panel", url: "/video-panel", icon: PlayCircle },
   { title: "Users", url: "/users", icon: Users },
   { title: "Payments", url: "/payments", icon: CreditCard },
+];
+
+const techMenuItems: MenuItem[] = [
+  { title: "Subscription Plans", url: "/subscription-plans", icon: Layers },
 ];
 
 const memberMenuItems: MenuItem[] = [
@@ -55,8 +57,32 @@ export function AdminSidebar() {
   const location = useLocation();
   const currentUser = useQuery(api.user.getCurrentUser);
   const isAdmin = currentUser?.isGod ?? false;
+  const isTech = currentUser?.isTech ?? false;
   const isLoadingUser = currentUser === undefined;
-  const menuItems = isLoadingUser ? memberMenuItems : isAdmin ? adminMenuItems : memberMenuItems;
+
+  const menuItems = useMemo(() => {
+    if (isLoadingUser) {
+      return memberMenuItems;
+    }
+    const items: MenuItem[] = [];
+    if (isAdmin) {
+      items.push(...adminMenuItems);
+    }
+    if (isTech) {
+      items.push(...techMenuItems);
+    }
+    return items.length > 0 ? items : memberMenuItems;
+  }, [isAdmin, isTech, isLoadingUser]);
+
+  const panelLabel = isLoadingUser
+    ? "User Panel"
+    : isAdmin && isTech
+      ? "Admin + Tech Panel"
+      : isAdmin
+        ? "Admin Panel"
+        : isTech
+          ? "Tech Panel"
+          : "User Panel";
 
   const handleLinkClick = () => {
     if (isMobile) {
@@ -67,7 +93,6 @@ export function AdminSidebar() {
   return (
     <Sidebar collapsible="offcanvas" className="border-none bg-transparent">
       <SidebarContent className="sidebar-panel">
-        {/* Logo Header */}
         <div className="px-5 py-6 transition-all duration-300">
           <a
             href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`}
@@ -84,20 +109,16 @@ export function AdminSidebar() {
             {!collapsed && (
               <div className="space-y-1">
                 <h2 className="font-semibold text-base tracking-tight">Reham Diva</h2>
-                <p className="text-xs text-sidebar-foreground/60">
-                  {isLoadingUser ? "User Panel" : isAdmin ? "Admin Panel" : "User Panel"}
-                </p>
+                <p className="text-xs text-sidebar-foreground/60">{panelLabel}</p>
               </div>
             )}
           </a>
         </div>
 
-        {/* Menu Items */}
         <SidebarGroup className="px-3">
           <SidebarGroupContent>
             <SidebarMenu className="space-y-1">
               {menuItems.map((item) => {
-                // For exact matches like /dashboard, check both exact and with wildcard
                 const exactMatch = matchPath({ path: item.url, end: true }, location.pathname);
                 const patternMatch = matchPath({ path: `${item.url}/*`, end: false }, location.pathname);
                 const isActive = Boolean(exactMatch || patternMatch);
@@ -121,16 +142,14 @@ export function AdminSidebar() {
                           )}
                         />
                         {!collapsed && (
-                          <>
-                            <span
-                              className={cn(
-                                "text-sm font-medium tracking-wide transition-colors duration-200",
-                                isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/75",
-                              )}
-                            >
-                              {item.title}
-                            </span>
-                          </>
+                          <span
+                            className={cn(
+                              "text-sm font-medium tracking-wide transition-colors duration-200",
+                              isActive ? "text-sidebar-accent-foreground" : "text-sidebar-foreground/75",
+                            )}
+                          >
+                            {item.title}
+                          </span>
                         )}
                       </Link>
                     </SidebarMenuButton>

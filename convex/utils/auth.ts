@@ -7,6 +7,7 @@ type UserDoc = Doc<"users">;
 
 type RequireUserOptions = {
   requireGod?: boolean;
+  requireTech?: boolean;
 };
 
 type RequireUserResult<T extends boolean = false> = T extends true
@@ -17,7 +18,8 @@ type RequireUserResult<T extends boolean = false> = T extends true
  * Require that a user is authenticated (for queries and mutations)
  * @param ctx - Query or Mutation context
  * @param options - Options for requiring user
- * @param options.requireGod - If true, also requires the user to be an admin (isGod flag)
+ * @param options.requireGod - If true, requires the user to be an admin (isGod flag)
+ * @param options.requireTech - If true, requires the user to be tech staff (isTech flag)
  * @returns Object containing identity and optionally user document
  */
 export const requireUser = async <T extends boolean = false>(
@@ -33,8 +35,8 @@ export const requireUser = async <T extends boolean = false>(
     });
   }
 
-  // If we don't need to check for admin, just return identity
-  if (!options?.requireGod) {
+  const needsRoleCheck = options?.requireGod || options?.requireTech;
+  if (!needsRoleCheck) {
     return { identity } as RequireUserResult<T>;
   }
 
@@ -65,8 +67,14 @@ export const requireUser = async <T extends boolean = false>(
     });
   }
 
-  // Check if user is admin (isGod flag)
-  if (!user.isGod) {
+  if (options?.requireTech && !user.isTech) {
+    throw new ConvexError({
+      code: "UNAUTHORIZED",
+      message: "You must be a tech administrator to access this resource.",
+    });
+  }
+
+  if (options?.requireGod && !user.isGod) {
     throw new ConvexError({
       code: "UNAUTHORIZED",
       message: "You must be an administrator to access this resource.",

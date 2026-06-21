@@ -18,6 +18,8 @@ import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
 import UserInfo from "@/pages/UserInfo";
 import Payments from "@/pages/Payments";
+import SubscriptionPlans from "@/pages/SubscriptionPlans";
+import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
 import Coaches from "@/pages/Coaches";
 import CoachDetail from "@/pages/CoachDetail";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -91,6 +93,36 @@ const AdminRoute = () => {
   }
 
   if (!currentUser?.isGod) {
+    return <Navigate to="/" replace state={{ from: location }} />;
+  }
+
+  return <Outlet />;
+};
+
+const TechRoute = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const location = useLocation();
+
+  if (currentUser === undefined) {
+    return <LoadingScreen />;
+  }
+
+  if (!currentUser?.isTech) {
+    return <Navigate to="/" replace state={{ from: location }} />;
+  }
+
+  return <Outlet />;
+};
+
+const PanelRoute = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const location = useLocation();
+
+  if (currentUser === undefined) {
+    return <LoadingScreen />;
+  }
+
+  if (!currentUser?.isGod && !currentUser?.isTech) {
     return <Navigate to="/" replace state={{ from: location }} />;
   }
 
@@ -181,6 +213,10 @@ const RootRedirect = () => {
     return <Navigate to="/dashboard" replace />;
   }
 
+  if (currentUser?.isTech) {
+    return <Navigate to="/subscription-plans" replace />;
+  }
+
   return <Navigate to="/user-dashboard" replace />;
 };
 
@@ -207,18 +243,24 @@ const App = () => (
       <Route element={<PrivateRoute />}>
         {/* Admin routes - with sidebar */}
         <Route element={<DashboardProviders />}>
-          <Route element={<AdminRoute />}>
-            <Route path="/dashboard" element={<Dashboard />} />
-            <Route path="/categories" element={<Categories />} />
-            <Route path="/courses" element={<Courses />} />
-            <Route path="/courses/:id" element={<CourseDetail />} />
-            <Route path="/lessons" element={<Lessons />} />
-            <Route path="/lessons/:id" element={<LessonDetail />} />
-            <Route path="/video-panel" element={<VideoPanel />} />
-            <Route path="/coaches" element={<Coaches />} />
-            <Route path="/coaches/:id" element={<CoachDetail />} />
-            <Route path="/users" element={<Users />} />
-            <Route path="/users/:id/info" element={<UserInfo />} />
+          <Route element={<PanelRoute />}>
+            <Route element={<AdminRoute />}>
+              <Route path="/dashboard" element={<Dashboard />} />
+              <Route path="/categories" element={<Categories />} />
+              <Route path="/courses" element={<Courses />} />
+              <Route path="/courses/:id" element={<CourseDetail />} />
+              <Route path="/lessons" element={<Lessons />} />
+              <Route path="/lessons/:id" element={<LessonDetail />} />
+              <Route path="/video-panel" element={<VideoPanel />} />
+              <Route path="/coaches" element={<Coaches />} />
+              <Route path="/coaches/:id" element={<CoachDetail />} />
+              <Route path="/users" element={<Users />} />
+              <Route path="/users/:id/info" element={<UserInfo />} />
+            </Route>
+            <Route element={<TechRoute />}>
+              <Route path="/subscription-plans" element={<SubscriptionPlans />} />
+              <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
+            </Route>
           </Route>
         </Route>
         {/* Normal user routes - no sidebar */}

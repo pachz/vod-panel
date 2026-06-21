@@ -16,6 +16,7 @@ export default defineSchema({
     phoneVerificationTime: v.optional(v.number()),
     isAnonymous: v.optional(v.boolean()),
     isGod: v.optional(v.boolean()),
+    isTech: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
     stripeCustomerId: v.optional(v.string()), // Stripe customer ID
   })
@@ -254,4 +255,67 @@ export default defineSchema({
     updatedAt: v.number(),
   })
     .index("selectedProductId", ["selectedProductId"]),
+
+  subscriptionPlans: defineTable({
+    name: v.string(),
+    name_ar: v.string(),
+    slug: v.string(),
+    billingInterval: v.union(v.literal("month"), v.literal("year")),
+    stripeProductId: v.string(),
+    stripePriceId: v.string(),
+    priceAmount: v.number(),
+    priceCurrency: v.string(),
+    compareAtPriceAmount: v.optional(v.number()),
+    priceSubtitle: v.optional(v.string()),
+    theme: v.object({
+      primary: v.string(),
+      secondary: v.string(),
+      border: v.string(),
+      headerBg: v.string(),
+      buttonBg: v.string(),
+    }),
+    badgeTag: v.union(
+      v.literal("start_here"),
+      v.literal("best_value"),
+      v.literal("most_popular"),
+      v.literal("limited"),
+      v.literal("vip"),
+      v.literal("none"),
+    ),
+    ribbonText: v.optional(v.string()),
+    includesPlanId: v.optional(v.id("subscriptionPlans")),
+    includeAllCourses: v.boolean(),
+    includedCourseIds: v.array(v.id("courses")),
+    includedCategoryIds: v.array(v.id("categories")),
+    resolvedCourseIds: v.array(v.id("courses")),
+    features: v.array(
+      v.object({
+        icon: v.string(),
+        title: v.string(),
+        title_ar: v.optional(v.string()),
+        subtitle: v.optional(v.string()),
+        subtitle_ar: v.optional(v.string()),
+        isChecklistItem: v.boolean(),
+        displayOrder: v.number(),
+      }),
+    ),
+    displayOrder: v.number(),
+    isActive: v.boolean(),
+    updatedBy: v.id("users"),
+    updatedAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_slug", ["slug"])
+    .index("by_displayOrder", ["displayOrder", "deletedAt"])
+    .index("by_includesPlanId", ["includesPlanId"])
+    .index("by_deletedAt", ["deletedAt"]),
+
+  subscriptionPlanPriceHistory: defineTable({
+    planId: v.id("subscriptionPlans"),
+    stripePriceId: v.string(),
+    priceAmount: v.number(),
+    priceCurrency: v.string(),
+    archivedAt: v.number(),
+    updatedBy: v.id("users"),
+  }).index("by_planId", ["planId"]),
 });

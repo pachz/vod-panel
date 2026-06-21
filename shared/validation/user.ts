@@ -29,6 +29,7 @@ export const userInputSchema = z.object({
     })
     .min(8, "Password must be at least 8 characters long."),
   isAdmin: z.boolean().optional().default(false),
+  isTech: z.boolean().optional().default(false),
 });
 
 export const userUpdateSchema = z.object({
@@ -55,6 +56,7 @@ export const userUpdateSchema = z.object({
     .optional()
     .or(z.literal("")),
   isAdmin: z.boolean().optional().default(false),
+  isTech: z.boolean().optional().default(false),
 });
 
 export const userPasswordUpdateSchema = z.object({

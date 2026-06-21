@@ -2,6 +2,7 @@ import { mutation, query } from "./_generated/server";
 import type { MutationCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 
 import {
   courseInputSchema,
@@ -432,6 +433,10 @@ export const createCourse = mutation({
       entityName: validated.name,
     });
 
+    await ctx.scheduler.runAfter(0, internal.plansInternal.recomputePlansForCourse, {
+      courseId,
+    });
+
     return courseId;
   },
 });
@@ -707,6 +712,10 @@ export const updateCourse = mutation({
       entityId: id,
       entityName: validated.name,
     });
+
+    await ctx.scheduler.runAfter(0, internal.plansInternal.recomputePlansForCourse, {
+      courseId: id,
+    });
   },
 });
 
@@ -894,6 +903,10 @@ export const deleteCourse = mutation({
       action: "deleted",
       entityId: id,
       entityName: course.name,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.plansInternal.recomputePlansForCourse, {
+      courseId: id,
     });
   },
 });

@@ -1,7 +1,7 @@
 import { mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
-import { components } from "./_generated/api";
+import { components, internal } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 import { TableAggregate } from "@convex-dev/aggregate";
 
@@ -233,6 +233,10 @@ export const deleteCategory = mutation({
       action: "deleted",
       entityId: id,
       entityName: category.name,
+    });
+
+    await ctx.scheduler.runAfter(0, internal.plansInternal.recomputePlansForCategory, {
+      categoryId: id,
     });
   },
 });

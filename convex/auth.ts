@@ -49,6 +49,9 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         if (user.isGod === undefined) {
           patch.isGod = false;
         }
+        if (user.isTech === undefined) {
+          patch.isTech = false;
+        }
 
         if (Object.keys(patch).length > 0) {
           await ctx.db.patch(args.userId as Id<"users">, patch);

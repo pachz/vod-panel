@@ -47,6 +47,7 @@ type FormValues = {
   phone: string;
   password: string;
   isAdmin: boolean;
+  isTech: boolean;
 };
 
 type PasswordFormValues = {
@@ -59,6 +60,7 @@ const initialFormValues: FormValues = {
   phone: "",
   password: "",
   isAdmin: false,
+  isTech: false,
 };
 
 const PAGE_SIZE = 10;
@@ -165,6 +167,7 @@ const Users = () => {
         phone: editingUser.phone ?? "",
         password: "", // Don't populate password
         isAdmin: editingUser.isGod ?? false,
+        isTech: editingUser.isTech ?? false,
       });
     } else {
       setFormValues(initialFormValues);
@@ -293,6 +296,7 @@ const Users = () => {
           email: formValues.email,
           phone: formValues.phone || undefined,
           isAdmin: formValues.isAdmin,
+          isTech: formValues.isTech,
         })
       : userInputSchema.safeParse(formValues);
 
@@ -313,6 +317,7 @@ const Users = () => {
           email: validated.email,
           phone: validated.phone,
           isAdmin: editingOwnAccount ? editingUser.isGod ?? false : validated.isAdmin,
+          isTech: editingOwnAccount ? editingUser.isTech ?? false : validated.isTech,
         });
         toast.success("User updated successfully");
       } else {
@@ -624,9 +629,22 @@ const Users = () => {
                   Administrator (Full Access)
                 </Label>
               </div>
+              <div className="flex items-center space-x-2">
+                <Switch
+                  id="isTech"
+                  checked={formValues.isTech}
+                  disabled={editingOwnAccount}
+                  onCheckedChange={(checked) =>
+                    setFormValues((prev) => ({ ...prev, isTech: checked }))
+                  }
+                />
+                <Label htmlFor="isTech" className="cursor-pointer">
+                  Tech (Subscription Plans)
+                </Label>
+              </div>
               {editingOwnAccount && (
                 <p className="text-xs text-muted-foreground">
-                  You cannot change your own administrator status.
+                  You cannot change your own administrator or tech status.
                 </p>
               )}
               <Button
@@ -706,7 +724,16 @@ const Users = () => {
 
                     return (
                       <TableRow key={user._id}>
-                        <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{user.name ?? "—"}</span>
+                            {user.isTech && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                Tech
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
                         <TableCell>
@@ -856,7 +883,16 @@ const Users = () => {
 
                     return (
                       <TableRow key={user._id}>
-                        <TableCell className="font-medium">{user.name ?? "—"}</TableCell>
+                        <TableCell className="font-medium">
+                          <div className="flex items-center gap-2">
+                            <span>{user.name ?? "—"}</span>
+                            {user.isTech && (
+                              <Badge variant="outline" className="text-[10px] uppercase tracking-wide">
+                                Tech
+                              </Badge>
+                            )}
+                          </div>
+                        </TableCell>
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">—</TableCell>
