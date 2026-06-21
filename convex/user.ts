@@ -562,6 +562,7 @@ export const registerUser = action({
       phone: undefined,
       password,
       isAdmin: false,
+      isTech: false,
     });
 
     // Check if user already exists before creating auth account
@@ -631,6 +632,7 @@ export const createUser = action({
       phone,
       password,
       isAdmin: isAdmin ?? false,
+      isTech: false,
     });
 
     // Check if user already exists before creating auth account
