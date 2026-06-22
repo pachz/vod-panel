@@ -116,14 +116,34 @@ function resolveStoredFeatures(
   features: Doc<"subscriptionPlans">["features"],
   stats: PlanCourseStats,
 ) {
-  return resolvePlanFeaturesForDisplay(
+  const resolved = resolvePlanFeaturesForDisplay(
     features.map((f) => ({
-      ...f,
+      icon: f.icon,
+      title: f.title,
+      title_ar: f.title_ar,
+      subtitle: f.subtitle,
       subtitleAr: f.subtitle_ar,
+      subtitleMode: f.subtitleMode,
+      subtitleTemplate: f.subtitleTemplate,
       subtitleTemplateAr: f.subtitleTemplate_ar,
+      isChecklistItem: f.isChecklistItem,
+      displayOrder: f.displayOrder,
     })),
     stats,
   );
+
+  return resolved.map((f) => ({
+    icon: f.icon,
+    title: f.title,
+    title_ar: f.title_ar,
+    subtitle: f.subtitle,
+    subtitle_ar: f.subtitle_ar,
+    subtitleMode: f.subtitleMode,
+    subtitleTemplate: f.subtitleTemplate,
+    subtitleTemplate_ar: f.subtitleTemplate_ar,
+    isChecklistItem: f.isChecklistItem,
+    displayOrder: f.displayOrder,
+  }));
 }
 
 async function getPlanDepth(
