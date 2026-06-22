@@ -3,7 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
-import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
   SelectContent,
@@ -12,7 +11,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { PLAN_ICON_OPTIONS } from "./planIcons";
+import { LimitedInput, LimitedTextarea } from "./planFormFields";
 import type { PlanFeature } from "../../../shared/validation/plan";
+import { PLAN_FIELD_LIMITS } from "../../../shared/validation/plan";
 import {
   DEFAULT_COURSE_STATS_TEMPLATE_AR,
   DEFAULT_COURSE_STATS_TEMPLATE_EN,
@@ -45,6 +46,7 @@ export function PlanFeaturesEditor({
   const stats: PlanCourseStats = courseStats ?? { courses: 0, lessons: 0, hours: 0 };
 
   const addFeature = () => {
+    if (features.length >= PLAN_FIELD_LIMITS.maxFeatures) return;
     onChange([
       ...features,
       {
@@ -61,6 +63,7 @@ export function PlanFeaturesEditor({
   };
 
   const addCourseStatsFeature = () => {
+    if (features.length >= PLAN_FIELD_LIMITS.maxFeatures) return;
     onChange([
       ...features,
       {
@@ -174,24 +177,33 @@ export function PlanFeaturesEditor({
                 <Label>Order</Label>
                 <Input
                   type="number"
+                  min={0}
+                  max={PLAN_FIELD_LIMITS.featureDisplayOrder}
                   value={feature.displayOrder}
-                  onChange={(e) =>
-                    updateFeature(featureIndex, {
-                      displayOrder: parseInt(e.target.value, 10) || 0,
-                    })
-                  }
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    const next = Number.isFinite(parsed)
+                      ? Math.min(
+                          PLAN_FIELD_LIMITS.featureDisplayOrder,
+                          Math.max(0, parsed),
+                        )
+                      : 0;
+                    updateFeature(featureIndex, { displayOrder: next });
+                  }}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Title (EN)</Label>
-                <Input
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.featureTitle}
                   value={feature.title}
                   onChange={(e) => updateFeature(featureIndex, { title: e.target.value })}
                 />
               </div>
               <div className="space-y-2">
                 <Label>Title (AR)</Label>
-                <Input
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.featureTitleAr}
                   value={feature.titleAr ?? ""}
                   onChange={(e) => updateFeature(featureIndex, { titleAr: e.target.value })}
                   dir="rtl"
@@ -256,9 +268,10 @@ export function PlanFeaturesEditor({
                   </div>
                   <div data-template-block className="space-y-2">
                     <Label className="text-xs">Template (EN)</Label>
-                    <Textarea
+                    <LimitedTextarea
                       data-template-field="en"
                       rows={2}
+                      maxLength={PLAN_FIELD_LIMITS.featureSubtitleTemplate}
                       value={feature.subtitleTemplate ?? ""}
                       onChange={(e) =>
                         updateFeature(featureIndex, { subtitleTemplate: e.target.value })
@@ -295,9 +308,10 @@ export function PlanFeaturesEditor({
                   </div>
                   <div data-template-block-ar className="space-y-2">
                     <Label className="text-xs">Template (AR)</Label>
-                    <Textarea
+                    <LimitedTextarea
                       data-template-field="ar"
                       rows={2}
+                      maxLength={PLAN_FIELD_LIMITS.featureSubtitleTemplateAr}
                       value={feature.subtitleTemplateAr ?? ""}
                       onChange={(e) =>
                         updateFeature(featureIndex, { subtitleTemplateAr: e.target.value })
@@ -322,7 +336,8 @@ export function PlanFeaturesEditor({
                 <div className="grid gap-3 sm:grid-cols-1">
                   <div className="space-y-2">
                     <Label className="text-xs">Subtitle (EN)</Label>
-                    <Input
+                    <LimitedInput
+                      maxLength={PLAN_FIELD_LIMITS.featureSubtitle}
                       value={feature.subtitle ?? ""}
                       onChange={(e) =>
                         updateFeature(featureIndex, { subtitle: e.target.value })
@@ -331,7 +346,8 @@ export function PlanFeaturesEditor({
                   </div>
                   <div className="space-y-2">
                     <Label className="text-xs">Subtitle (AR)</Label>
-                    <Input
+                    <LimitedInput
+                      maxLength={PLAN_FIELD_LIMITS.featureSubtitleAr}
                       value={feature.subtitleAr ?? ""}
                       onChange={(e) =>
                         updateFeature(featureIndex, { subtitleAr: e.target.value })
@@ -362,7 +378,13 @@ export function PlanFeaturesEditor({
       })}
 
       <div className="flex flex-col gap-2 sm:flex-row">
-        <Button type="button" variant="outline" onClick={addFeature} className="flex-1">
+        <Button
+          type="button"
+          variant="outline"
+          onClick={addFeature}
+          className="flex-1"
+          disabled={features.length >= PLAN_FIELD_LIMITS.maxFeatures}
+        >
           <Plus className="h-4 w-4 mr-2" />
           Add feature
         </Button>
@@ -371,11 +393,17 @@ export function PlanFeaturesEditor({
           variant="secondary"
           onClick={addCourseStatsFeature}
           className="flex-1"
+          disabled={features.length >= PLAN_FIELD_LIMITS.maxFeatures}
         >
           <Sparkles className="h-4 w-4 mr-2" />
           Add course stats line
         </Button>
       </div>
+      {features.length >= PLAN_FIELD_LIMITS.maxFeatures && (
+        <p className="text-xs text-muted-foreground text-center">
+          Maximum {PLAN_FIELD_LIMITS.maxFeatures} features per plan.
+        </p>
+      )}
     </div>
   );
 }

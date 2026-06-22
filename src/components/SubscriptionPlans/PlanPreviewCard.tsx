@@ -27,7 +27,6 @@ export type PlanPreviewData = {
   inheritsDescription?: string;
   inheritsDescription_ar?: string;
   features: PlanPreviewFeature[];
-  resolvedCourseCount?: number;
   isActive?: boolean;
 };
 
@@ -184,11 +183,6 @@ export function PlanPreviewCard({
           </ul>
         ) : (
           <p className="text-sm text-muted-foreground text-center py-4">No features added yet</p>
-        )}
-        {plan.resolvedCourseCount != null && plan.resolvedCourseCount > 0 && (
-          <p className="mt-4 text-xs text-center text-muted-foreground">
-            {plan.resolvedCourseCount} course{plan.resolvedCourseCount !== 1 ? "s" : ""} included
-          </p>
         )}
       </div>
 

@@ -30,6 +30,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PlanPreviewCard, type PlanPreviewData } from "@/components/SubscriptionPlans/PlanPreviewCard";
 import { PlanFeaturesEditor } from "@/components/SubscriptionPlans/PlanFeaturesEditor";
+import { LimitedInput } from "@/components/SubscriptionPlans/planFormFields";
 import { PlanCourseCategoryPicker } from "@/components/SubscriptionPlans/PlanCourseCategoryPicker";
 import { BADGE_TAG_OPTIONS } from "@/components/SubscriptionPlans/planIcons";
 import {
@@ -38,6 +39,7 @@ import {
   expandPlanTheme,
   type PlanFeature,
   type PlanThemeInput,
+  PLAN_FIELD_LIMITS,
 } from "../../shared/validation/plan";
 import { slugify } from "@/lib/slugify";
 import { resolvePlanFeaturesForDisplay } from "../../shared/planFeatureTemplate";
@@ -254,7 +256,6 @@ export function useSubscriptionPlanEditor() {
       })),
       inheritsDescription: form.inheritsDescription.trim() || undefined,
       inheritsDescription_ar: form.inheritsDescriptionAr.trim() || undefined,
-      resolvedCourseCount: stats.courses,
       isActive: form.isActive,
     };
     },
@@ -505,8 +506,17 @@ const SubscriptionPlanEditor = () => {
         </div>
       </div>
 
-      <div className="grid gap-8 xl:grid-cols-[1fr_380px]">
-        <div className="space-y-6">
+      <Card className="card-elevated lg:hidden">
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Live preview</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <PlanPreviewCard plan={previewData} className="max-w-none mx-auto" />
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_min(400px,38%)] lg:items-start">
+        <div className="min-w-0 space-y-6">
           <Card className="card-elevated">
             <CardHeader>
               <CardTitle>Basics</CardTitle>
@@ -514,15 +524,28 @@ const SubscriptionPlanEditor = () => {
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Name (EN)</Label>
-                <Input value={form.name} onChange={(e) => setField("name", e.target.value)} />
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.name}
+                  value={form.name}
+                  onChange={(e) => setField("name", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Name (AR)</Label>
-                <Input value={form.nameAr} onChange={(e) => setField("nameAr", e.target.value)} dir="rtl" />
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.nameAr}
+                  value={form.nameAr}
+                  onChange={(e) => setField("nameAr", e.target.value)}
+                  dir="rtl"
+                />
               </div>
               <div className="space-y-2">
                 <Label>Slug</Label>
-                <Input value={form.slug} onChange={(e) => setField("slug", e.target.value)} />
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.slug}
+                  value={form.slug}
+                  onChange={(e) => setField("slug", e.target.value)}
+                />
               </div>
               <div className="space-y-2">
                 <Label>Billing interval</Label>
@@ -576,7 +599,8 @@ const SubscriptionPlanEditor = () => {
               </div>
               <div className="space-y-2 sm:col-span-2">
                 <Label>Price subtitle</Label>
-                <Input
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.priceSubtitle}
                   value={form.priceSubtitle}
                   onChange={(e) => setField("priceSubtitle", e.target.value)}
                   placeholder="e.g. per year · 12 + 2 months free"
@@ -587,6 +611,7 @@ const SubscriptionPlanEditor = () => {
                 <Input
                   type="number"
                   min="1"
+                  max={PLAN_FIELD_LIMITS.maxCapacity}
                   step="1"
                   value={form.maxCapacity}
                   onChange={(e) => setField("maxCapacity", e.target.value)}
@@ -651,7 +676,8 @@ const SubscriptionPlanEditor = () => {
                 </div>
                 <div className="space-y-2">
                   <Label>Ribbon text (optional)</Label>
-                  <Input
+                  <LimitedInput
+                    maxLength={PLAN_FIELD_LIMITS.ribbonText}
                     value={form.ribbonText}
                     onChange={(e) => setField("ribbonText", e.target.value)}
                     placeholder="MOST POPULAR"
@@ -733,7 +759,8 @@ const SubscriptionPlanEditor = () => {
               </p>
               <div className="space-y-2">
                 <Label>Inherits text (EN)</Label>
-                <Input
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.inheritsDescription}
                   value={form.inheritsDescription}
                   onChange={(e) => setField("inheritsDescription", e.target.value)}
                   placeholder="Everything in Monthly, plus"
@@ -741,7 +768,8 @@ const SubscriptionPlanEditor = () => {
               </div>
               <div className="space-y-2">
                 <Label>Inherits text (AR)</Label>
-                <Input
+                <LimitedInput
+                  maxLength={PLAN_FIELD_LIMITS.inheritsDescriptionAr}
                   value={form.inheritsDescriptionAr}
                   onChange={(e) => setField("inheritsDescriptionAr", e.target.value)}
                   placeholder="كل ما في الباقة الشهرية، بالإضافة إلى"
@@ -776,8 +804,16 @@ const SubscriptionPlanEditor = () => {
                 <Input
                   type="number"
                   className="w-20"
+                  min={0}
+                  max={PLAN_FIELD_LIMITS.displayOrder}
                   value={form.displayOrder}
-                  onChange={(e) => setField("displayOrder", parseInt(e.target.value, 10) || 0)}
+                  onChange={(e) => {
+                    const parsed = parseInt(e.target.value, 10);
+                    const next = Number.isFinite(parsed)
+                      ? Math.min(PLAN_FIELD_LIMITS.displayOrder, Math.max(0, parsed))
+                      : 0;
+                    setField("displayOrder", next);
+                  }}
                 />
               </div>
             </CardContent>
@@ -797,10 +833,16 @@ const SubscriptionPlanEditor = () => {
           </div>
         </div>
 
-        <div className="xl:sticky xl:top-24 h-fit w-full max-w-[380px] xl:mx-auto space-y-3">
-          <h2 className="text-lg font-semibold">Live preview</h2>
-          <PlanPreviewCard plan={previewData} className="max-w-none" />
-        </div>
+        <aside className="hidden lg:sticky lg:top-20 lg:self-start lg:block">
+          <Card className="card-elevated shadow-md">
+            <CardHeader className="border-b bg-muted/20 pb-3">
+              <CardTitle className="text-base">Live preview</CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4">
+              <PlanPreviewCard plan={previewData} className="mx-auto max-w-none" />
+            </CardContent>
+          </Card>
+        </aside>
       </div>
 
       <AlertDialog open={showArchiveDialog} onOpenChange={setShowArchiveDialog}>

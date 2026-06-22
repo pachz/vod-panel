@@ -185,14 +185,14 @@ const DashboardLayout = () => {
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
       <div className="relative z-10 flex min-h-screen w-full">
         <AdminSidebar />
-        <main className="flex flex-1 flex-col">
-          <header className="sticky top-0 z-20 flex h-16 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
+        <main className="flex min-h-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-4 border-b border-border/40 dark:border-transparent bg-background/80 px-6 backdrop-blur">
             <SidebarTrigger />
             <div className="flex-1" />
             <ThemeToggle />
             <UserProfile />
           </header>
-          <div className="flex-1 overflow-y-auto p-6 md:p-10">
+          <div className="flex-1 p-6 md:p-10">
             <Outlet />
           </div>
         </main>

@@ -54,7 +54,6 @@ const SubscriptionPlans = () => {
       inheritsDescription: p.inheritsDescription,
       inheritsDescription_ar: p.inheritsDescription_ar,
       features: p.features,
-      resolvedCourseCount: p.resolvedCourseCount,
       isActive: p.isActive,
     }));
   }, [plans]);
