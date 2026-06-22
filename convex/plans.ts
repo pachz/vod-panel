@@ -140,7 +140,7 @@ function resolveStoredFeatures(
     subtitle_ar: f.subtitle_ar,
     subtitleMode: f.subtitleMode,
     subtitleTemplate: f.subtitleTemplate,
-    subtitleTemplate_ar: f.subtitleTemplate_ar,
+    subtitleTemplate_ar: f.subtitleTemplateAr,
     isChecklistItem: f.isChecklistItem,
     displayOrder: f.displayOrder,
   }));
