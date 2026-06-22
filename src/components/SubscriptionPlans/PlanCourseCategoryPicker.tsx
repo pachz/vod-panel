@@ -1,6 +1,6 @@
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { Check, ChevronsUpDown } from "lucide-react";
+import { Check, ChevronsUpDown, X } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -47,6 +47,10 @@ export function PlanCourseCategoryPicker({
   const allSelected =
     allCourseIds.length > 0 &&
     allCourseIds.every((id) => selectedCourseIds.includes(id));
+
+  const removeCourse = (id: Id<"courses">) => {
+    onCoursesChange(selectedCourseIds.filter((courseId) => courseId !== id));
+  };
 
   const toggleCourse = (id: Id<"courses">) => {
     if (selectedCourseIds.includes(id)) {
@@ -129,8 +133,16 @@ export function PlanCourseCategoryPicker({
             {selectedCourseIds.map((id) => {
               const course = courses?.find((c) => c._id === id);
               return (
-                <Badge key={id} variant="secondary" className="text-xs">
-                  {course?.name ?? id}
+                <Badge key={id} variant="secondary" className="gap-1 pr-1 text-xs">
+                  <span>{course?.name ?? id}</span>
+                  <button
+                    type="button"
+                    onClick={() => removeCourse(id)}
+                    className="rounded-sm p-0.5 hover:bg-muted-foreground/20"
+                    aria-label={`Remove ${course?.name ?? "course"}`}
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
                 </Badge>
               );
             })}

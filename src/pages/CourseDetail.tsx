@@ -66,6 +66,7 @@ import { courseUpdateSchema } from "../../shared/validation/course";
 import { chapterInputSchema } from "../../shared/validation/chapter";
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
 import { PdfDropzone, type PdfUploadState } from "@/components/PdfDropzone";
+import { CourseSubscriptionPlansTab } from "@/components/CourseSubscriptionPlansTab";
 
 type CourseDoc = Doc<"courses">;
 type CategoryDoc = Doc<"categories">;
@@ -284,6 +285,7 @@ const CourseDetail = () => {
     api.course.getCourse,
     courseId ? { id: courseId } : undefined,
   );
+  const currentUser = useQuery(api.user.getCurrentUser);
   const categories = useQuery(api.category.listCategories);
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const coaches = useQuery(api.coach.listCoaches);
@@ -1112,6 +1114,9 @@ const CourseDetail = () => {
               </span>
             )}
           </TabsTrigger>
+          {currentUser?.isTech && (
+            <TabsTrigger value="subscription-plans">Subscription plans</TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="details" className="space-y-6">
@@ -1593,6 +1598,12 @@ const CourseDetail = () => {
             </div>
           )}
         </TabsContent>
+
+        {currentUser?.isTech && courseId && (
+          <TabsContent value="subscription-plans">
+            <CourseSubscriptionPlansTab courseId={courseId} />
+          </TabsContent>
+        )}
       </Tabs>
 
       <Dialog open={isCreateChapterDialogOpen} onOpenChange={setIsCreateChapterDialogOpen}>

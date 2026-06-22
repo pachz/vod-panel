@@ -12,6 +12,7 @@ import {
 } from "../shared/validation/plan";
 import {
   countActiveSubscribersForPlan,
+  getCourseInclusionReason,
   getStoredPlanCourseStats,
 } from "./plansInternal";
 import {
@@ -505,6 +506,142 @@ export const listPlansForInheritancePicker = query({
       result.push({ _id: plan._id, name: plan.name, depth });
     }
     return result.sort((a, b) => a.name.localeCompare(b.name));
+  },
+});
+
+const planCourseInclusionValidator = v.union(
+  v.literal("direct"),
+  v.literal("category"),
+  v.literal("all_courses"),
+  v.literal("inheritance"),
+);
+
+export const getCoursePlanMembership = query({
+  args: { courseId: v.id("courses") },
+  returns: v.object({
+    includingPlans: v.array(
+      v.object({
+        _id: v.id("subscriptionPlans"),
+        name: v.string(),
+        slug: v.string(),
+        billingInterval: v.union(v.literal("month"), v.literal("year")),
+        isActive: v.boolean(),
+        inclusion: planCourseInclusionValidator,
+        canRemove: v.boolean(),
+      }),
+    ),
+    addablePlans: v.array(
+      v.object({
+        _id: v.id("subscriptionPlans"),
+        name: v.string(),
+      }),
+    ),
+  }),
+  handler: async (ctx, { courseId }) => {
+    await requireUser(ctx, { requireTech: true });
+
+    const course = await ctx.db.get(courseId);
+    if (!course || course.deletedAt !== undefined) {
+      return { includingPlans: [], addablePlans: [] };
+    }
+
+    const courseCategoryIds = [
+      course.category_id,
+      ...(course.additional_category_ids ?? []),
+    ];
+
+    const plans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    const includingPlans = [];
+    const addablePlans = [];
+
+    for (const plan of plans) {
+      const inclusion = getCourseInclusionReason(plan, courseId, courseCategoryIds);
+      if (inclusion) {
+        includingPlans.push({
+          _id: plan._id,
+          name: plan.name,
+          slug: plan.slug,
+          billingInterval: plan.billingInterval,
+          isActive: plan.isActive,
+          inclusion,
+          canRemove: inclusion === "direct",
+        });
+      } else {
+        addablePlans.push({
+          _id: plan._id,
+          name: plan.name,
+        });
+      }
+    }
+
+    includingPlans.sort((a, b) => a.name.localeCompare(b.name));
+    addablePlans.sort((a, b) => a.name.localeCompare(b.name));
+
+    return { includingPlans, addablePlans };
+  },
+});
+
+export const addCourseToPlan = mutation({
+  args: {
+    planId: v.id("subscriptionPlans"),
+    courseId: v.id("courses"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
+    }
+
+    try {
+      await ctx.runMutation(internal.plansInternal.addCourseToPlanRecord, {
+        planId: args.planId,
+        courseId: args.courseId,
+        updatedBy: userId as Id<"users">,
+      });
+    } catch (error) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: error instanceof Error ? error.message : "Could not add course to plan.",
+      });
+    }
+
+    return null;
+  },
+});
+
+export const removeCourseFromPlan = mutation({
+  args: {
+    planId: v.id("subscriptionPlans"),
+    courseId: v.id("courses"),
+  },
+  returns: v.null(),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
+    }
+
+    try {
+      await ctx.runMutation(internal.plansInternal.removeCourseFromPlanRecord, {
+        planId: args.planId,
+        courseId: args.courseId,
+        updatedBy: userId as Id<"users">,
+      });
+    } catch (error) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: error instanceof Error ? error.message : "Could not remove course from plan.",
+      });
+    }
+
+    return null;
   },
 });
 

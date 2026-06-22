@@ -330,6 +330,109 @@ export async function computePlanCourseStatsForPlan(
 
 export { resolveCourseIdsFromPicker };
 
+export type PlanCourseInclusionReason =
+  | "direct"
+  | "category"
+  | "all_courses"
+  | "inheritance";
+
+export function getCourseInclusionReason(
+  plan: Pick<
+    Doc<"subscriptionPlans">,
+    | "resolvedCourseIds"
+    | "includeAllCourses"
+    | "includedCourseIds"
+    | "includedCategoryIds"
+  >,
+  courseId: Id<"courses">,
+  courseCategoryIds: Id<"categories">[],
+): PlanCourseInclusionReason | null {
+  if (!plan.resolvedCourseIds.includes(courseId)) {
+    return null;
+  }
+  if (plan.includeAllCourses) {
+    return "all_courses";
+  }
+  if (plan.includedCourseIds.includes(courseId)) {
+    return "direct";
+  }
+  if (plan.includedCategoryIds.some((id) => courseCategoryIds.includes(id))) {
+    return "category";
+  }
+  return "inheritance";
+}
+
+export const addCourseToPlanRecord = internalMutation({
+  args: {
+    planId: v.id("subscriptionPlans"),
+    courseId: v.id("courses"),
+    updatedBy: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { planId, courseId, updatedBy }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.deletedAt !== undefined) {
+      throw new Error("Plan not found.");
+    }
+
+    const course = await ctx.db.get(courseId);
+    if (!course || course.deletedAt !== undefined || course.status !== "published") {
+      throw new Error("Published course not found.");
+    }
+
+    if (plan.includeAllCourses || plan.includedCourseIds.includes(courseId)) {
+      return null;
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(planId, {
+      includedCourseIds: [...plan.includedCourseIds, courseId],
+      updatedBy,
+      updatedAt: now,
+    });
+
+    const updated = await ctx.db.get(planId);
+    if (updated) {
+      await patchPlanResolution(ctx, updated);
+      await cascadeResolveChildPlansHandler(ctx, planId);
+    }
+    return null;
+  },
+});
+
+export const removeCourseFromPlanRecord = internalMutation({
+  args: {
+    planId: v.id("subscriptionPlans"),
+    courseId: v.id("courses"),
+    updatedBy: v.id("users"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { planId, courseId, updatedBy }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.deletedAt !== undefined) {
+      throw new Error("Plan not found.");
+    }
+
+    if (!plan.includedCourseIds.includes(courseId)) {
+      throw new Error("Course is not directly selected on this plan.");
+    }
+
+    const now = Date.now();
+    await ctx.db.patch(planId, {
+      includedCourseIds: plan.includedCourseIds.filter((id) => id !== courseId),
+      updatedBy,
+      updatedAt: now,
+    });
+
+    const updated = await ctx.db.get(planId);
+    if (updated) {
+      await patchPlanResolution(ctx, updated);
+      await cascadeResolveChildPlansHandler(ctx, planId);
+    }
+    return null;
+  },
+});
+
 export const resolvePlanCourses = internalMutation({
   args: { planId: v.id("subscriptionPlans") },
   returns: v.null(),
