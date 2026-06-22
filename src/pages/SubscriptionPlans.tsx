@@ -28,6 +28,8 @@ type PlanListItem = {
   displayOrder: number;
   isActive: boolean;
   resolvedCourseCount: number;
+  activeSubscriberCount: number;
+  maxCapacity?: number;
   includesPlanId?: Id<"subscriptionPlans">;
   includesPlanName?: string;
 };
@@ -85,6 +87,19 @@ const SubscriptionPlans = () => {
           <Badge variant="secondary">{BADGE_TAG_LABELS[row.badgeTag]}</Badge>
         ) : (
           "—"
+        ),
+    },
+    {
+      header: "Capacity",
+      render: (row) =>
+        row.maxCapacity != null ? (
+          <span className={row.activeSubscriberCount >= row.maxCapacity ? "text-destructive font-medium" : ""}>
+            {row.activeSubscriberCount} / {row.maxCapacity}
+          </span>
+        ) : (
+          <span className="text-muted-foreground">
+            {row.activeSubscriberCount} / ∞
+          </span>
         ),
     },
     {

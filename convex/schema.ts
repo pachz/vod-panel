@@ -233,12 +233,18 @@ export default defineSchema({
     interval: v.optional(v.string()),
     /** Interval count from Stripe price (e.g. 1 for monthly, 1 for yearly) */
     intervalCount: v.optional(v.number()),
+    /** Subscription plan (when checkout uses plan-based pricing). */
+    planId: v.optional(v.id("subscriptionPlans")),
+    /** Stripe price ID at time of subscription (for capacity counting across price changes). */
+    stripePriceId: v.optional(v.string()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })
     .index("subscriptionId", ["subscriptionId"])
     .index("userId", ["userId"])
-    .index("status", ["status"]),
+    .index("status", ["status"])
+    .index("by_planId", ["planId"])
+    .index("by_stripePriceId", ["stripePriceId"]),
 
   paymentSettings: defineTable({
     selectedProductId: v.string(), // Stripe product ID
@@ -288,6 +294,13 @@ export default defineSchema({
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
     resolvedCourseIds: v.array(v.id("courses")),
+    courseStats: v.optional(
+      v.object({
+        courses: v.number(),
+        lessons: v.number(),
+        hours: v.number(),
+      }),
+    ),
     features: v.array(
       v.object({
         icon: v.string(),
@@ -295,12 +308,17 @@ export default defineSchema({
         title_ar: v.optional(v.string()),
         subtitle: v.optional(v.string()),
         subtitle_ar: v.optional(v.string()),
+        subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+        subtitleTemplate: v.optional(v.string()),
+        subtitleTemplate_ar: v.optional(v.string()),
         isChecklistItem: v.boolean(),
         displayOrder: v.number(),
       }),
     ),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    /** Max concurrent active subscribers; unset = unlimited. */
+    maxCapacity: v.optional(v.number()),
     updatedBy: v.id("users"),
     updatedAt: v.number(),
     deletedAt: v.optional(v.number()),

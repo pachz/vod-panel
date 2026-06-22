@@ -22,6 +22,9 @@ const planFeatureValidator = v.object({
   title_ar: v.optional(v.string()),
   subtitle: v.optional(v.string()),
   subtitle_ar: v.optional(v.string()),
+  subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+  subtitleTemplate: v.optional(v.string()),
+  subtitleTemplate_ar: v.optional(v.string()),
   isChecklistItem: v.boolean(),
   displayOrder: v.number(),
 });
@@ -64,6 +67,7 @@ export const createPlanWithStripe = action({
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    maxCapacity: v.optional(v.number()),
   },
   returns: v.id("subscriptionPlans"),
   handler: async (ctx, args) => {
@@ -92,11 +96,15 @@ export const createPlanWithStripe = action({
         titleAr: f.title_ar,
         subtitle: f.subtitle,
         subtitleAr: f.subtitle_ar,
+        subtitleMode: f.subtitleMode,
+        subtitleTemplate: f.subtitleTemplate,
+        subtitleTemplateAr: f.subtitleTemplate_ar,
         isChecklistItem: f.isChecklistItem,
         displayOrder: f.displayOrder,
       })),
       displayOrder: args.displayOrder,
       isActive: args.isActive,
+      maxCapacity: args.maxCapacity,
     });
 
     if (!parsed.success) {
@@ -162,6 +170,7 @@ export const createPlanWithStripe = action({
         features: args.features,
         displayOrder: args.displayOrder,
         isActive: args.isActive,
+        maxCapacity: args.maxCapacity,
         updatedBy: userId as Id<"users">,
       },
     );

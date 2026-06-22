@@ -40,6 +40,11 @@ import {
   type PlanThemeInput,
 } from "../../shared/validation/plan";
 import { slugify } from "@/lib/slugify";
+import { resolvePlanFeaturesForDisplay } from "../../shared/planFeatureTemplate";
+import {
+  computePlanCourseStatsForCourseIds,
+  resolveCourseIdsFromPickerData,
+} from "../../shared/planCourseResolution";
 
 export type PlanFormState = {
   name: string;
@@ -60,6 +65,7 @@ export type PlanFormState = {
   features: PlanFeature[];
   displayOrder: number;
   isActive: boolean;
+  maxCapacity: string;
 };
 
 const defaultFormState = (): PlanFormState => ({
@@ -81,6 +87,7 @@ const defaultFormState = (): PlanFormState => ({
   features: [],
   displayOrder: 0,
   isActive: true,
+  maxCapacity: "",
 });
 
 function dollarsToCents(value: string): number {
@@ -107,6 +114,16 @@ function syncPriceFields(dollars: string) {
   return { priceAmountDollars: dollars };
 }
 
+function parseMaxCapacity(value: string): number | undefined {
+  const trimmed = value.trim();
+  if (!trimmed) return undefined;
+  const parsed = Number.parseInt(trimmed, 10);
+  if (!Number.isFinite(parsed) || parsed < 1) {
+    return undefined;
+  }
+  return parsed;
+}
+
 export function useSubscriptionPlanEditor() {
   const { id } = useParams<{ id: string }>();
   const isNew = id === "new";
@@ -119,6 +136,8 @@ export function useSubscriptionPlanEditor() {
   const inheritanceOptions = useQuery(api.plans.listPlansForInheritancePicker, {
     excludePlanId: planId,
   });
+  const pickerCourses = useQuery(api.plans.listCoursesForPicker);
+  const planResolvedCourses = useQuery(api.plans.listPlanResolvedCourseIds);
 
   const createPlanWithStripe = useAction(api.plansStripe.createPlanWithStripe);
   const updatePlanPriceWithStripe = useAction(api.plansStripe.updatePlanPriceWithStripe);
@@ -132,6 +151,37 @@ export function useSubscriptionPlanEditor() {
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
   const [initialized, setInitialized] = useState(isNew);
+
+  const courseStats = useMemo(() => {
+    if (!pickerCourses) {
+      return planDetail?.courseStats ?? null;
+    }
+
+    const planResolvedMap = new Map(
+      (planResolvedCourses ?? []).map((plan) => [plan._id, plan.resolvedCourseIds]),
+    );
+    const courseIds = resolveCourseIdsFromPickerData(
+      {
+        includeAllCourses: form.includeAllCourses,
+        includedCourseIds: form.includedCourseIds,
+        includedCategoryIds: form.includedCategoryIds,
+        includesPlanId: form.includesPlanId
+          ? (form.includesPlanId as Id<"subscriptionPlans">)
+          : undefined,
+      },
+      pickerCourses,
+      planResolvedMap,
+    );
+    return computePlanCourseStatsForCourseIds(courseIds, pickerCourses);
+  }, [
+    pickerCourses,
+    planResolvedCourses,
+    planDetail?.courseStats,
+    form.includeAllCourses,
+    form.includedCourseIds,
+    form.includedCategoryIds,
+    form.includesPlanId,
+  ]);
 
   useEffect(() => {
     if (isNew || !planDetail?.plan || initialized) return;
@@ -160,11 +210,15 @@ export function useSubscriptionPlanEditor() {
         titleAr: f.title_ar,
         subtitle: f.subtitle,
         subtitleAr: f.subtitle_ar,
+        subtitleMode: f.subtitleMode ?? "manual",
+        subtitleTemplate: f.subtitleTemplate,
+        subtitleTemplateAr: f.subtitleTemplate_ar,
         isChecklistItem: f.isChecklistItem,
         displayOrder: f.displayOrder,
       })),
       displayOrder: p.displayOrder,
       isActive: p.isActive,
+      maxCapacity: p.maxCapacity != null ? String(p.maxCapacity) : "",
     });
     setNewPriceDollars(centsToDollars(p.priceAmount));
     setInitialized(true);
@@ -181,7 +235,10 @@ export function useSubscriptionPlanEditor() {
   }, [isNew]);
 
   const previewData: PlanPreviewData = useMemo(
-    () => ({
+    () => {
+      const stats = courseStats ?? { courses: 0, lessons: 0, hours: 0 };
+      const resolvedFeatures = resolvePlanFeaturesForDisplay(form.features, stats);
+      return {
       name: form.name || "Plan name",
       name_ar: form.nameAr || "اسم الخطة",
       billingInterval: form.billingInterval,
@@ -196,20 +253,21 @@ export function useSubscriptionPlanEditor() {
       theme: expandPlanTheme(form.theme),
       badgeTag: form.badgeTag,
       ribbonText: form.ribbonText || undefined,
-      features: form.features.map((f) => ({
+      features: resolvedFeatures.map((f) => ({
         icon: f.icon,
         title: f.title,
         title_ar: f.titleAr,
         subtitle: f.subtitle,
-        subtitle_ar: f.subtitleAr,
+        subtitle_ar: f.subtitle_ar,
         isChecklistItem: f.isChecklistItem,
         displayOrder: f.displayOrder,
       })),
       includesPlanName: inheritanceOptions?.find((p) => p._id === form.includesPlanId)?.name,
-      resolvedCourseCount: planDetail?.resolvedCourses.length,
+      resolvedCourseCount: stats.courses,
       isActive: form.isActive,
-    }),
-    [form, inheritanceOptions, planDetail?.resolvedCourses.length, planDetail?.plan.priceAmount, isNew, newPriceDollars],
+    };
+    },
+    [form, inheritanceOptions, planDetail?.plan.priceAmount, isNew, newPriceDollars, courseStats],
   );
 
   const applyPriceUpdate = useCallback(
@@ -243,6 +301,7 @@ export function useSubscriptionPlanEditor() {
     features: form.features,
     displayOrder: form.displayOrder,
     isActive: form.isActive,
+    maxCapacity: parseMaxCapacity(form.maxCapacity),
   });
 
   return {
@@ -271,6 +330,7 @@ export function useSubscriptionPlanEditor() {
     applyPriceUpdate,
     buildMutationArgs,
     dollarsToCents,
+    courseStats,
     initialized: isNew || initialized,
   };
 }
@@ -302,6 +362,7 @@ const SubscriptionPlanEditor = () => {
     applyPriceUpdate,
     buildMutationArgs,
     dollarsToCents,
+    courseStats,
     initialized,
   } = useSubscriptionPlanEditor();
 
@@ -336,6 +397,10 @@ const SubscriptionPlanEditor = () => {
     setIsSaving(true);
     try {
       const args = buildMutationArgs();
+      if (form.maxCapacity.trim() && args.maxCapacity === undefined) {
+        toast.error("Max capacity must be a whole number of at least 1, or leave blank for unlimited.");
+        return;
+      }
       if (isNew) {
         const priceAmount = dollarsToCents(form.priceAmountDollars);
         if (priceAmount < 50) {
@@ -364,11 +429,15 @@ const SubscriptionPlanEditor = () => {
             title_ar: f.titleAr,
             subtitle: f.subtitle,
             subtitle_ar: f.subtitleAr,
+            subtitleMode: f.subtitleMode,
+            subtitleTemplate: f.subtitleTemplate,
+            subtitleTemplate_ar: f.subtitleTemplateAr,
             isChecklistItem: f.isChecklistItem,
             displayOrder: f.displayOrder,
           })),
           displayOrder: args.displayOrder,
           isActive: args.isActive,
+          maxCapacity: args.maxCapacity,
         });
         toast.success("Plan created.");
         navigate(`/subscription-plans/${newId}`);
@@ -523,6 +592,28 @@ const SubscriptionPlanEditor = () => {
                   onChange={(e) => setField("priceSubtitle", e.target.value)}
                   placeholder="e.g. per year · 12 + 2 months free"
                 />
+              </div>
+              <div className="space-y-2">
+                <Label>Max capacity (optional)</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  step="1"
+                  value={form.maxCapacity}
+                  onChange={(e) => setField("maxCapacity", e.target.value)}
+                  placeholder="Unlimited"
+                />
+                <p className="text-xs text-muted-foreground">
+                  {isNew
+                    ? "Max active subscribers at once. Leave blank for unlimited."
+                    : planDetail
+                      ? `${planDetail.activeSubscriberCount} active now${
+                          form.maxCapacity.trim()
+                            ? ` · cap ${form.maxCapacity}`
+                            : " · no cap"
+                        }`
+                      : "Max active subscribers at once."}
+                </p>
               </div>
               {!isNew && (
                 <div className="sm:col-span-2 flex gap-2">
@@ -680,6 +771,7 @@ const SubscriptionPlanEditor = () => {
             <CardContent>
               <PlanFeaturesEditor
                 features={form.features}
+                courseStats={courseStats}
                 onChange={(features) => setField("features", features)}
               />
             </CardContent>

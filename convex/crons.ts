@@ -27,6 +27,13 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "recompute-plan-course-stats-hourly",
+  { hours: 1 },
+  internal.plansInternal.recomputeAllPlanCourseStats,
+  {},
+);
+
 // Full Mailchimp audience resync weekly (safety net alongside real-time sync)
 crons.cron(
   "mailchimp-audience-resync",

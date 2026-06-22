@@ -10,6 +10,14 @@ import {
   planUpdateInputSchema,
   type PlanFeature,
 } from "../shared/validation/plan";
+import {
+  countActiveSubscribersForPlan,
+  getStoredPlanCourseStats,
+} from "./plansInternal";
+import {
+  resolvePlanFeaturesForDisplay,
+  type PlanCourseStats,
+} from "../shared/planFeatureTemplate";
 
 const planThemeValidator = v.object({
   primary: v.string(),
@@ -47,6 +55,13 @@ const planDocValidator = v.object({
   includedCourseIds: v.array(v.id("courses")),
   includedCategoryIds: v.array(v.id("categories")),
   resolvedCourseIds: v.array(v.id("courses")),
+  courseStats: v.optional(
+    v.object({
+      courses: v.number(),
+      lessons: v.number(),
+      hours: v.number(),
+    }),
+  ),
   features: v.array(
     v.object({
       icon: v.string(),
@@ -54,12 +69,16 @@ const planDocValidator = v.object({
       title_ar: v.optional(v.string()),
       subtitle: v.optional(v.string()),
       subtitle_ar: v.optional(v.string()),
+      subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+      subtitleTemplate: v.optional(v.string()),
+      subtitleTemplate_ar: v.optional(v.string()),
       isChecklistItem: v.boolean(),
       displayOrder: v.number(),
     }),
   ),
   displayOrder: v.number(),
   isActive: v.boolean(),
+  maxCapacity: v.optional(v.number()),
   updatedBy: v.id("users"),
   updatedAt: v.number(),
   deletedAt: v.optional(v.number()),
@@ -71,6 +90,9 @@ const planFeatureInputValidator = v.object({
   titleAr: v.optional(v.string()),
   subtitle: v.optional(v.string()),
   subtitleAr: v.optional(v.string()),
+  subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+  subtitleTemplate: v.optional(v.string()),
+  subtitleTemplateAr: v.optional(v.string()),
   isChecklistItem: v.boolean(),
   displayOrder: v.number(),
 });
@@ -82,9 +104,26 @@ function mapFeatures(features: PlanFeature[]) {
     title_ar: f.titleAr,
     subtitle: f.subtitle,
     subtitle_ar: f.subtitleAr,
+    subtitleMode: f.subtitleMode,
+    subtitleTemplate: f.subtitleTemplate,
+    subtitleTemplate_ar: f.subtitleTemplateAr,
     isChecklistItem: f.isChecklistItem,
     displayOrder: f.displayOrder,
   }));
+}
+
+function resolveStoredFeatures(
+  features: Doc<"subscriptionPlans">["features"],
+  stats: PlanCourseStats,
+) {
+  return resolvePlanFeaturesForDisplay(
+    features.map((f) => ({
+      ...f,
+      subtitleAr: f.subtitle_ar,
+      subtitleTemplateAr: f.subtitleTemplate_ar,
+    })),
+    stats,
+  );
 }
 
 async function getPlanDepth(
@@ -212,6 +251,9 @@ const planListItemValidator = v.object({
       title_ar: v.optional(v.string()),
       subtitle: v.optional(v.string()),
       subtitle_ar: v.optional(v.string()),
+      subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+      subtitleTemplate: v.optional(v.string()),
+      subtitleTemplate_ar: v.optional(v.string()),
       isChecklistItem: v.boolean(),
       displayOrder: v.number(),
     }),
@@ -219,6 +261,8 @@ const planListItemValidator = v.object({
   displayOrder: v.number(),
   isActive: v.boolean(),
   resolvedCourseCount: v.number(),
+  activeSubscriberCount: v.number(),
+  maxCapacity: v.optional(v.number()),
   includesPlanId: v.optional(v.id("subscriptionPlans")),
   includesPlanName: v.optional(v.string()),
 });
@@ -237,12 +281,15 @@ export const listPlans = query({
       .sort((a, b) => a.displayOrder - b.displayOrder);
 
     const result = [];
+    const nowMs = Date.now();
     for (const plan of filtered) {
       let includesPlanName: string | undefined;
       if (plan.includesPlanId) {
         const parent = await ctx.db.get(plan.includesPlanId);
         includesPlanName = parent?.name;
       }
+      const activeSubscriberCount = await countActiveSubscribersForPlan(ctx, plan, nowMs);
+      const courseStats = getStoredPlanCourseStats(plan);
       result.push({
         _id: plan._id,
         name: plan.name,
@@ -256,10 +303,12 @@ export const listPlans = query({
         theme: plan.theme,
         badgeTag: plan.badgeTag,
         ribbonText: plan.ribbonText,
-        features: plan.features,
+        features: resolveStoredFeatures(plan.features, courseStats),
         displayOrder: plan.displayOrder,
         isActive: plan.isActive,
         resolvedCourseCount: plan.resolvedCourseIds.length,
+        activeSubscriberCount,
+        maxCapacity: plan.maxCapacity,
         includesPlanId: plan.includesPlanId,
         includesPlanName,
       });
@@ -271,6 +320,12 @@ export const listPlans = query({
 const planDetailValidator = v.object({
   plan: planDocValidator,
   includesPlanName: v.optional(v.string()),
+  activeSubscriberCount: v.number(),
+  courseStats: v.object({
+    courses: v.number(),
+    lessons: v.number(),
+    hours: v.number(),
+  }),
   resolvedCourses: v.array(
     v.object({
       _id: v.id("courses"),
@@ -309,7 +364,36 @@ export const getPlan = query({
       }
     }
 
-    return { plan, includesPlanName, resolvedCourses };
+    return {
+      plan,
+      includesPlanName,
+      activeSubscriberCount: await countActiveSubscribersForPlan(ctx, plan, Date.now()),
+      courseStats: getStoredPlanCourseStats(plan),
+      resolvedCourses,
+    };
+  },
+});
+
+export const listPlanResolvedCourseIds = query({
+  args: {},
+  returns: v.array(
+    v.object({
+      _id: v.id("subscriptionPlans"),
+      resolvedCourseIds: v.array(v.id("courses")),
+    }),
+  ),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireTech: true });
+
+    const plans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    return plans.map((plan) => ({
+      _id: plan._id,
+      resolvedCourseIds: plan.resolvedCourseIds,
+    }));
   },
 });
 
@@ -321,6 +405,9 @@ export const listCoursesForPicker = query({
       name: v.string(),
       name_ar: v.string(),
       category_id: v.id("categories"),
+      additional_category_ids: v.optional(v.array(v.id("categories"))),
+      duration: v.optional(v.number()),
+      lesson_count: v.number(),
     }),
   ),
   handler: async (ctx) => {
@@ -339,6 +426,9 @@ export const listCoursesForPicker = query({
         name: c.name,
         name_ar: c.name_ar,
         category_id: c.category_id,
+        additional_category_ids: c.additional_category_ids,
+        duration: c.duration,
+        lesson_count: c.lesson_count,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },
@@ -423,6 +513,7 @@ export const updatePlan = mutation({
     features: v.array(planFeatureInputValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    maxCapacity: v.optional(v.number()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -456,11 +547,15 @@ export const updatePlan = mutation({
         titleAr: f.titleAr,
         subtitle: f.subtitle,
         subtitleAr: f.subtitleAr,
+        subtitleMode: f.subtitleMode,
+        subtitleTemplate: f.subtitleTemplate,
+        subtitleTemplateAr: f.subtitleTemplateAr,
         isChecklistItem: f.isChecklistItem,
         displayOrder: f.displayOrder,
       })),
       displayOrder: args.displayOrder,
       isActive: args.isActive,
+      maxCapacity: args.maxCapacity,
     });
 
     if (!parsed.success) {
@@ -490,6 +585,7 @@ export const updatePlan = mutation({
       features: mapFeatures(parsed.data.features),
       displayOrder: parsed.data.displayOrder,
       isActive: parsed.data.isActive,
+      maxCapacity: parsed.data.maxCapacity,
       updatedBy: userId as Id<"users">,
     });
 

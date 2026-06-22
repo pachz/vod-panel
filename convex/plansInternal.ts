@@ -1,7 +1,69 @@
 import { internalMutation, internalQuery } from "./_generated/server";
-import type { MutationCtx } from "./_generated/server";
+import type { MutationCtx, QueryCtx } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { v } from "convex/values";
+import {
+  computePlanCourseStats,
+  EMPTY_PLAN_COURSE_STATS,
+  type PlanCourseStats,
+} from "../shared/planFeatureTemplate";
+
+const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
+
+function isSubscriptionCurrentlyActive(
+  sub: Pick<Doc<"subscriptions">, "status" | "currentPeriodEnd">,
+  nowMs: number,
+): boolean {
+  return ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) && sub.currentPeriodEnd >= nowMs;
+}
+
+/** Count distinct users with an active subscription on this plan (by planId or Stripe price). */
+export async function countActiveSubscribersForPlan(
+  ctx: QueryCtx | MutationCtx,
+  plan: Pick<Doc<"subscriptionPlans">, "_id" | "stripePriceId">,
+  nowMs: number,
+): Promise<number> {
+  const seen = new Set<Id<"subscriptions">>();
+  let count = 0;
+
+  const byPlan = await ctx.db
+    .query("subscriptions")
+    .withIndex("by_planId", (q) => q.eq("planId", plan._id))
+    .collect();
+
+  for (const sub of byPlan) {
+    if (seen.has(sub._id)) continue;
+    if (isSubscriptionCurrentlyActive(sub, nowMs)) {
+      seen.add(sub._id);
+      count += 1;
+    }
+  }
+
+  const priceIds = new Set([plan.stripePriceId]);
+  const history = await ctx.db
+    .query("subscriptionPlanPriceHistory")
+    .withIndex("by_planId", (q) => q.eq("planId", plan._id))
+    .collect();
+  for (const entry of history) {
+    priceIds.add(entry.stripePriceId);
+  }
+
+  for (const stripePriceId of priceIds) {
+    const byPrice = await ctx.db
+      .query("subscriptions")
+      .withIndex("by_stripePriceId", (q) => q.eq("stripePriceId", stripePriceId))
+      .collect();
+    for (const sub of byPrice) {
+      if (seen.has(sub._id)) continue;
+      if (isSubscriptionCurrentlyActive(sub, nowMs)) {
+        seen.add(sub._id);
+        count += 1;
+      }
+    }
+  }
+
+  return count;
+}
 
 const planFeatureValidator = v.object({
   icon: v.string(),
@@ -9,6 +71,9 @@ const planFeatureValidator = v.object({
   title_ar: v.optional(v.string()),
   subtitle: v.optional(v.string()),
   subtitle_ar: v.optional(v.string()),
+  subtitleMode: v.optional(v.union(v.literal("manual"), v.literal("template"))),
+  subtitleTemplate: v.optional(v.string()),
+  subtitleTemplate_ar: v.optional(v.string()),
   isChecklistItem: v.boolean(),
   displayOrder: v.number(),
 });
@@ -49,9 +114,17 @@ export const planDocValidator = v.object({
   includedCourseIds: v.array(v.id("courses")),
   includedCategoryIds: v.array(v.id("categories")),
   resolvedCourseIds: v.array(v.id("courses")),
+  courseStats: v.optional(
+    v.object({
+      courses: v.number(),
+      lessons: v.number(),
+      hours: v.number(),
+    }),
+  ),
   features: v.array(planFeatureValidator),
   displayOrder: v.number(),
   isActive: v.boolean(),
+  maxCapacity: v.optional(v.number()),
   updatedBy: v.id("users"),
   updatedAt: v.number(),
   deletedAt: v.optional(v.number()),
@@ -62,7 +135,7 @@ function isPublishedCourse(course: Doc<"courses">): boolean {
 }
 
 async function collectCoursesForCategories(
-  ctx: MutationCtx,
+  ctx: QueryCtx | MutationCtx,
   categoryIds: Id<"categories">[],
 ): Promise<Set<Id<"courses">>> {
   const result = new Set<Id<"courses">>();
@@ -101,7 +174,7 @@ async function collectCoursesForCategories(
   return result;
 }
 
-async function collectAllPublishedCourses(ctx: MutationCtx): Promise<Set<Id<"courses">>> {
+async function collectAllPublishedCourses(ctx: QueryCtx | MutationCtx): Promise<Set<Id<"courses">>> {
   const result = new Set<Id<"courses">>();
   const courses = await ctx.db
     .query("courses")
@@ -116,8 +189,11 @@ async function collectAllPublishedCourses(ctx: MutationCtx): Promise<Set<Id<"cou
 }
 
 async function computeOwnCourseIds(
-  ctx: MutationCtx,
-  plan: Doc<"subscriptionPlans">,
+  ctx: QueryCtx | MutationCtx,
+  plan: Pick<
+    Doc<"subscriptionPlans">,
+    "includeAllCourses" | "includedCourseIds" | "includedCategoryIds"
+  >,
 ): Promise<Set<Id<"courses">>> {
   if (plan.includeAllCourses) {
     return collectAllPublishedCourses(ctx);
@@ -141,7 +217,7 @@ async function computeOwnCourseIds(
 }
 
 async function resolveWithInheritance(
-  ctx: MutationCtx,
+  ctx: QueryCtx | MutationCtx,
   plan: Doc<"subscriptionPlans">,
   visited: Set<Id<"subscriptionPlans">> = new Set(),
 ): Promise<Id<"courses">[]> {
@@ -166,6 +242,94 @@ async function resolveWithInheritance(
   return [...merged].sort();
 }
 
+type CoursePickerConfig = {
+  includeAllCourses: boolean;
+  includedCourseIds: Id<"courses">[];
+  includedCategoryIds: Id<"categories">[];
+  includesPlanId?: Id<"subscriptionPlans">;
+};
+
+async function resolveCourseIdsFromPicker(
+  ctx: QueryCtx | MutationCtx,
+  config: CoursePickerConfig,
+): Promise<Id<"courses">[]> {
+  const ownIds = await computeOwnCourseIds(ctx, {
+    includeAllCourses: config.includeAllCourses,
+    includedCourseIds: config.includedCourseIds,
+    includedCategoryIds: config.includedCategoryIds,
+  });
+
+  const merged = new Set(ownIds);
+  if (config.includesPlanId) {
+    const parent = await ctx.db.get(config.includesPlanId);
+    if (parent && parent.deletedAt === undefined) {
+      const parentIds = await resolveWithInheritance(ctx, parent);
+      for (const id of parentIds) {
+        merged.add(id);
+      }
+    }
+  }
+  return [...merged].sort();
+}
+
+export async function computePlanCourseStatsForIds(
+  ctx: QueryCtx | MutationCtx,
+  courseIds: Id<"courses">[],
+): Promise<PlanCourseStats> {
+  const courses: Array<{ duration?: number | null; lesson_count: number }> = [];
+  for (const courseId of courseIds) {
+    const course = await ctx.db.get(courseId);
+    if (course && isPublishedCourse(course)) {
+      courses.push(course);
+    }
+  }
+  return computePlanCourseStats(courses);
+}
+
+export function getStoredPlanCourseStats(
+  plan: Pick<Doc<"subscriptionPlans">, "courseStats" | "resolvedCourseIds">,
+): PlanCourseStats {
+  return plan.courseStats ?? EMPTY_PLAN_COURSE_STATS;
+}
+
+async function patchPlanResolution(
+  ctx: MutationCtx,
+  plan: Doc<"subscriptionPlans">,
+): Promise<void> {
+  const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
+  const courseStats = await computePlanCourseStatsForIds(ctx, resolvedCourseIds);
+  await ctx.db.patch(plan._id, { resolvedCourseIds, courseStats });
+}
+
+async function patchPlanResolutionById(
+  ctx: MutationCtx,
+  planId: Id<"subscriptionPlans">,
+): Promise<void> {
+  const plan = await ctx.db.get(planId);
+  if (!plan || plan.deletedAt !== undefined) {
+    return;
+  }
+  await patchPlanResolution(ctx, plan);
+}
+
+export async function computePlanCourseStatsForPlan(
+  ctx: QueryCtx | MutationCtx,
+  plan: Doc<"subscriptionPlans">,
+): Promise<PlanCourseStats> {
+  const courseIds =
+    plan.resolvedCourseIds.length > 0
+      ? plan.resolvedCourseIds
+      : await resolveCourseIdsFromPicker(ctx, {
+          includeAllCourses: plan.includeAllCourses,
+          includedCourseIds: plan.includedCourseIds,
+          includedCategoryIds: plan.includedCategoryIds,
+          includesPlanId: plan.includesPlanId,
+        });
+  return computePlanCourseStatsForIds(ctx, courseIds);
+}
+
+export { resolveCourseIdsFromPicker };
+
 export const resolvePlanCourses = internalMutation({
   args: { planId: v.id("subscriptionPlans") },
   returns: v.null(),
@@ -175,8 +339,7 @@ export const resolvePlanCourses = internalMutation({
       return null;
     }
 
-    const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
-    await ctx.db.patch(planId, { resolvedCourseIds });
+    await patchPlanResolution(ctx, plan);
     return null;
   },
 });
@@ -194,8 +357,7 @@ export const cascadeResolveChildPlans = internalMutation({
       if (child.deletedAt !== undefined) {
         continue;
       }
-      const resolvedCourseIds = await resolveWithInheritance(ctx, child);
-      await ctx.db.patch(child._id, { resolvedCourseIds });
+      await patchPlanResolution(ctx, child);
 
       const grandchildren = await ctx.db
         .query("subscriptionPlans")
@@ -205,8 +367,7 @@ export const cascadeResolveChildPlans = internalMutation({
         if (grandchild.deletedAt !== undefined) {
           continue;
         }
-        const gcResolved = await resolveWithInheritance(ctx, grandchild);
-        await ctx.db.patch(grandchild._id, { resolvedCourseIds: gcResolved });
+        await patchPlanResolution(ctx, grandchild);
       }
     }
     return null;
@@ -258,12 +419,7 @@ export const recomputePlansForCourse = internalMutation({
     }
 
     for (const planId of affectedPlanIds) {
-      const plan = await ctx.db.get(planId);
-      if (!plan || plan.deletedAt !== undefined) {
-        continue;
-      }
-      const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
-      await ctx.db.patch(planId, { resolvedCourseIds });
+      await patchPlanResolutionById(ctx, planId);
       await cascadeResolveChildPlansHandler(ctx, planId);
     }
     return null;
@@ -283,8 +439,7 @@ async function cascadeResolveChildPlansHandler(
     if (child.deletedAt !== undefined) {
       continue;
     }
-    const resolvedCourseIds = await resolveWithInheritance(ctx, child);
-    await ctx.db.patch(child._id, { resolvedCourseIds });
+    await patchPlanResolution(ctx, child);
 
     const grandchildren = await ctx.db
       .query("subscriptionPlans")
@@ -294,8 +449,7 @@ async function cascadeResolveChildPlansHandler(
       if (grandchild.deletedAt !== undefined) {
         continue;
       }
-      const gcResolved = await resolveWithInheritance(ctx, grandchild);
-      await ctx.db.patch(grandchild._id, { resolvedCourseIds: gcResolved });
+      await patchPlanResolution(ctx, grandchild);
     }
   }
 }
@@ -316,8 +470,7 @@ export const recomputePlansForCategory = internalMutation({
       if (!affected) {
         continue;
       }
-      const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
-      await ctx.db.patch(plan._id, { resolvedCourseIds });
+      await patchPlanResolution(ctx, plan);
       await cascadeResolveChildPlansHandler(ctx, plan._id);
     }
     return null;
@@ -353,6 +506,7 @@ export const insertPlanRecord = internalMutation({
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    maxCapacity: v.optional(v.number()),
     updatedBy: v.id("users"),
   },
   returns: v.id("subscriptionPlans"),
@@ -361,13 +515,13 @@ export const insertPlanRecord = internalMutation({
     const planId = await ctx.db.insert("subscriptionPlans", {
       ...args,
       resolvedCourseIds: [],
+      courseStats: EMPTY_PLAN_COURSE_STATS,
       updatedAt: now,
     });
 
     const plan = await ctx.db.get(planId);
     if (plan) {
-      const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
-      await ctx.db.patch(planId, { resolvedCourseIds });
+      await patchPlanResolution(ctx, plan);
       await cascadeResolveChildPlansHandler(ctx, planId);
     }
 
@@ -400,6 +554,7 @@ export const patchPlanRecord = internalMutation({
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    maxCapacity: v.optional(v.number()),
     updatedBy: v.id("users"),
   },
   returns: v.null(),
@@ -409,9 +564,24 @@ export const patchPlanRecord = internalMutation({
 
     const plan = await ctx.db.get(planId);
     if (plan && plan.deletedAt === undefined) {
-      const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
-      await ctx.db.patch(planId, { resolvedCourseIds });
+      await patchPlanResolution(ctx, plan);
       await cascadeResolveChildPlansHandler(ctx, planId);
+    }
+    return null;
+  },
+});
+
+export const recomputeAllPlanCourseStats = internalMutation({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    const plans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    for (const plan of plans) {
+      await patchPlanResolution(ctx, plan);
     }
     return null;
   },
@@ -574,5 +744,28 @@ export const getPlanByIdInternal = internalQuery({
       return null;
     }
     return plan;
+  },
+});
+
+/** For plan checkout: whether the plan has reached its subscriber cap. */
+export const getPlanCapacityStatus = internalQuery({
+  args: { planId: v.id("subscriptionPlans") },
+  returns: v.object({
+    maxCapacity: v.union(v.number(), v.null()),
+    activeSubscriberCount: v.number(),
+    isAtCapacity: v.boolean(),
+  }),
+  handler: async (ctx, { planId }) => {
+    const plan = await ctx.db.get(planId);
+    if (!plan || plan.deletedAt !== undefined) {
+      return { maxCapacity: null, activeSubscriberCount: 0, isAtCapacity: true };
+    }
+
+    const nowMs = Date.now();
+    const activeSubscriberCount = await countActiveSubscribersForPlan(ctx, plan, nowMs);
+    const maxCapacity = plan.maxCapacity ?? null;
+    const isAtCapacity = maxCapacity !== null && activeSubscriberCount >= maxCapacity;
+
+    return { maxCapacity, activeSubscriberCount, isAtCapacity };
   },
 });

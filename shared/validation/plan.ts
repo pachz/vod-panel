@@ -12,12 +12,17 @@ export const planThemeSchema = z.object({
   buttonBg: hexColorSchema,
 });
 
+export const planFeatureSubtitleModeSchema = z.enum(["manual", "template"]);
+
 export const planFeatureSchema = z.object({
   icon: z.string().min(1).max(64),
   title: z.string().trim().min(1).max(200),
   titleAr: z.string().trim().max(200).optional(),
   subtitle: z.string().trim().max(500).optional(),
   subtitleAr: z.string().trim().max(500).optional(),
+  subtitleMode: planFeatureSubtitleModeSchema.optional().default("manual"),
+  subtitleTemplate: z.string().trim().max(500).optional(),
+  subtitleTemplateAr: z.string().trim().max(500).optional(),
   isChecklistItem: z.boolean(),
   displayOrder: z.number().int().min(0).max(100),
 });
@@ -57,6 +62,7 @@ export const planCreateInputSchema = z.object({
   features: z.array(planFeatureSchema).max(30),
   displayOrder: z.number().int().min(0).max(1000),
   isActive: z.boolean(),
+  maxCapacity: z.number().int().min(1).max(1_000_000).optional(),
 });
 
 export const planUpdateInputSchema = planCreateInputSchema.omit({

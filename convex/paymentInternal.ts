@@ -147,6 +147,8 @@ export const upsertSubscription = internalMutation({
     canceledAt: v.optional(v.number()),
     interval: v.optional(v.string()),
     intervalCount: v.optional(v.number()),
+    planId: v.optional(v.id("subscriptionPlans")),
+    stripePriceId: v.optional(v.string()),
   },
   returns: v.id("subscriptions"),
   handler: async (ctx, args) => {
@@ -166,6 +168,8 @@ export const upsertSubscription = internalMutation({
         canceledAt: args.canceledAt,
         ...(args.interval !== undefined && { interval: args.interval }),
         ...(args.intervalCount !== undefined && { intervalCount: args.intervalCount }),
+        ...(args.planId !== undefined && { planId: args.planId }),
+        ...(args.stripePriceId !== undefined && { stripePriceId: args.stripePriceId }),
         updatedAt: Date.now(),
       });
       await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
@@ -185,6 +189,8 @@ export const upsertSubscription = internalMutation({
         canceledAt: args.canceledAt,
         interval: args.interval,
         intervalCount: args.intervalCount,
+        planId: args.planId,
+        stripePriceId: args.stripePriceId,
         createdAt: Date.now(),
         updatedAt: Date.now(),
       });
