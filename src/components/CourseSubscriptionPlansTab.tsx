@@ -21,7 +21,6 @@ const INCLUSION_LABELS = {
   direct: "Selected",
   category: "Via category",
   all_courses: "All courses",
-  inheritance: "Via parent plan",
 } as const;
 
 type CourseSubscriptionPlansTabProps = {

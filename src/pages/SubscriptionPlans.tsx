@@ -30,8 +30,8 @@ type PlanListItem = {
   resolvedCourseCount: number;
   activeSubscriberCount: number;
   maxCapacity?: number;
-  includesPlanId?: Id<"subscriptionPlans">;
-  includesPlanName?: string;
+  inheritsDescription?: string;
+  inheritsDescription_ar?: string;
 };
 
 const SubscriptionPlans = () => {
@@ -51,8 +51,9 @@ const SubscriptionPlans = () => {
       theme: p.theme,
       badgeTag: p.badgeTag,
       ribbonText: p.ribbonText,
+      inheritsDescription: p.inheritsDescription,
+      inheritsDescription_ar: p.inheritsDescription_ar,
       features: p.features,
-      includesPlanName: p.includesPlanName,
       resolvedCourseCount: p.resolvedCourseCount,
       isActive: p.isActive,
     }));

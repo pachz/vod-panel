@@ -109,6 +109,8 @@ export const planDocValidator = v.object({
     v.literal("none"),
   ),
   ribbonText: v.optional(v.string()),
+  inheritsDescription: v.optional(v.string()),
+  inheritsDescription_ar: v.optional(v.string()),
   includesPlanId: v.optional(v.id("subscriptionPlans")),
   includeAllCourses: v.boolean(),
   includedCourseIds: v.array(v.id("courses")),
@@ -216,60 +218,28 @@ async function computeOwnCourseIds(
   return result;
 }
 
-async function resolveWithInheritance(
+async function resolvePlanCourseIds(
   ctx: QueryCtx | MutationCtx,
-  plan: Doc<"subscriptionPlans">,
-  visited: Set<Id<"subscriptionPlans">> = new Set(),
+  plan: Pick<
+    Doc<"subscriptionPlans">,
+    "includeAllCourses" | "includedCourseIds" | "includedCategoryIds"
+  >,
 ): Promise<Id<"courses">[]> {
-  if (visited.has(plan._id)) {
-    return [];
-  }
-  visited.add(plan._id);
-
   const ownIds = await computeOwnCourseIds(ctx, plan);
-  const merged = new Set(ownIds);
-
-  if (plan.includesPlanId) {
-    const parent = await ctx.db.get(plan.includesPlanId);
-    if (parent && parent.deletedAt === undefined) {
-      const parentIds = await resolveWithInheritance(ctx, parent, visited);
-      for (const id of parentIds) {
-        merged.add(id);
-      }
-    }
-  }
-
-  return [...merged].sort();
+  return [...ownIds].sort();
 }
 
 type CoursePickerConfig = {
   includeAllCourses: boolean;
   includedCourseIds: Id<"courses">[];
   includedCategoryIds: Id<"categories">[];
-  includesPlanId?: Id<"subscriptionPlans">;
 };
 
 async function resolveCourseIdsFromPicker(
   ctx: QueryCtx | MutationCtx,
   config: CoursePickerConfig,
 ): Promise<Id<"courses">[]> {
-  const ownIds = await computeOwnCourseIds(ctx, {
-    includeAllCourses: config.includeAllCourses,
-    includedCourseIds: config.includedCourseIds,
-    includedCategoryIds: config.includedCategoryIds,
-  });
-
-  const merged = new Set(ownIds);
-  if (config.includesPlanId) {
-    const parent = await ctx.db.get(config.includesPlanId);
-    if (parent && parent.deletedAt === undefined) {
-      const parentIds = await resolveWithInheritance(ctx, parent);
-      for (const id of parentIds) {
-        merged.add(id);
-      }
-    }
-  }
-  return [...merged].sort();
+  return resolvePlanCourseIds(ctx, config);
 }
 
 export async function computePlanCourseStatsForIds(
@@ -296,7 +266,7 @@ async function patchPlanResolution(
   ctx: MutationCtx,
   plan: Doc<"subscriptionPlans">,
 ): Promise<void> {
-  const resolvedCourseIds = await resolveWithInheritance(ctx, plan);
+  const resolvedCourseIds = await resolvePlanCourseIds(ctx, plan);
   const courseStats = await computePlanCourseStatsForIds(ctx, resolvedCourseIds);
   await ctx.db.patch(plan._id, { resolvedCourseIds, courseStats });
 }
@@ -319,22 +289,13 @@ export async function computePlanCourseStatsForPlan(
   const courseIds =
     plan.resolvedCourseIds.length > 0
       ? plan.resolvedCourseIds
-      : await resolveCourseIdsFromPicker(ctx, {
-          includeAllCourses: plan.includeAllCourses,
-          includedCourseIds: plan.includedCourseIds,
-          includedCategoryIds: plan.includedCategoryIds,
-          includesPlanId: plan.includesPlanId,
-        });
+      : await resolvePlanCourseIds(ctx, plan);
   return computePlanCourseStatsForIds(ctx, courseIds);
 }
 
 export { resolveCourseIdsFromPicker };
 
-export type PlanCourseInclusionReason =
-  | "direct"
-  | "category"
-  | "all_courses"
-  | "inheritance";
+export type PlanCourseInclusionReason = "direct" | "category" | "all_courses";
 
 export function getCourseInclusionReason(
   plan: Pick<
@@ -359,7 +320,7 @@ export function getCourseInclusionReason(
   if (plan.includedCategoryIds.some((id) => courseCategoryIds.includes(id))) {
     return "category";
   }
-  return "inheritance";
+  return null;
 }
 
 export const addCourseToPlanRecord = internalMutation({
@@ -394,7 +355,6 @@ export const addCourseToPlanRecord = internalMutation({
     const updated = await ctx.db.get(planId);
     if (updated) {
       await patchPlanResolution(ctx, updated);
-      await cascadeResolveChildPlansHandler(ctx, planId);
     }
     return null;
   },
@@ -427,7 +387,6 @@ export const removeCourseFromPlanRecord = internalMutation({
     const updated = await ctx.db.get(planId);
     if (updated) {
       await patchPlanResolution(ctx, updated);
-      await cascadeResolveChildPlansHandler(ctx, planId);
     }
     return null;
   },
@@ -443,36 +402,6 @@ export const resolvePlanCourses = internalMutation({
     }
 
     await patchPlanResolution(ctx, plan);
-    return null;
-  },
-});
-
-export const cascadeResolveChildPlans = internalMutation({
-  args: { parentPlanId: v.id("subscriptionPlans") },
-  returns: v.null(),
-  handler: async (ctx, { parentPlanId }) => {
-    const children = await ctx.db
-      .query("subscriptionPlans")
-      .withIndex("by_includesPlanId", (q) => q.eq("includesPlanId", parentPlanId))
-      .collect();
-
-    for (const child of children) {
-      if (child.deletedAt !== undefined) {
-        continue;
-      }
-      await patchPlanResolution(ctx, child);
-
-      const grandchildren = await ctx.db
-        .query("subscriptionPlans")
-        .withIndex("by_includesPlanId", (q) => q.eq("includesPlanId", child._id))
-        .collect();
-      for (const grandchild of grandchildren) {
-        if (grandchild.deletedAt !== undefined) {
-          continue;
-        }
-        await patchPlanResolution(ctx, grandchild);
-      }
-    }
     return null;
   },
 });
@@ -523,39 +452,10 @@ export const recomputePlansForCourse = internalMutation({
 
     for (const planId of affectedPlanIds) {
       await patchPlanResolutionById(ctx, planId);
-      await cascadeResolveChildPlansHandler(ctx, planId);
     }
     return null;
   },
 });
-
-async function cascadeResolveChildPlansHandler(
-  ctx: MutationCtx,
-  parentPlanId: Id<"subscriptionPlans">,
-): Promise<void> {
-  const children = await ctx.db
-    .query("subscriptionPlans")
-    .withIndex("by_includesPlanId", (q) => q.eq("includesPlanId", parentPlanId))
-    .collect();
-
-  for (const child of children) {
-    if (child.deletedAt !== undefined) {
-      continue;
-    }
-    await patchPlanResolution(ctx, child);
-
-    const grandchildren = await ctx.db
-      .query("subscriptionPlans")
-      .withIndex("by_includesPlanId", (q) => q.eq("includesPlanId", child._id))
-      .collect();
-    for (const grandchild of grandchildren) {
-      if (grandchild.deletedAt !== undefined) {
-        continue;
-      }
-      await patchPlanResolution(ctx, grandchild);
-    }
-  }
-}
 
 export const recomputePlansForCategory = internalMutation({
   args: { categoryId: v.id("categories") },
@@ -574,7 +474,6 @@ export const recomputePlansForCategory = internalMutation({
         continue;
       }
       await patchPlanResolution(ctx, plan);
-      await cascadeResolveChildPlansHandler(ctx, plan._id);
     }
     return null;
   },
@@ -602,7 +501,8 @@ export const insertPlanRecord = internalMutation({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
+    inheritsDescription: v.optional(v.string()),
+    inheritsDescription_ar: v.optional(v.string()),
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
@@ -625,7 +525,6 @@ export const insertPlanRecord = internalMutation({
     const plan = await ctx.db.get(planId);
     if (plan) {
       await patchPlanResolution(ctx, plan);
-      await cascadeResolveChildPlansHandler(ctx, planId);
     }
 
     return planId;
@@ -650,7 +549,8 @@ export const patchPlanRecord = internalMutation({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
+    inheritsDescription: v.optional(v.string()),
+    inheritsDescription_ar: v.optional(v.string()),
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
@@ -668,7 +568,6 @@ export const patchPlanRecord = internalMutation({
     const plan = await ctx.db.get(planId);
     if (plan && plan.deletedAt === undefined) {
       await patchPlanResolution(ctx, plan);
-      await cascadeResolveChildPlansHandler(ctx, planId);
     }
     return null;
   },
@@ -754,10 +653,9 @@ export const archivePlanRecord = internalMutation({
 export const validateNewPlanInternal = internalQuery({
   args: {
     slug: v.string(),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
   },
   returns: v.null(),
-  handler: async (ctx, { slug, includesPlanId }) => {
+  handler: async (ctx, { slug }) => {
     const existing = await ctx.db
       .query("subscriptionPlans")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
@@ -765,26 +663,6 @@ export const validateNewPlanInternal = internalQuery({
     const conflict = existing.find((p) => p.deletedAt === undefined);
     if (conflict) {
       throw new Error("A plan with this slug already exists.");
-    }
-
-    if (includesPlanId) {
-      const parent = await ctx.db.get(includesPlanId);
-      if (!parent || parent.deletedAt !== undefined) {
-        throw new Error("Parent plan not found.");
-      }
-      let depth = 0;
-      let currentId: typeof includesPlanId | undefined = includesPlanId;
-      while (currentId) {
-        const node: Doc<"subscriptionPlans"> | null = await ctx.db.get(currentId);
-        if (!node?.includesPlanId) {
-          break;
-        }
-        depth++;
-        currentId = node.includesPlanId;
-      }
-      if (depth >= 2) {
-        throw new Error("Maximum inheritance depth is 2 levels.");
-      }
     }
     return null;
   },
@@ -794,10 +672,9 @@ export const validatePlanUpdateInternal = internalQuery({
   args: {
     planId: v.id("subscriptionPlans"),
     slug: v.string(),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
   },
   returns: v.null(),
-  handler: async (ctx, { planId, slug, includesPlanId }) => {
+  handler: async (ctx, { planId, slug }) => {
     const existing = await ctx.db
       .query("subscriptionPlans")
       .withIndex("by_slug", (q) => q.eq("slug", slug))
@@ -807,32 +684,6 @@ export const validatePlanUpdateInternal = internalQuery({
     );
     if (conflict) {
       throw new Error("A plan with this slug already exists.");
-    }
-
-    if (includesPlanId) {
-      if (includesPlanId === planId) {
-        throw new Error("A plan cannot inherit from itself.");
-      }
-      const parent = await ctx.db.get(includesPlanId);
-      if (!parent || parent.deletedAt !== undefined) {
-        throw new Error("Parent plan not found.");
-      }
-      let depth = 0;
-      let currentId: typeof includesPlanId | undefined = includesPlanId;
-      while (currentId) {
-        if (currentId === planId) {
-          throw new Error("Plan inheritance cannot form a cycle.");
-        }
-        const node: Doc<"subscriptionPlans"> | null = await ctx.db.get(currentId);
-        if (!node?.includesPlanId) {
-          break;
-        }
-        depth++;
-        currentId = node.includesPlanId;
-      }
-      if (depth >= 2) {
-        throw new Error("Maximum inheritance depth is 2 levels.");
-      }
     }
     return null;
   },

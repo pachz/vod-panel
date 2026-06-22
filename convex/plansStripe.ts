@@ -60,7 +60,8 @@ export const createPlanWithStripe = action({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
+    inheritsDescription: v.optional(v.string()),
+    inheritsDescription_ar: v.optional(v.string()),
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
@@ -86,7 +87,8 @@ export const createPlanWithStripe = action({
       theme: args.theme,
       badgeTag: args.badgeTag,
       ribbonText: args.ribbonText,
-      includesPlanId: args.includesPlanId,
+      inheritsDescription: args.inheritsDescription,
+      inheritsDescriptionAr: args.inheritsDescription_ar,
       includeAllCourses: args.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,
@@ -117,7 +119,6 @@ export const createPlanWithStripe = action({
     try {
       await ctx.runQuery(internal.plansInternal.validateNewPlanInternal, {
         slug: args.slug,
-        includesPlanId: args.includesPlanId,
       });
     } catch (error) {
       throw new ConvexError({
@@ -163,7 +164,8 @@ export const createPlanWithStripe = action({
         theme: args.theme,
         badgeTag: args.badgeTag,
         ribbonText: args.ribbonText,
-        includesPlanId: args.includesPlanId,
+        inheritsDescription: args.inheritsDescription,
+        inheritsDescription_ar: args.inheritsDescription_ar,
         includeAllCourses: args.includeAllCourses,
         includedCourseIds: args.includedCourseIds,
         includedCategoryIds: args.includedCategoryIds,

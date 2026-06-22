@@ -58,7 +58,8 @@ export type PlanFormState = {
   theme: PlanThemeInput;
   badgeTag: (typeof BADGE_TAG_OPTIONS)[number]["value"];
   ribbonText: string;
-  includesPlanId: string;
+  inheritsDescription: string;
+  inheritsDescriptionAr: string;
   includeAllCourses: boolean;
   includedCourseIds: Id<"courses">[];
   includedCategoryIds: Id<"categories">[];
@@ -80,7 +81,8 @@ const defaultFormState = (): PlanFormState => ({
   theme: { ...DEFAULT_PLAN_THEME_INPUT },
   badgeTag: "none",
   ribbonText: "",
-  includesPlanId: "",
+  inheritsDescription: "",
+  inheritsDescriptionAr: "",
   includeAllCourses: false,
   includedCourseIds: [],
   includedCategoryIds: [],
@@ -133,11 +135,7 @@ export function useSubscriptionPlanEditor() {
     api.plans.getPlan,
     planId ? { planId } : "skip",
   );
-  const inheritanceOptions = useQuery(api.plans.listPlansForInheritancePicker, {
-    excludePlanId: planId,
-  });
   const pickerCourses = useQuery(api.plans.listCoursesForPicker);
-  const planResolvedCourses = useQuery(api.plans.listPlanResolvedCourseIds);
 
   const createPlanWithStripe = useAction(api.plansStripe.createPlanWithStripe);
   const updatePlanPriceWithStripe = useAction(api.plansStripe.updatePlanPriceWithStripe);
@@ -157,30 +155,21 @@ export function useSubscriptionPlanEditor() {
       return planDetail?.courseStats ?? null;
     }
 
-    const planResolvedMap = new Map(
-      (planResolvedCourses ?? []).map((plan) => [plan._id, plan.resolvedCourseIds]),
-    );
     const courseIds = resolveCourseIdsFromPickerData(
       {
         includeAllCourses: form.includeAllCourses,
         includedCourseIds: form.includedCourseIds,
         includedCategoryIds: form.includedCategoryIds,
-        includesPlanId: form.includesPlanId
-          ? (form.includesPlanId as Id<"subscriptionPlans">)
-          : undefined,
       },
       pickerCourses,
-      planResolvedMap,
     );
     return computePlanCourseStatsForCourseIds(courseIds, pickerCourses);
   }, [
     pickerCourses,
-    planResolvedCourses,
     planDetail?.courseStats,
     form.includeAllCourses,
     form.includedCourseIds,
     form.includedCategoryIds,
-    form.includesPlanId,
   ]);
 
   useEffect(() => {
@@ -200,7 +189,8 @@ export function useSubscriptionPlanEditor() {
       theme: collapsePlanTheme(p.theme),
       badgeTag: p.badgeTag,
       ribbonText: p.ribbonText ?? "",
-      includesPlanId: p.includesPlanId ?? "",
+      inheritsDescription: p.inheritsDescription ?? "",
+      inheritsDescriptionAr: p.inheritsDescription_ar ?? "",
       includeAllCourses: p.includeAllCourses,
       includedCourseIds: p.includedCourseIds,
       includedCategoryIds: p.includedCategoryIds,
@@ -262,12 +252,13 @@ export function useSubscriptionPlanEditor() {
         isChecklistItem: f.isChecklistItem,
         displayOrder: f.displayOrder,
       })),
-      includesPlanName: inheritanceOptions?.find((p) => p._id === form.includesPlanId)?.name,
+      inheritsDescription: form.inheritsDescription.trim() || undefined,
+      inheritsDescription_ar: form.inheritsDescriptionAr.trim() || undefined,
       resolvedCourseCount: stats.courses,
       isActive: form.isActive,
     };
     },
-    [form, inheritanceOptions, planDetail?.plan.priceAmount, isNew, newPriceDollars, courseStats],
+    [form, planDetail?.plan.priceAmount, isNew, newPriceDollars, courseStats],
   );
 
   const applyPriceUpdate = useCallback(
@@ -292,9 +283,8 @@ export function useSubscriptionPlanEditor() {
     theme: expandPlanTheme(form.theme),
     badgeTag: form.badgeTag,
     ribbonText: form.ribbonText.trim() || undefined,
-    includesPlanId: form.includesPlanId
-      ? (form.includesPlanId as Id<"subscriptionPlans">)
-      : undefined,
+    inheritsDescription: form.inheritsDescription.trim() || undefined,
+    inheritsDescriptionAr: form.inheritsDescriptionAr.trim() || undefined,
     includeAllCourses: form.includeAllCourses,
     includedCourseIds: form.includedCourseIds,
     includedCategoryIds: form.includedCategoryIds,
@@ -309,7 +299,6 @@ export function useSubscriptionPlanEditor() {
     isNew,
     planId,
     planDetail,
-    inheritanceOptions,
     form,
     setField,
     setForm,
@@ -341,7 +330,6 @@ const SubscriptionPlanEditor = () => {
     isNew,
     planId,
     planDetail,
-    inheritanceOptions,
     form,
     setField,
     setForm,
@@ -419,7 +407,8 @@ const SubscriptionPlanEditor = () => {
           theme: args.theme,
           badgeTag: args.badgeTag,
           ribbonText: args.ribbonText,
-          includesPlanId: args.includesPlanId,
+          inheritsDescription: args.inheritsDescription,
+          inheritsDescription_ar: args.inheritsDescriptionAr,
           includeAllCourses: args.includeAllCourses,
           includedCourseIds: args.includedCourseIds,
           includedCategoryIds: args.includedCategoryIds,
@@ -736,31 +725,30 @@ const SubscriptionPlanEditor = () => {
 
           <Card className="card-elevated">
             <CardHeader>
-              <CardTitle>Inheritance</CardTitle>
+              <CardTitle>Inherits (optional)</CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <Label>Include everything from plan</Label>
-              <Select
-                value={form.includesPlanId || "__none__"}
-                onValueChange={(v) =>
-                  setField("includesPlanId", v === "__none__" ? "" : v)
-                }
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="None" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__none__">None</SelectItem>
-                  {inheritanceOptions?.map((p) => (
-                    <SelectItem key={p._id} value={p._id}>
-                      {p.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+            <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Up to 2 levels (e.g. Monthly → Annual → VIP).
+                Free text shown above the feature list, e.g. &quot;Everything in Monthly, plus&quot;
               </p>
+              <div className="space-y-2">
+                <Label>Inherits text (EN)</Label>
+                <Input
+                  value={form.inheritsDescription}
+                  onChange={(e) => setField("inheritsDescription", e.target.value)}
+                  placeholder="Everything in Monthly, plus"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label>Inherits text (AR)</Label>
+                <Input
+                  value={form.inheritsDescriptionAr}
+                  onChange={(e) => setField("inheritsDescriptionAr", e.target.value)}
+                  placeholder="كل ما في الباقة الشهرية، بالإضافة إلى"
+                  dir="rtl"
+                  className="text-right"
+                />
+              </div>
             </CardContent>
           </Card>
 

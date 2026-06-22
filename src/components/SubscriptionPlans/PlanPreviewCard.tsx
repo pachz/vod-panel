@@ -24,8 +24,9 @@ export type PlanPreviewData = {
   theme: PlanTheme;
   badgeTag: BadgeTag;
   ribbonText?: string;
+  inheritsDescription?: string;
+  inheritsDescription_ar?: string;
   features: PlanPreviewFeature[];
-  includesPlanName?: string;
   resolvedCourseCount?: number;
   isActive?: boolean;
 };
@@ -133,9 +134,13 @@ export function PlanPreviewCard({
       </div>
 
       <div className="flex-1 px-5 py-4">
-        {plan.includesPlanName && (
+        {(useArabic
+          ? plan.inheritsDescription_ar?.trim() || plan.inheritsDescription?.trim()
+          : plan.inheritsDescription?.trim()) && (
           <p className="mb-3 text-xs font-medium text-muted-foreground">
-            Everything in {plan.includesPlanName}, plus
+            {useArabic
+              ? plan.inheritsDescription_ar?.trim() || plan.inheritsDescription
+              : plan.inheritsDescription}
           </p>
         )}
         {sortedFeatures.length > 0 ? (

@@ -289,6 +289,8 @@ export default defineSchema({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
+    inheritsDescription: v.optional(v.string()),
+    inheritsDescription_ar: v.optional(v.string()),
     includesPlanId: v.optional(v.id("subscriptionPlans")),
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),

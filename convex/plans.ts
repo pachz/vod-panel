@@ -51,6 +51,8 @@ const planDocValidator = v.object({
     v.literal("none"),
   ),
   ribbonText: v.optional(v.string()),
+  inheritsDescription: v.optional(v.string()),
+  inheritsDescription_ar: v.optional(v.string()),
   includesPlanId: v.optional(v.id("subscriptionPlans")),
   includeAllCourses: v.boolean(),
   includedCourseIds: v.array(v.id("courses")),
@@ -147,83 +149,6 @@ function resolveStoredFeatures(
   }));
 }
 
-async function getPlanDepth(
-  ctx: QueryCtx | MutationCtx,
-  planId: Id<"subscriptionPlans">,
-): Promise<number> {
-  let depth = 0;
-  let currentId: Id<"subscriptionPlans"> | undefined = planId;
-  const visited = new Set<string>();
-
-  while (currentId) {
-    if (visited.has(currentId)) {
-      throw new ConvexError({
-        code: "INHERITANCE_CYCLE",
-        message: "Plan inheritance cannot form a cycle.",
-      });
-    }
-    visited.add(currentId);
-
-    const plan: Doc<"subscriptionPlans"> | null = await ctx.db.get(currentId);
-    if (!plan?.includesPlanId) {
-      break;
-    }
-    depth++;
-    currentId = plan.includesPlanId;
-    if (depth > 10) {
-      break;
-    }
-  }
-  return depth;
-}
-
-async function validateInheritance(
-  ctx: MutationCtx,
-  includesPlanId: Id<"subscriptionPlans"> | undefined,
-  selfPlanId?: Id<"subscriptionPlans">,
-): Promise<void> {
-  if (!includesPlanId) {
-    return;
-  }
-
-  if (selfPlanId && includesPlanId === selfPlanId) {
-    throw new ConvexError({
-      code: "INVALID_INHERITANCE",
-      message: "A plan cannot inherit from itself.",
-    });
-  }
-
-  const parent = await ctx.db.get(includesPlanId);
-  if (!parent || parent.deletedAt !== undefined) {
-    throw new ConvexError({
-      code: "INVALID_INHERITANCE",
-      message: "Parent plan not found.",
-    });
-  }
-
-  const parentDepth = await getPlanDepth(ctx, includesPlanId);
-  if (parentDepth >= 2) {
-    throw new ConvexError({
-      code: "MAX_INHERITANCE_DEPTH",
-      message: "Maximum inheritance depth is 2 levels (e.g. Monthly → Annual → VIP).",
-    });
-  }
-
-  if (selfPlanId) {
-    let cursor: Id<"subscriptionPlans"> | undefined = includesPlanId;
-    while (cursor) {
-      if (cursor === selfPlanId) {
-        throw new ConvexError({
-          code: "INHERITANCE_CYCLE",
-          message: "Plan inheritance cannot form a cycle.",
-        });
-      }
-      const node: Doc<"subscriptionPlans"> | null = await ctx.db.get(cursor);
-      cursor = node?.includesPlanId;
-    }
-  }
-}
-
 async function assertUniqueSlug(
   ctx: MutationCtx,
   slug: string,
@@ -265,6 +190,8 @@ const planListItemValidator = v.object({
     v.literal("none"),
   ),
   ribbonText: v.optional(v.string()),
+  inheritsDescription: v.optional(v.string()),
+  inheritsDescription_ar: v.optional(v.string()),
   features: v.array(
     v.object({
       icon: v.string(),
@@ -284,8 +211,6 @@ const planListItemValidator = v.object({
   resolvedCourseCount: v.number(),
   activeSubscriberCount: v.number(),
   maxCapacity: v.optional(v.number()),
-  includesPlanId: v.optional(v.id("subscriptionPlans")),
-  includesPlanName: v.optional(v.string()),
 });
 
 export const listPlans = query({
@@ -304,11 +229,6 @@ export const listPlans = query({
     const result = [];
     const nowMs = Date.now();
     for (const plan of filtered) {
-      let includesPlanName: string | undefined;
-      if (plan.includesPlanId) {
-        const parent = await ctx.db.get(plan.includesPlanId);
-        includesPlanName = parent?.name;
-      }
       const activeSubscriberCount = await countActiveSubscribersForPlan(ctx, plan, nowMs);
       const courseStats = getStoredPlanCourseStats(plan);
       result.push({
@@ -324,14 +244,14 @@ export const listPlans = query({
         theme: plan.theme,
         badgeTag: plan.badgeTag,
         ribbonText: plan.ribbonText,
+        inheritsDescription: plan.inheritsDescription,
+        inheritsDescription_ar: plan.inheritsDescription_ar,
         features: resolveStoredFeatures(plan.features, courseStats),
         displayOrder: plan.displayOrder,
         isActive: plan.isActive,
         resolvedCourseCount: plan.resolvedCourseIds.length,
         activeSubscriberCount,
         maxCapacity: plan.maxCapacity,
-        includesPlanId: plan.includesPlanId,
-        includesPlanName,
       });
     }
     return result;
@@ -340,7 +260,6 @@ export const listPlans = query({
 
 const planDetailValidator = v.object({
   plan: planDocValidator,
-  includesPlanName: v.optional(v.string()),
   activeSubscriberCount: v.number(),
   courseStats: v.object({
     courses: v.number(),
@@ -367,12 +286,6 @@ export const getPlan = query({
       return null;
     }
 
-    let includesPlanName: string | undefined;
-    if (plan.includesPlanId) {
-      const parent = await ctx.db.get(plan.includesPlanId);
-      includesPlanName = parent?.name;
-    }
-
     const resolvedCourses = [];
     for (const courseId of plan.resolvedCourseIds) {
       const course = await ctx.db.get(courseId);
@@ -387,34 +300,10 @@ export const getPlan = query({
 
     return {
       plan,
-      includesPlanName,
       activeSubscriberCount: await countActiveSubscribersForPlan(ctx, plan, Date.now()),
       courseStats: getStoredPlanCourseStats(plan),
       resolvedCourses,
     };
-  },
-});
-
-export const listPlanResolvedCourseIds = query({
-  args: {},
-  returns: v.array(
-    v.object({
-      _id: v.id("subscriptionPlans"),
-      resolvedCourseIds: v.array(v.id("courses")),
-    }),
-  ),
-  handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
-
-    const plans = await ctx.db
-      .query("subscriptionPlans")
-      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
-      .collect();
-
-    return plans.map((plan) => ({
-      _id: plan._id,
-      resolvedCourseIds: plan.resolvedCourseIds,
-    }));
   },
 });
 
@@ -475,45 +364,10 @@ export const listCategoriesForPicker = query({
   },
 });
 
-export const listPlansForInheritancePicker = query({
-  args: {
-    excludePlanId: v.optional(v.id("subscriptionPlans")),
-  },
-  returns: v.array(
-    v.object({
-      _id: v.id("subscriptionPlans"),
-      name: v.string(),
-      depth: v.number(),
-    }),
-  ),
-  handler: async (ctx, { excludePlanId }) => {
-    await requireUser(ctx, { requireTech: true });
-
-    const plans = await ctx.db
-      .query("subscriptionPlans")
-      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
-      .collect();
-
-    const result = [];
-    for (const plan of plans) {
-      if (excludePlanId && plan._id === excludePlanId) {
-        continue;
-      }
-      const depth = await getPlanDepth(ctx, plan._id);
-      if (depth >= 2) {
-        continue;
-      }
-      result.push({ _id: plan._id, name: plan.name, depth });
-    }
-    return result.sort((a, b) => a.name.localeCompare(b.name));
-  },
-});
-
 const planCourseInclusionValidator = v.union(
   v.literal("direct"),
   v.literal("category"),
   v.literal("all_courses"),
-  v.literal("inheritance"),
 );
 
 export const getCoursePlanMembership = query({
@@ -663,7 +517,8 @@ export const updatePlan = mutation({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
-    includesPlanId: v.optional(v.id("subscriptionPlans")),
+    inheritsDescription: v.optional(v.string()),
+    inheritsDescriptionAr: v.optional(v.string()),
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
@@ -694,7 +549,8 @@ export const updatePlan = mutation({
       theme: args.theme,
       badgeTag: args.badgeTag,
       ribbonText: args.ribbonText,
-      includesPlanId: args.includesPlanId,
+      inheritsDescription: args.inheritsDescription,
+      inheritsDescriptionAr: args.inheritsDescriptionAr,
       includeAllCourses: args.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,
@@ -723,7 +579,6 @@ export const updatePlan = mutation({
     }
 
     await assertUniqueSlug(ctx, parsed.data.slug, args.planId);
-    await validateInheritance(ctx, args.includesPlanId, args.planId);
 
     await ctx.runMutation(internal.plansInternal.patchPlanRecord, {
       planId: args.planId,
@@ -735,7 +590,8 @@ export const updatePlan = mutation({
       theme: parsed.data.theme,
       badgeTag: parsed.data.badgeTag,
       ribbonText: parsed.data.ribbonText,
-      includesPlanId: args.includesPlanId,
+      inheritsDescription: parsed.data.inheritsDescription,
+      inheritsDescription_ar: parsed.data.inheritsDescriptionAr,
       includeAllCourses: parsed.data.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,

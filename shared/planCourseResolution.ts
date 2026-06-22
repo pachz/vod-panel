@@ -15,7 +15,6 @@ export type PlanCoursePickerInput = {
   includeAllCourses: boolean;
   includedCourseIds: string[];
   includedCategoryIds: string[];
-  includesPlanId?: string;
 };
 
 export function resolveOwnCourseIdsFromPicker(
@@ -58,20 +57,8 @@ export function resolveOwnCourseIdsFromPicker(
 export function resolveCourseIdsFromPickerData(
   config: PlanCoursePickerInput,
   publishedCourses: readonly PlanCoursePickerCourse[],
-  planResolvedCourseIds: ReadonlyMap<string, readonly string[]>,
 ): string[] {
-  const merged = new Set(
-    resolveOwnCourseIdsFromPicker(config, publishedCourses),
-  );
-
-  if (config.includesPlanId) {
-    const parentIds = planResolvedCourseIds.get(config.includesPlanId) ?? [];
-    for (const courseId of parentIds) {
-      merged.add(courseId);
-    }
-  }
-
-  return [...merged].sort();
+  return resolveOwnCourseIdsFromPicker(config, publishedCourses);
 }
 
 export function computePlanCourseStatsForCourseIds(
