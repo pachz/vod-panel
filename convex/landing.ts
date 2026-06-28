@@ -16,6 +16,33 @@ type CategoryItem = {
   main: boolean;
 };
 
+type LandingPlanTheme = {
+  primary: string;
+  secondary: string;
+  border: string;
+  headerBg: string;
+  buttonBg: string;
+};
+
+type LandingCoursePackagePill = {
+  id: Id<"subscriptionPlans">;
+  slug: string;
+  nameEn: string;
+  nameAr: string;
+  color: string;
+  theme: LandingPlanTheme;
+  billingInterval: "month" | "year";
+  priceAmountCents: number;
+  priceAmount: number;
+  priceCurrency: string;
+  compareAtPriceAmountCents: number | null;
+  intervalLabel: string;
+  priceDisplay: string;
+  priceSubtitleEn: string | null;
+  priceSubtitleAr: string | null;
+  stripePriceId: string;
+};
+
 type LandingCourse = {
   id: Id<"courses">;
   slug: string;
@@ -31,6 +58,7 @@ type LandingCourse = {
   coverImageUrl: string;
   updatedAt: number;
   coachId: Id<"coaches"> | null;
+  cheapestPlan: LandingCoursePackagePill | null;
 };
 
 type LandingCourseLesson = {
@@ -40,7 +68,10 @@ type LandingCourseLesson = {
   durationMinutes: number;
 };
 
-type LandingCourseDetail = Omit<LandingCourse, "shortDescriptionEn" | "shortDescriptionAr"> & {
+type LandingCourseDetail = Omit<
+  LandingCourse,
+  "shortDescriptionEn" | "shortDescriptionAr" | "cheapestPlan"
+> & {
   shortDescriptionEn: string;
   shortDescriptionAr: string;
   instructor: string;
@@ -62,6 +93,111 @@ type LandingCoachProfile = {
   profileThumbnailUrl: string | null;
   lastUpdatedAt: number;
 };
+
+const landingPlanThemeValidator = v.object({
+  primary: v.string(),
+  secondary: v.string(),
+  border: v.string(),
+  headerBg: v.string(),
+  buttonBg: v.string(),
+});
+
+const landingCoursePackagePillValidator = v.object({
+  id: v.id("subscriptionPlans"),
+  slug: v.string(),
+  nameEn: v.string(),
+  nameAr: v.string(),
+  color: v.string(),
+  theme: landingPlanThemeValidator,
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  priceAmountCents: v.number(),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  compareAtPriceAmountCents: v.union(v.number(), v.null()),
+  intervalLabel: v.string(),
+  priceDisplay: v.string(),
+  priceSubtitleEn: v.union(v.string(), v.null()),
+  priceSubtitleAr: v.union(v.string(), v.null()),
+  stripePriceId: v.string(),
+});
+
+const INTERVAL_LABELS: Record<Doc<"subscriptionPlans">["billingInterval"], string> = {
+  month: "Monthly",
+  year: "Yearly",
+};
+
+function resolveLandingPlanPricing(plan: Doc<"subscriptionPlans">) {
+  const amount = plan.priceAmount / 100;
+  const intervalLabel = INTERVAL_LABELS[plan.billingInterval];
+  const currency = plan.priceCurrency.toUpperCase();
+
+  return {
+    billingInterval: plan.billingInterval,
+    priceAmountCents: plan.priceAmount,
+    priceAmount: amount,
+    priceCurrency: currency,
+    compareAtPriceAmountCents: plan.compareAtPriceAmount ?? null,
+    intervalLabel,
+    priceDisplay: `${currency} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
+    priceSubtitleEn: plan.priceSubtitle ?? null,
+    priceSubtitleAr: plan.priceSubtitle_ar ?? null,
+    stripePriceId: plan.stripePriceId,
+  };
+}
+
+function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
+  return (
+    plan.deletedAt === undefined &&
+    plan.isActive &&
+    plan.isHidden !== true
+  );
+}
+
+function mapPlanToLandingCoursePackagePill(
+  plan: Doc<"subscriptionPlans">,
+): LandingCoursePackagePill {
+  return {
+    id: plan._id,
+    slug: plan.slug,
+    nameEn: plan.name,
+    nameAr: plan.name_ar,
+    color: plan.theme.primary,
+    theme: plan.theme,
+    ...resolveLandingPlanPricing(plan),
+  };
+}
+
+function buildPublicPlansByCourseId(
+  publicPlans: Array<Doc<"subscriptionPlans">>,
+): Map<Id<"courses">, Array<Doc<"subscriptionPlans">>> {
+  const plansByCourseId = new Map<Id<"courses">, Array<Doc<"subscriptionPlans">>>();
+
+  for (const plan of publicPlans) {
+    for (const courseId of plan.resolvedCourseIds) {
+      const existing = plansByCourseId.get(courseId) ?? [];
+      existing.push(plan);
+      plansByCourseId.set(courseId, existing);
+    }
+  }
+
+  return plansByCourseId;
+}
+
+function resolveCheapestPlanForCourse(
+  plansByCourseId: Map<Id<"courses">, Array<Doc<"subscriptionPlans">>>,
+  courseId: Id<"courses">,
+): LandingCoursePackagePill | null {
+  const plans = plansByCourseId.get(courseId) ?? [];
+  if (plans.length === 0) {
+    return null;
+  }
+
+  const cheapest = plans.reduce((currentCheapest, plan) =>
+    plan.priceAmount < currentCheapest.priceAmount ? plan : currentCheapest,
+  );
+
+  return mapPlanToLandingCoursePackagePill(cheapest);
+}
 
 export const listLandingCoaches = internalQuery({
   args: {},
@@ -129,6 +265,7 @@ export const listLandingCourses = internalQuery({
       coverImageUrl: v.string(),
       updatedAt: v.number(),
       coachId: v.union(v.id("coaches"), v.null()),
+      cheapestPlan: v.union(landingCoursePackagePillValidator, v.null()),
     }),
   ),
   handler: async (ctx, args): Promise<Array<LandingCourse>> => {
@@ -169,6 +306,13 @@ export const listLandingCourses = internalQuery({
     const watchedHoursMap = new Map(
       courseIds.map((id, i) => [id, watchedHoursList[i] ?? 0]),
     );
+
+    const allPlans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+    const publicPlans = allPlans.filter(isPublicPlan);
+    const plansByCourseId = buildPublicPlansByCourseId(publicPlans);
 
     const categoryIds = Array.from(
       new Set<Id<"categories">>(courses.map((course) => course.category_id)),
@@ -232,6 +376,11 @@ export const listLandingCourses = internalQuery({
       }
       categories.push(...additionalItems);
 
+      const cheapestPlan = resolveCheapestPlanForCourse(
+        plansByCourseId,
+        course._id,
+      );
+
       return {
         id: course._id,
         slug: course.slug,
@@ -250,6 +399,7 @@ export const listLandingCourses = internalQuery({
           "",
         updatedAt: course.updatedAt ?? course.createdAt,
         coachId: course.coach_id ?? null,
+        cheapestPlan,
       };
     });
   },
@@ -444,14 +594,6 @@ export const getCoachById = internalQuery({
   },
 });
 
-const landingPlanThemeValidator = v.object({
-  primary: v.string(),
-  secondary: v.string(),
-  border: v.string(),
-  headerBg: v.string(),
-  buttonBg: v.string(),
-});
-
 const landingPackageFeatureValidator = v.object({
   icon: v.string(),
   titleEn: v.string(),
@@ -505,33 +647,6 @@ const landingPackageValidator = v.object({
   isAtCapacity: v.boolean(),
 });
 
-const landingCoursePackagePillValidator = v.object({
-  id: v.id("subscriptionPlans"),
-  slug: v.string(),
-  nameEn: v.string(),
-  nameAr: v.string(),
-  color: v.string(),
-  theme: landingPlanThemeValidator,
-  billingInterval: v.union(v.literal("month"), v.literal("year")),
-  priceAmountCents: v.number(),
-  priceAmount: v.number(),
-  priceCurrency: v.string(),
-  compareAtPriceAmountCents: v.union(v.number(), v.null()),
-  intervalLabel: v.string(),
-  priceDisplay: v.string(),
-  priceSubtitleEn: v.union(v.string(), v.null()),
-  priceSubtitleAr: v.union(v.string(), v.null()),
-  stripePriceId: v.string(),
-});
-
-type LandingPlanTheme = {
-  primary: string;
-  secondary: string;
-  border: string;
-  headerBg: string;
-  buttonBg: string;
-};
-
 type LandingPackage = {
   id: Id<"subscriptionPlans">;
   slug: string;
@@ -571,38 +686,6 @@ type LandingPackage = {
   displayOrder: number;
   isAtCapacity: boolean;
 };
-
-const INTERVAL_LABELS: Record<Doc<"subscriptionPlans">["billingInterval"], string> = {
-  month: "Monthly",
-  year: "Yearly",
-};
-
-function resolveLandingPlanPricing(plan: Doc<"subscriptionPlans">) {
-  const amount = plan.priceAmount / 100;
-  const intervalLabel = INTERVAL_LABELS[plan.billingInterval];
-  const currency = plan.priceCurrency.toUpperCase();
-
-  return {
-    billingInterval: plan.billingInterval,
-    priceAmountCents: plan.priceAmount,
-    priceAmount: amount,
-    priceCurrency: currency,
-    compareAtPriceAmountCents: plan.compareAtPriceAmount ?? null,
-    intervalLabel,
-    priceDisplay: `${currency} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
-    priceSubtitleEn: plan.priceSubtitle ?? null,
-    priceSubtitleAr: plan.priceSubtitle_ar ?? null,
-    stripePriceId: plan.stripePriceId,
-  };
-}
-
-function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
-  return (
-    plan.deletedAt === undefined &&
-    plan.isActive &&
-    plan.isHidden !== true
-  );
-}
 
 function resolveLandingFeatures(plan: Doc<"subscriptionPlans">) {
   const stats = getStoredPlanCourseStats(plan);
@@ -727,15 +810,7 @@ export const getLandingPlansForCourse = internalQuery({
           isPublicPlan(plan) && plan.resolvedCourseIds.includes(args.courseId),
       )
       .sort((a, b) => a.displayOrder - b.displayOrder)
-      .map((plan) => ({
-        id: plan._id,
-        slug: plan.slug,
-        nameEn: plan.name,
-        nameAr: plan.name_ar,
-        color: plan.theme.primary,
-        theme: plan.theme,
-        ...resolveLandingPlanPricing(plan),
-      }));
+      .map(mapPlanToLandingCoursePackagePill);
   },
 });
 
