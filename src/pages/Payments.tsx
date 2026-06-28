@@ -4,15 +4,22 @@ import { SubscriptionStatusCard } from "./Payments/SubscriptionStatusCard";
 import { AdminProductManagement } from "./Payments/AdminProductManagement";
 import { AdminMultipleActiveSubscriptions } from "./Payments/AdminMultipleActiveSubscriptions";
 import { SubscribeCard } from "./Payments/SubscribeCard";
+import { SubscriptionPackagePlans } from "./Payments/SubscriptionPackagePlans";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Layers } from "lucide-react";
 
 const Payments = () => {
   const navigate = useNavigate();
   const {
     t,
     isRTL,
+    language,
     translateInterval,
     subscription,
     paymentSettings,
+    usesPackageModel,
+    packagePlans,
+    hasActivePackageSubscription,
     isAdmin,
     usersWithMultipleActiveSubscriptions,
     isLoading,
@@ -56,6 +63,7 @@ const Payments = () => {
       <SubscriptionStatusCard
         subscription={subscription}
         paymentSettings={paymentSettings}
+        usesPackageModel={usesPackageModel}
         isSyncing={isSyncing}
         effectiveStatus={getEffectiveStatus()}
         cycleInfo={cycleInfo}
@@ -72,6 +80,27 @@ const Payments = () => {
         onOpenPortal={handleOpenCustomerPortal}
         onReSync={handleReSyncSubscription}
       />
+
+      {usesPackageModel && packagePlans.length > 0 && (
+        <Card className="card-elevated">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Layers className="h-5 w-5" />
+              {t("paymentsPackagePlansTitle")}
+            </CardTitle>
+            <CardDescription>{t("paymentsPackagePlansDescription")}</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <SubscriptionPackagePlans
+              plans={packagePlans}
+              hasActiveSubscription={hasActivePackageSubscription}
+              isRTL={isRTL}
+              language={language}
+              t={t}
+            />
+          </CardContent>
+        </Card>
+      )}
 
       {isAdmin && (
         <>
@@ -101,7 +130,7 @@ const Payments = () => {
         </>
       )}
 
-      {subscription && subscription.status === "canceled" && (
+      {subscription && subscription.status === "canceled" && !usesPackageModel && (
         <SubscribeCard
           paymentSettings={paymentSettings}
           isLoading={isLoading}

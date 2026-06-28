@@ -8,6 +8,15 @@ import {
   PLAN_PREVIEW_COPY,
 } from "../../../shared/planPreviewCopy";
 
+/** Keeps package plan cards readable — not too narrow on mobile, not too wide in modals. */
+export const PLAN_CARD_MIN_WIDTH_PX = 280;
+export const PLAN_CARD_MAX_WIDTH_PX = 360;
+export const planCardWidthClass =
+  "mx-auto w-[min(100%,360px)] shrink-0 min-w-[280px] max-w-[360px]";
+/** Up to 3 fixed-width cards per row on large screens; partial rows stay centered with normal gap. */
+export const planCardGridClass =
+  "mx-auto flex w-full max-w-6xl flex-wrap items-stretch justify-center gap-4";
+
 export type PlanPreviewFeature = {
   icon: string;
   title: string;
@@ -45,6 +54,12 @@ type PlanPreviewCardProps = {
   useArabic?: boolean;
   className?: string;
   showFooter?: boolean;
+  actionLabel?: string;
+  onAction?: () => void;
+  actionDisabled?: boolean;
+  actionLoading?: boolean;
+  /** Use in grids so cards fill their column instead of capping at 340px. */
+  layout?: "default" | "grid";
 };
 
 function savingsPercent(current: number, compareAt: number): number | null {
@@ -58,6 +73,11 @@ export function PlanPreviewCard({
   useArabic = false,
   className,
   showFooter = true,
+  actionLabel,
+  onAction,
+  actionDisabled = false,
+  actionLoading = false,
+  layout = "default",
 }: PlanPreviewCardProps) {
   const locale = getPlanPreviewLocale(useArabic);
   const copy = PLAN_PREVIEW_COPY[locale];
@@ -76,11 +96,15 @@ export function PlanPreviewCard({
 
   return (
     <div
-      className={cn("relative mx-auto w-full max-w-[340px]", className)}
+      className={cn(
+        "relative",
+        layout === "grid" ? cn("h-full", planCardWidthClass) : "mx-auto w-full max-w-[340px]",
+        className,
+      )}
       dir={isRTL ? "rtl" : "ltr"}
     >
       <div
-        className="relative flex flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-lg"
+        className="relative flex h-full min-h-full flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-lg"
         style={{ borderColor: plan.theme.border }}
       >
       {(() => {
@@ -219,11 +243,14 @@ export function PlanPreviewCard({
         <div className="px-5 pb-5 pt-2">
           <button
             type="button"
-            className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90"
+            className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"
             style={{ background: plan.theme.buttonBg }}
-            disabled
+            disabled={actionDisabled || actionLoading || (!onAction && plan.isActive === false)}
+            onClick={onAction}
           >
-            {plan.badgeTag === "vip" ? copy.joinVip : copy.selectPlan}
+            {actionLoading
+              ? copy.selectPlan
+              : actionLabel ?? (plan.badgeTag === "vip" ? copy.joinVip : copy.selectPlan)}
           </button>
           <p className="mt-3 text-center text-[10px] text-muted-foreground">
             {copy.securePayment}
@@ -267,13 +294,14 @@ export function PlanPreviewRow({ plans, highlightIndex, isRTL, useArabic = false
   }
 
   return (
-    <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+    <div className={planCardGridClass}>
       {plans.map((plan, index) => (
         <PlanPreviewCard
           key={`${plan.name}-${index}`}
           plan={plan}
           isRTL={isRTL}
           useArabic={useArabic}
+          layout="grid"
           className={cn(
             highlightIndex === index && "ring-2 ring-primary ring-offset-2 scale-[1.02]",
           )}

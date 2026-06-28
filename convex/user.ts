@@ -17,6 +17,7 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { requireUser, requireUserAction } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
 import { pickPrimarySubscriptionForUserDisplay } from "./paymentInternal";
+import { SUBSCRIPTION_MODEL, usesPackageSubscriptionModel } from "../shared/subscriptionModel";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
@@ -111,6 +112,9 @@ const userListItemValidator = v.object({
   isTech: v.optional(v.boolean()),
   deletedAt: v.optional(v.number()),
   stripeCustomerId: v.optional(v.string()),
+  subscriptionModel: v.optional(
+    v.union(v.literal("legacy"), v.literal("packages")),
+  ),
 });
 
 /**
@@ -233,9 +237,52 @@ export const searchUsers = query({
 });
 
 /**
- * Returns subscription status for the given user IDs (admin only).
- * Used by the Users table to show Active / None badges.
+ * Returns subscription status and billing model for the given user IDs (admin only).
  */
+export const getUserListMetadataForUsers = query({
+  args: {
+    userIds: v.array(v.id("users")),
+  },
+  returns: v.record(
+    v.string(),
+    v.object({
+      subscriptionStatus: v.union(v.literal("active"), v.literal("none")),
+      subscriptionModel: v.union(v.literal("legacy"), v.literal("packages")),
+    }),
+  ),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const result: Record<
+      string,
+      { subscriptionStatus: "active" | "none"; subscriptionModel: "legacy" | "packages" }
+    > = {};
+    const nowMs = Date.now();
+    for (const userId of args.userIds) {
+      const user = await ctx.db.get(userId);
+      const subs = await ctx.db
+        .query("subscriptions")
+        .withIndex("userId", (q) => q.eq("userId", userId))
+        .collect();
+      const sub = pickPrimarySubscriptionForUserDisplay(subs, nowMs);
+      result[userId] = {
+        subscriptionStatus:
+          sub &&
+          ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) &&
+          sub.currentPeriodEnd >= nowMs
+            ? "active"
+            : "none",
+        subscriptionModel:
+          user?.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES
+            ? SUBSCRIPTION_MODEL.PACKAGES
+            : SUBSCRIPTION_MODEL.LEGACY,
+      };
+    }
+    return result;
+  },
+});
+
+/** @deprecated Use getUserListMetadataForUsers */
 export const getSubscriptionStatusForUsers = query({
   args: {
     userIds: v.array(v.id("users")),
@@ -437,7 +484,17 @@ export const createUserRecord = internalMutation({
     const existing = allUsers.find((u) => !u.deletedAt);
 
     if (existing) {
-      await ctx.db.patch(existing._id, {
+      const patch: {
+        name: string;
+        email: string;
+        name_search: string | undefined;
+        phone: string | undefined;
+        isGod: boolean;
+        isTech: boolean;
+        emailVerificationTime: number;
+        deletedAt: undefined;
+        subscriptionModel?: typeof SUBSCRIPTION_MODEL.PACKAGES;
+      } = {
         name: args.name,
         email: args.email,
         name_search: buildNameSearch(args.name, args.email),
@@ -446,7 +503,12 @@ export const createUserRecord = internalMutation({
         isTech: args.isTech ?? false,
         emailVerificationTime: existing.emailVerificationTime ?? Date.now(),
         deletedAt: undefined,
-      });
+      };
+      if (existing.subscriptionModel === undefined) {
+        patch.subscriptionModel = SUBSCRIPTION_MODEL.PACKAGES;
+      }
+
+      await ctx.db.patch(existing._id, patch);
 
       await logActivity({
         ctx,
@@ -472,6 +534,7 @@ export const createUserRecord = internalMutation({
       isGod: args.isAdmin,
       isTech: args.isTech ?? false,
       emailVerificationTime: Date.now(), // Auto-verify for admin-created users
+      subscriptionModel: SUBSCRIPTION_MODEL.PACKAGES,
     });
 
     await logActivity({
@@ -935,16 +998,26 @@ export const getUserInfo = query({
     const nowMs = Date.now();
     const subscription = pickPrimarySubscriptionForUserDisplay(allSubscriptions, nowMs);
 
-    const subscriptionHistory = allSubscriptions.map((sub) => ({
-      subscriptionId: sub.subscriptionId,
-      status: sub.status,
-      currentPeriodStart: sub.currentPeriodStart,
-      currentPeriodEnd: sub.currentPeriodEnd,
-      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
-      canceledAt: sub.canceledAt,
-      createdAt: sub.createdAt,
-      isAdminGranted: sub.subscriptionId.startsWith("admin-grant-"),
-    }));
+    const subscriptionHistory = await Promise.all(
+      allSubscriptions.map(async (sub) => {
+        const plan = sub.planId ? await ctx.db.get(sub.planId) : null;
+        return {
+          subscriptionId: sub.subscriptionId,
+          status: sub.status,
+          currentPeriodStart: sub.currentPeriodStart,
+          currentPeriodEnd: sub.currentPeriodEnd,
+          cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+          canceledAt: sub.canceledAt,
+          createdAt: sub.createdAt,
+          isAdminGranted: sub.subscriptionId.startsWith("admin-grant-"),
+          planId: sub.planId,
+          planName: plan?.name,
+        };
+      }),
+    );
+
+    const activePlan =
+      subscription?.planId != null ? await ctx.db.get(subscription.planId) : null;
 
     // Checkout sessions (payment history)
     const checkoutSessions = await ctx.db
@@ -1055,6 +1128,10 @@ export const getUserInfo = query({
         emailVerificationTime: user.emailVerificationTime,
         createdAt: user._creationTime,
         stripeCustomerId: user.stripeCustomerId,
+        subscriptionModel:
+          user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES
+            ? SUBSCRIPTION_MODEL.PACKAGES
+            : SUBSCRIPTION_MODEL.LEGACY,
       },
       subscription: subscription
         ? {
@@ -1066,6 +1143,9 @@ export const getUserInfo = query({
             canceledAt: subscription.canceledAt,
             createdAt: subscription.createdAt,
             isAdminGranted: subscription.subscriptionId.startsWith("admin-grant-"),
+            planId: subscription.planId,
+            planName: activePlan?.name,
+            interval: subscription.interval,
           }
         : null,
       subscriptionHistory,
@@ -1086,12 +1166,13 @@ export const getUserInfo = query({
 
 /**
  * Admin-only: grant a subscription to a user who does not have an active one.
- * Creates an admin-granted subscription (no Stripe); duration in days.
+ * Legacy users: duration in days (all-access). Package users: assign a plan (internal, no payment).
  */
 export const adminGrantSubscription = mutation({
   args: {
     userId: v.id("users"),
     durationDays: v.optional(v.number()),
+    planId: v.optional(v.id("subscriptionPlans")),
   },
   returns: v.id("subscriptions"),
   handler: async (ctx, args) => {
@@ -1124,10 +1205,75 @@ export const adminGrantSubscription = mutation({
       });
     }
 
-    const days = args.durationDays ?? 365;
-    const periodEndMs = nowMs + days * 86400 * 1000;
     const subscriptionId = `admin-grant-${args.userId}-${Date.now()}`;
     const customerId = `admin-grant-${args.userId}`;
+    const packageUser = usesPackageSubscriptionModel(user);
+
+    if (packageUser) {
+      if (!args.planId) {
+        throw new ConvexError({
+          code: "PLAN_REQUIRED",
+          message: "Select a subscription plan for package billing users.",
+        });
+      }
+      if (args.durationDays !== undefined) {
+        throw new ConvexError({
+          code: "INVALID_ARGS",
+          message: "Duration is not used for package billing users. Select a plan instead.",
+        });
+      }
+
+      const plan = await ctx.db.get(args.planId);
+      if (!plan || plan.deletedAt !== undefined) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Subscription plan not found.",
+        });
+      }
+
+      const periodDays = plan.billingInterval === "month" ? 30 : 365;
+      const periodEndMs = nowMs + periodDays * 86400 * 1000;
+
+      const id = await ctx.db.insert("subscriptions", {
+        subscriptionId,
+        userId: args.userId,
+        customerId,
+        status: "active",
+        currentPeriodStart: nowMs,
+        currentPeriodEnd: periodEndMs,
+        cancelAtPeriodEnd: false,
+        interval: plan.billingInterval,
+        intervalCount: 1,
+        planId: args.planId,
+        stripePriceId: plan.stripePriceId,
+        createdAt: Date.now(),
+        updatedAt: Date.now(),
+      });
+
+      await logActivity({
+        ctx,
+        entityType: "user",
+        action: "updated",
+        entityId: args.userId,
+        entityName: user.name || user.email || "User",
+      });
+
+      await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+        userId: args.userId,
+      });
+
+      return id;
+    }
+
+    if (args.planId) {
+      throw new ConvexError({
+        code: "INVALID_ARGS",
+        message: "Plan selection is only for package billing users.",
+      });
+    }
+
+    const days = args.durationDays ?? 365;
+    const periodEndMs = nowMs + days * 86400 * 1000;
 
     const id = await ctx.db.insert("subscriptions", {
       subscriptionId,
@@ -1149,7 +1295,114 @@ export const adminGrantSubscription = mutation({
       entityName: user.name || user.email || "User",
     });
 
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+      userId: args.userId,
+    });
+
     return id;
+  },
+});
+
+export const getPackageMigrationStats = query({
+  args: {},
+  returns: v.object({
+    legacyCount: v.number(),
+    packagesCount: v.number(),
+    eligibleForMigrationCount: v.number(),
+  }),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    const nowMs = Date.now();
+    let legacyCount = 0;
+    let packagesCount = 0;
+    let eligibleForMigrationCount = 0;
+
+    for (const user of users) {
+      if (user.isGod) {
+        continue;
+      }
+
+      if (user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES) {
+        packagesCount += 1;
+        continue;
+      }
+
+      legacyCount += 1;
+
+      const subs = await ctx.db
+        .query("subscriptions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .collect();
+      const sub = pickPrimarySubscriptionForUserDisplay(subs, nowMs);
+      const hasActive =
+        sub &&
+        ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) &&
+        sub.currentPeriodEnd >= nowMs;
+
+      if (!hasActive) {
+        eligibleForMigrationCount += 1;
+      }
+    }
+
+    return { legacyCount, packagesCount, eligibleForMigrationCount };
+  },
+});
+
+export const migrateNoPlanUsersToPackages = mutation({
+  args: {},
+  returns: v.object({
+    updated: v.number(),
+    remaining: v.number(),
+  }),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const users = await ctx.db
+      .query("users")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    const nowMs = Date.now();
+    let updated = 0;
+
+    for (const user of users) {
+      if (user.isGod) {
+        continue;
+      }
+      if (user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES) {
+        continue;
+      }
+
+      const subs = await ctx.db
+        .query("subscriptions")
+        .withIndex("userId", (q) => q.eq("userId", user._id))
+        .collect();
+      const sub = pickPrimarySubscriptionForUserDisplay(subs, nowMs);
+      const hasActive =
+        sub &&
+        ACTIVE_SUBSCRIPTION_STATUSES.has(sub.status) &&
+        sub.currentPeriodEnd >= nowMs;
+
+      if (hasActive) {
+        continue;
+      }
+
+      await ctx.db.patch(user._id, {
+        subscriptionModel: SUBSCRIPTION_MODEL.PACKAGES,
+      });
+      updated += 1;
+    }
+
+    return {
+      updated,
+      remaining: 0,
+    };
   },
 });
 

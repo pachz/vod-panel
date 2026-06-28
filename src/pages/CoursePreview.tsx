@@ -14,7 +14,7 @@ import { LessonNavigationButtons } from "@/components/CoursePreview/LessonNaviga
 import { LessonTabs } from "@/components/CoursePreview/LessonTabs";
 import { LessonPlaylist } from "@/components/CoursePreview/LessonPlaylist";
 import { AboutCourseCard } from "@/components/CoursePreview/AboutCourseCard";
-import { Paywall } from "@/components/CoursePreview/Paywall";
+import { Paywall, PackagePaywall } from "@/components/CoursePreview";
 import {
   buildBeginCheckoutGtmPayload,
   pushGtmBeginCheckout,
@@ -33,8 +33,6 @@ const DEFAULT_PROGRESS: CourseProgress = {
   completedCount: 0,
   lastCompletedAt: null,
 };
-
-const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
 /** Duration is stored in seconds; format as time for course/lesson display (0:10 or 01:10:10). */
 const formatDurationTime = (seconds: number | undefined | null) => {
@@ -59,15 +57,18 @@ const CoursePreview = () => {
 
   const course = useQuery(api.course.getCourse, courseId ? { id: courseId } : undefined);
   const currentUser = useQuery(api.user.getCurrentUser);
+  const [accessNow] = useState(() => Date.now());
+  const courseAccessState = useQuery(
+    api.courseAccess.getCourseAccessState,
+    courseId ? { courseId, now: accessNow } : "skip",
+  );
   const subscription = useQuery(api.paymentInternal.getMySubscription);
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic);
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
+  const createPlanCheckoutSession = useAction(api.plansStripe.createPlanCheckoutSession);
+  const upgradePlanSubscription = useAction(api.plansStripe.upgradePlanSubscription);
   const isAdmin = currentUser?.isGod ?? false;
-  const hasActiveSubscription =
-    subscription &&
-    ACTIVE_SUBSCRIPTION_STATUSES.has(subscription.status) &&
-    subscription.currentPeriodEnd >= Date.now();
-  const canAccessProtectedContent = isAdmin || hasActiveSubscription;
+  const canAccessProtectedContent = courseAccessState?.canAccess ?? false;
   const lessons = useQuery(
     api.lesson.listLessonsByCourse,
     courseId && canAccessProtectedContent ? { courseId, status: "published" } : undefined,
@@ -86,6 +87,7 @@ const CoursePreview = () => {
   const [activeLessonId, setActiveLessonId] = useState<Id<"lessons"> | null>(null);
   const [isTogglingCompletion, setIsTogglingCompletion] = useState(false);
   const [isStartingCheckout, setIsStartingCheckout] = useState(false);
+  const [processingPlanId, setProcessingPlanId] = useState<Id<"subscriptionPlans"> | null>(null);
   const activeLessonRef = useRef<HTMLButtonElement>(null);
   const videoSectionRef = useRef<HTMLDivElement>(null);
   const buttonsSectionRef = useRef<HTMLDivElement>(null);
@@ -186,7 +188,7 @@ const CoursePreview = () => {
     );
   }
 
-  if (!isAdmin && subscription === undefined) {
+  if (!isAdmin && courseAccessState === undefined) {
     return (
       <div className="flex h-full items-center justify-center" dir={isRTL ? "rtl" : "ltr"}>
         <p className="text-muted-foreground">{t("checkingSubscription")}</p>
@@ -238,7 +240,62 @@ const CoursePreview = () => {
     }
   };
 
+  const handlePlanSelection = async (planId: Id<"subscriptionPlans">) => {
+    setProcessingPlanId(planId);
+
+    try {
+      if (courseAccessState?.paywallMode === "packages_upgrade") {
+        const result = await upgradePlanSubscription({ planId });
+        toast.success(result.message);
+        return;
+      }
+
+      const checkoutUrl = await createPlanCheckoutSession({ planId });
+      if (checkoutUrl) {
+        window.location.href = checkoutUrl;
+        return;
+      }
+
+      toast.error(t("packagePaywallCheckoutError"));
+    } catch (error) {
+      console.error(error);
+      const message =
+        error instanceof Error && error.message
+          ? error.message
+          : t("packagePaywallCheckoutError");
+      toast.error(message);
+    } finally {
+      setProcessingPlanId(null);
+    }
+  };
+
+  const navigateBackToCourses = () => {
+    const currentLang = searchParams.get("lang");
+    navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
+  };
+
   if (!canAccessProtectedContent) {
+    if (
+      courseAccessState.usesPackageModel &&
+      (courseAccessState.paywallMode === "packages_subscribe" ||
+        courseAccessState.paywallMode === "packages_upgrade")
+    ) {
+      return (
+        <PackagePaywall
+          course={course}
+          plans={courseAccessState.plans}
+          paywallMode={courseAccessState.paywallMode}
+          isProcessing={processingPlanId !== null}
+          processingPlanId={processingPlanId}
+          onSelectPlan={handlePlanSelection}
+          onBackToCourses={navigateBackToCourses}
+          language={language}
+          isRTL={isRTL}
+          t={t}
+        />
+      );
+    }
+
     return (
       <Paywall
         course={course}
@@ -248,10 +305,7 @@ const CoursePreview = () => {
         isPriceLoading={isPriceLoading}
         isStartingCheckout={isStartingCheckout}
         onStartSubscription={handleStartSubscription}
-        onBackToCourses={() => {
-          const currentLang = searchParams.get("lang");
-          navigate(`/courses/card${currentLang ? `?lang=${currentLang}` : ""}`);
-        }}
+        onBackToCourses={navigateBackToCourses}
         language={language}
         isRTL={isRTL}
         t={t}

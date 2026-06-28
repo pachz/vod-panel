@@ -20,13 +20,36 @@ export function formatDate(timestamp: number | string | undefined | null): strin
   }
 }
 
+const DEFAULT_CURRENCY = "usd";
+
+/** Normalize to a 3-letter ISO currency code; invalid/empty input falls back to USD. */
+export function normalizeCurrencyCode(
+  currency: string | undefined | null,
+  fallback = DEFAULT_CURRENCY,
+): string {
+  const code = currency?.trim().toLowerCase() ?? "";
+  if (code.length !== 3) {
+    return fallback;
+  }
+  try {
+    new Intl.NumberFormat("en-US", {
+      style: "currency",
+      currency: code.toUpperCase(),
+    }).format(0);
+    return code;
+  } catch {
+    return fallback;
+  }
+}
+
 /**
  * Format Stripe amount (cents) and currency for display.
  */
 export function formatPrice(amount: number, currency: string): string {
+  const normalized = normalizeCurrencyCode(currency);
   return new Intl.NumberFormat("en-US", {
     style: "currency",
-    currency: currency.toUpperCase(),
+    currency: normalized.toUpperCase(),
   }).format(amount / 100);
 }
 

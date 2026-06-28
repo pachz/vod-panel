@@ -324,3 +324,251 @@ export const archivePlanOnStripe = internalAction({
     return null;
   },
 });
+
+async function getOrCreateStripeCustomerForPlanCheckout(
+  ctx: import("./_generated/server").ActionCtx,
+  userId: Id<"users">,
+  stripe: Stripe,
+): Promise<string> {
+  const userWithCustomer = await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+    userId,
+  });
+
+  if (userWithCustomer?.stripeCustomerId) {
+    try {
+      await stripe.customers.retrieve(userWithCustomer.stripeCustomerId);
+      return userWithCustomer.stripeCustomerId;
+    } catch {
+      // fall through to create
+    }
+  }
+
+  const userFull = await ctx.runQuery(internal.paymentInternal.getUserFull, { userId });
+  if (!userFull) {
+    throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
+  }
+
+  const customer = await stripe.customers.create({
+    email: userFull.email || undefined,
+    name: userFull.name || undefined,
+    phone: userFull.phone || undefined,
+    metadata: { userId },
+  });
+
+  await ctx.runMutation(internal.paymentInternal.updateUserStripeCustomerId, {
+    userId,
+    stripeCustomerId: customer.id,
+  });
+
+  return customer.id;
+}
+
+export const createPlanCheckoutSession = action({
+  args: {
+    planId: v.id("subscriptionPlans"),
+    successUrl: v.optional(v.string()),
+    cancelUrl: v.optional(v.string()),
+  },
+  returns: v.string(),
+  handler: async (ctx, args): Promise<string> => {
+    const { userId } = await requireUserAction(ctx);
+    const userIdTyped = userId as Id<"users">;
+
+    const user = await ctx.runQuery(internal.user.getUserById, { id: userIdTyped });
+    if (!user || user.deletedAt) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
+    }
+    if (user.subscriptionModel !== "packages") {
+      throw new ConvexError({
+        code: "LEGACY_BILLING",
+        message: "Plan checkout is only available on the package billing model.",
+      });
+    }
+
+    const plan = await ctx.runQuery(internal.plansInternal.getPlanByIdInternal, {
+      planId: args.planId,
+    });
+    if (!plan || plan.deletedAt !== undefined || !plan.isActive || plan.isHidden === true) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Plan not available." });
+    }
+
+    const capacity = await ctx.runQuery(internal.plansInternal.getPlanCapacityStatus, {
+      planId: args.planId,
+    });
+    if (capacity.isAtCapacity) {
+      throw new ConvexError({
+        code: "PLAN_AT_CAPACITY",
+        message: "This plan is currently full. Please choose another plan.",
+      });
+    }
+
+    const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+      userId: userIdTyped,
+    });
+    const nowMs = Date.now();
+    if (
+      existingSub &&
+      (existingSub.status === "active" || existingSub.status === "trialing") &&
+      existingSub.currentPeriodEnd >= nowMs
+    ) {
+      throw new ConvexError({
+        code: "ALREADY_SUBSCRIBED",
+        message: "You already have an active subscription. Use upgrade instead.",
+      });
+    }
+
+    const stripe = getStripe();
+    const customerId = await getOrCreateStripeCustomerForPlanCheckout(ctx, userIdTyped, stripe);
+    const panelUrl = process.env.PANEL_URL || "http://localhost:5173";
+
+    const session = await stripe.checkout.sessions.create({
+      mode: "subscription",
+      customer: customerId,
+      payment_method_types: ["card"],
+      line_items: [{ price: plan.stripePriceId, quantity: 1 }],
+      allow_promotion_codes: true,
+      success_url: args.successUrl ?? `${panelUrl}/payments?success=true&session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: args.cancelUrl ?? `${panelUrl}/payments?canceled=true`,
+      metadata: {
+        userId: userIdTyped,
+        planId: args.planId,
+      },
+    });
+
+    if (!session.url || !session.id) {
+      throw new ConvexError({
+        code: "CHECKOUT_FAILED",
+        message: "Failed to create checkout session.",
+      });
+    }
+
+    await ctx.runMutation(internal.paymentInternal.storeCheckoutSession, {
+      sessionId: session.id,
+      userId: userIdTyped,
+    });
+
+    return session.url;
+  },
+});
+
+export const upgradePlanSubscription = action({
+  args: {
+    planId: v.id("subscriptionPlans"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    const { userId } = await requireUserAction(ctx);
+    const userIdTyped = userId as Id<"users">;
+
+    const user = await ctx.runQuery(internal.user.getUserById, { id: userIdTyped });
+    if (!user || user.deletedAt) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
+    }
+    if (user.subscriptionModel !== "packages") {
+      throw new ConvexError({
+        code: "LEGACY_BILLING",
+        message: "Plan upgrades are only available on the package billing model.",
+      });
+    }
+
+    const plan = await ctx.runQuery(internal.plansInternal.getPlanByIdInternal, {
+      planId: args.planId,
+    });
+    if (!plan || plan.deletedAt !== undefined || !plan.isActive || plan.isHidden === true) {
+      throw new ConvexError({ code: "NOT_FOUND", message: "Plan not available." });
+    }
+
+    const capacity = await ctx.runQuery(internal.plansInternal.getPlanCapacityStatus, {
+      planId: args.planId,
+    });
+    if (capacity.isAtCapacity) {
+      throw new ConvexError({
+        code: "PLAN_AT_CAPACITY",
+        message: "This plan is currently full. Please choose another plan.",
+      });
+    }
+
+    const existingSub = await ctx.runQuery(internal.paymentInternal.getMySubscriptionForUser, {
+      userId: userIdTyped,
+    });
+    const nowMs = Date.now();
+    if (
+      !existingSub ||
+      !((existingSub.status === "active" || existingSub.status === "trialing") &&
+        existingSub.currentPeriodEnd >= nowMs)
+    ) {
+      throw new ConvexError({
+        code: "NO_ACTIVE_SUBSCRIPTION",
+        message: "Subscribe to a plan first before upgrading.",
+      });
+    }
+
+    if (existingSub.planId === args.planId) {
+      throw new ConvexError({
+        code: "SAME_PLAN",
+        message: "You are already on this plan.",
+      });
+    }
+
+    if (existingSub.subscriptionId.startsWith("admin-grant-")) {
+      throw new ConvexError({
+        code: "ADMIN_GRANTED",
+        message: "Admin-granted subscriptions cannot be upgraded online. Contact support.",
+      });
+    }
+
+    const stripe = getStripe();
+    const stripeSubscription = await stripe.subscriptions.retrieve(existingSub.subscriptionId, {
+      expand: ["items.data.price"],
+    });
+    const itemId = stripeSubscription.items.data[0]?.id;
+    if (!itemId) {
+      throw new ConvexError({
+        code: "STRIPE_ERROR",
+        message: "Could not resolve subscription item for upgrade.",
+      });
+    }
+
+    const updated = await stripe.subscriptions.update(existingSub.subscriptionId, {
+      items: [{ id: itemId, price: plan.stripePriceId }],
+      proration_behavior: "create_prorations",
+    });
+
+    const updatedPeriodStart = (updated as { current_period_start?: number }).current_period_start;
+    const updatedPeriodEnd = (updated as { current_period_end?: number }).current_period_end;
+
+    await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
+      subscriptionId: updated.id,
+      userId: userIdTyped,
+      customerId:
+        typeof updated.customer === "string" ? updated.customer : updated.customer.id,
+      status: updated.status as
+        | "active"
+        | "canceled"
+        | "past_due"
+        | "unpaid"
+        | "incomplete"
+        | "trialing",
+      currentPeriodStart:
+        updatedPeriodStart != null ? updatedPeriodStart * 1000 : existingSub.currentPeriodStart,
+      currentPeriodEnd:
+        updatedPeriodEnd != null ? updatedPeriodEnd * 1000 : existingSub.currentPeriodEnd,
+      cancelAtPeriodEnd: Boolean((updated as { cancel_at_period_end?: boolean }).cancel_at_period_end),
+      canceledAt: (updated as { canceled_at?: number | null }).canceled_at
+        ? (updated as { canceled_at: number }).canceled_at * 1000
+        : undefined,
+      interval: plan.billingInterval,
+      intervalCount: 1,
+      planId: args.planId,
+      stripePriceId: plan.stripePriceId,
+    });
+
+    return {
+      success: true,
+      message: "Subscription upgraded successfully.",
+    };
+  },
+});

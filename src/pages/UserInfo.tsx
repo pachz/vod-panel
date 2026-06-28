@@ -27,6 +27,8 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 
+import { formatPrice } from "@/pages/Payments/utils";
+
 // Subscription period dates from backend are Unix milliseconds (Stripe and admin-grant)
 const periodDate = (ms: number) => new Date(ms);
 
@@ -42,12 +44,17 @@ const UserInfo = () => {
   const navigate = useNavigate();
   const [giveSubOpen, setGiveSubOpen] = useState(false);
   const [durationDays, setDurationDays] = useState<number>(365);
+  const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [isGranting, setIsGranting] = useState(false);
   const [isRefreshingSub, setIsRefreshingSub] = useState(false);
 
   const userInfo = useQuery(
     api.user.getUserInfo,
     id ? { id: id as Id<"users"> } : "skip"
+  );
+  const grantPlans = useQuery(
+    api.plans.listPlansForAdminGrant,
+    giveSubOpen && userInfo?.user.subscriptionModel === "packages" ? {} : "skip",
   );
   const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
   const adminSyncUserSubscriptionFromStripe = useAction(
@@ -77,6 +84,7 @@ const UserInfo = () => {
   }
 
   const { user, subscription, subscriptionHistory, checkoutHistory, paymentInfo, courses } = userInfo;
+  const isPackageUser = user.subscriptionModel === "packages";
   const nowMs = Date.now();
   const isPeriodActive = (endMs: number) => endMs >= nowMs;
   const hasActiveSubscription =
@@ -116,11 +124,21 @@ const UserInfo = () => {
 
   const handleGrantSubscription = async () => {
     if (!id) return;
+    if (isPackageUser && !selectedPlanId) {
+      toast.error("Select a subscription plan");
+      return;
+    }
     setIsGranting(true);
     try {
-      await adminGrantSubscription({ userId: id as Id<"users">, durationDays });
+      await adminGrantSubscription({
+        userId: id as Id<"users">,
+        ...(isPackageUser
+          ? { planId: selectedPlanId as Id<"subscriptionPlans"> }
+          : { durationDays }),
+      });
       toast.success("Subscription granted successfully");
       setGiveSubOpen(false);
+      setSelectedPlanId("");
     } catch (error: unknown) {
       const msg = error && typeof error === "object" && "data" in error && typeof (error as { data?: { message?: string } }).data?.message === "string"
         ? (error as { data: { message: string } }).data.message
@@ -317,6 +335,12 @@ const UserInfo = () => {
                   <div className="text-sm text-muted-foreground">Subscription ID</div>
                   <p className="font-mono text-sm break-all">{subscription.subscriptionId}</p>
                 </div>
+                {subscription.planName && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Plan</div>
+                    <p className="font-medium">{subscription.planName}</p>
+                  </div>
+                )}
                 <div className="space-y-1">
                   <div className="text-sm text-muted-foreground">Current Period Start</div>
                   <p className="font-medium">
@@ -374,6 +398,7 @@ const UserInfo = () => {
                     <TableHead>Period start</TableHead>
                     <TableHead>Period end</TableHead>
                     <TableHead>Created</TableHead>
+                    <TableHead>Plan</TableHead>
                     <TableHead>Source</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -389,6 +414,9 @@ const UserInfo = () => {
                       </TableCell>
                       <TableCell className="text-muted-foreground">
                         {format(new Date(sub.createdAt), "PPP")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {sub.planName ?? "—"}
                       </TableCell>
                       <TableCell>
                         {sub.isAdminGranted ? (
@@ -459,32 +487,79 @@ const UserInfo = () => {
           </DialogHeader>
           <div className="space-y-4 py-2">
             <p className="text-sm text-muted-foreground">
-              Grant an active subscription to this user. They will have full access until the period end.
+              {isPackageUser
+                ? "Assign a subscription plan to this user. Access follows the plan’s included courses for one billing period — no payment is collected."
+                : "Grant an active subscription to this user. They will have full access until the period end."}
             </p>
-            <div className="space-y-2">
-              <Label>Duration</Label>
-              <Select
-                value={String(durationDays)}
-                onValueChange={(v) => setDurationDays(Number(v))}
-              >
-                <SelectTrigger>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {DURATION_OPTIONS.map((opt) => (
-                    <SelectItem key={opt.value} value={String(opt.value)}>
-                      {opt.label}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            {isPackageUser ? (
+              <div className="space-y-2">
+                <Label>Subscription plan</Label>
+                {grantPlans === undefined ? (
+                  <p className="text-sm text-muted-foreground">Loading plans…</p>
+                ) : grantPlans.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No plans available.</p>
+                ) : (
+                  <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                    <SelectTrigger>
+                      <SelectValue placeholder="Select a plan" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {grantPlans.map((plan) => {
+                        const price = formatPrice(plan.priceAmount, plan.priceCurrency);
+                        const interval =
+                          plan.billingInterval === "month" ? "monthly" : "yearly";
+                        const flags = [
+                          plan.isHidden ? "hidden" : null,
+                          !plan.isActive ? "inactive" : null,
+                        ]
+                          .filter(Boolean)
+                          .join(", ");
+                        const label = flags
+                          ? `${plan.name} · ${price}/${interval} (${flags})`
+                          : `${plan.name} · ${price}/${interval}`;
+                        return (
+                          <SelectItem key={plan._id} value={plan._id}>
+                            {label}
+                          </SelectItem>
+                        );
+                      })}
+                    </SelectContent>
+                  </Select>
+                )}
+              </div>
+            ) : (
+              <div className="space-y-2">
+                <Label>Duration</Label>
+                <Select
+                  value={String(durationDays)}
+                  onValueChange={(v) => setDurationDays(Number(v))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {DURATION_OPTIONS.map((opt) => (
+                      <SelectItem key={opt.value} value={String(opt.value)}>
+                        {opt.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => setGiveSubOpen(false)} disabled={isGranting}>
               Cancel
             </Button>
-            <Button variant="cta" onClick={handleGrantSubscription} disabled={isGranting}>
+            <Button
+              variant="cta"
+              onClick={handleGrantSubscription}
+              disabled={
+                isGranting ||
+                (isPackageUser && (grantPlans === undefined || !selectedPlanId))
+              }
+            >
               {isGranting ? "Granting…" : "Grant subscription"}
             </Button>
           </DialogFooter>

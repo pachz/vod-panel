@@ -135,9 +135,11 @@ const Users = () => {
     [regularUsers]
   );
   const subscriptionStatus = useQuery(
-    api.user.getSubscriptionStatusForUsers,
+    api.user.getUserListMetadataForUsers,
     regularUserIds.length > 0 ? { userIds: regularUserIds } : "skip"
   );
+  const migrationStats = useQuery(api.user.getPackageMigrationStats);
+  const migrateNoPlanUsersToPackages = useMutation(api.user.migrateNoPlanUsersToPackages);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [isPasswordDialogOpen, setIsPasswordDialogOpen] = useState(false);
@@ -153,6 +155,7 @@ const Users = () => {
   });
   const [roleUpdating, setRoleUpdating] = useState<Record<string, boolean>>({});
   const [isExporting, setIsExporting] = useState(false);
+  const [isMigratingUsers, setIsMigratingUsers] = useState(false);
   const [mailchimpSyncingId, setMailchimpSyncingId] = useState<Id<"users"> | null>(null);
 
   useEffect(() => {
@@ -466,6 +469,19 @@ const Users = () => {
     }
   };
 
+  const handleMigrateNoPlanUsers = async () => {
+    setIsMigratingUsers(true);
+    try {
+      const result = await migrateNoPlanUsersToPackages({});
+      toast.success(`Migrated ${result.updated} user(s) to package billing.`);
+    } catch (error) {
+      console.error(error);
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsMigratingUsers(false);
+    }
+  };
+
   const handleMailchimpSyncUser = async (userId: Id<"users">) => {
     setMailchimpSyncingId(userId);
     try {
@@ -507,6 +523,21 @@ const Users = () => {
           </p>
         </div>
         <div className="flex gap-2">
+          {migrationStats && (
+            <div className="hidden items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground lg:flex">
+              <span>Legacy: {migrationStats.legacyCount}</span>
+              <span>Packages: {migrationStats.packagesCount}</span>
+              <span>Eligible: {migrationStats.eligibleForMigrationCount}</span>
+            </div>
+          )}
+          <Button
+            variant="outline"
+            onClick={handleMigrateNoPlanUsers}
+            disabled={isMigratingUsers || (migrationStats?.eligibleForMigrationCount ?? 0) === 0}
+            title="Move users without an active subscription to package billing"
+          >
+            {isMigratingUsers ? "Migrating…" : "Migrate no-plan users"}
+          </Button>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input
@@ -696,13 +727,14 @@ const Users = () => {
                   <TableHead>Email</TableHead>
                   <TableHead>Phone</TableHead>
                   <TableHead>Subscription Status</TableHead>
+                  <TableHead>Billing Model</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
                 {regularIsLoading ? (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
                         Loading users…
                       </div>
@@ -710,7 +742,7 @@ const Users = () => {
                   </TableRow>
                 ) : regularUsers.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={5}>
+                    <TableCell colSpan={6}>
                       <div className="flex h-24 items-center justify-center text-sm text-muted-foreground">
                         No users yet. Create your first user to get started.
                       </div>
@@ -739,10 +771,17 @@ const Users = () => {
                         <TableCell className="text-muted-foreground">{user.email ?? "—"}</TableCell>
                         <TableCell className="text-muted-foreground">{user.phone ?? "—"}</TableCell>
                         <TableCell>
-                          {subscriptionStatus?.[user._id] === "active" ? (
+                          {subscriptionStatus?.[user._id]?.subscriptionStatus === "active" ? (
                             <Badge variant="default">Active</Badge>
                           ) : (
                             <Badge variant="secondary">Inactive</Badge>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          {subscriptionStatus?.[user._id]?.subscriptionModel === "packages" ? (
+                            <Badge variant="outline">Packages</Badge>
+                          ) : (
+                            <Badge variant="secondary">Legacy</Badge>
                           )}
                         </TableCell>
                         <TableCell className="text-right">

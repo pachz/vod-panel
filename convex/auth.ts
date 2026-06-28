@@ -6,6 +6,7 @@ import { internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
 import { v, ConvexError } from "convex/values";
 import { ResendOTPPasswordReset } from "./ResendOTPPasswordReset";
+import { SUBSCRIPTION_MODEL } from "../shared/subscriptionModel";
 
 export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
   providers: [Password({
@@ -51,6 +52,12 @@ export const { auth, signIn, signOut, store, isAuthenticated } = convexAuth({
         }
         if (user.isTech === undefined) {
           patch.isTech = false;
+        }
+        if (
+          user.subscriptionModel === undefined &&
+          Date.now() - user._creationTime < 60_000
+        ) {
+          patch.subscriptionModel = SUBSCRIPTION_MODEL.PACKAGES;
         }
 
         if (Object.keys(patch).length > 0) {

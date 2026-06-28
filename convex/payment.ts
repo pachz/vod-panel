@@ -84,6 +84,35 @@ function getSubscriptionInterval(subscription: any): { interval: string; interva
   };
 }
 
+function getStripePriceIdFromSubscription(subscription: Stripe.Subscription): string | null {
+  const item = subscription.items?.data?.[0];
+  if (!item?.price) {
+    return null;
+  }
+  const price = item.price;
+  return typeof price === "string" ? price : price.id ?? null;
+}
+
+async function resolvePlanFieldsForStripeSubscription(
+  ctx: ActionCtx,
+  subscription: Stripe.Subscription,
+): Promise<{ planId?: Id<"subscriptionPlans">; stripePriceId?: string }> {
+  const stripePriceId = getStripePriceIdFromSubscription(subscription);
+  if (!stripePriceId) {
+    return {};
+  }
+
+  const planId: Id<"subscriptionPlans"> | null = await ctx.runQuery(
+    internal.plansInternal.resolvePlanFromStripePriceId,
+    { stripePriceId },
+  );
+
+  return {
+    stripePriceId,
+    ...(planId ? { planId } : {}),
+  };
+}
+
 type ConvexStripeSubscriptionStatus =
   | "active"
   | "canceled"
@@ -2130,6 +2159,8 @@ async function handleCheckoutSessionCompleted(
       currentPeriodEnd: existingSub.currentPeriodEnd,
     } : undefined);
     const intervalInfo = getSubscriptionInterval(subscription);
+    const metadataPlanId = session.metadata?.planId as Id<"subscriptionPlans"> | undefined;
+    const planFields = await resolvePlanFieldsForStripeSubscription(ctx, subscription);
 
     // Using type assertion until API regenerates
     await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
@@ -2143,6 +2174,8 @@ async function handleCheckoutSessionCompleted(
       canceledAt: (subscription as any).canceled_at ? convertStripeTimestamp((subscription as any).canceled_at, "canceled_at") : undefined,
       interval: intervalInfo?.interval,
       intervalCount: intervalInfo?.intervalCount,
+      planId: metadataPlanId ?? planFields.planId,
+      stripePriceId: planFields.stripePriceId,
     });
   }
 }
@@ -2213,6 +2246,7 @@ async function handleSubscriptionUpdate(
     currentPeriodEnd: existingSub.currentPeriodEnd,
   } : undefined);
   const intervalInfo = getSubscriptionInterval(subscriptionExpanded);
+  const planFields = await resolvePlanFieldsForStripeSubscription(ctx, subscriptionExpanded);
 
   await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscriptionExpanded.id,
@@ -2225,6 +2259,8 @@ async function handleSubscriptionUpdate(
     canceledAt: (subscriptionExpanded as any).canceled_at ? convertStripeTimestamp((subscriptionExpanded as any).canceled_at, "canceled_at") : undefined,
     interval: intervalInfo?.interval,
     intervalCount: intervalInfo?.intervalCount,
+    planId: planFields.planId,
+    stripePriceId: planFields.stripePriceId,
   });
 }
 

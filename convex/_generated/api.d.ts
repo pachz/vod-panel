@@ -15,6 +15,7 @@ import type * as category from "../category.js";
 import type * as chapter from "../chapter.js";
 import type * as coach from "../coach.js";
 import type * as course from "../course.js";
+import type * as courseAccess from "../courseAccess.js";
 import type * as crons from "../crons.js";
 import type * as dashboard from "../dashboard.js";
 import type * as http from "../http.js";
@@ -53,6 +54,7 @@ declare const fullApi: ApiFromModules<{
   chapter: typeof chapter;
   coach: typeof coach;
   course: typeof course;
+  courseAccess: typeof courseAccess;
   crons: typeof crons;
   dashboard: typeof dashboard;
   http: typeof http;

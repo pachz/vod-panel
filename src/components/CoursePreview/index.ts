@@ -6,5 +6,7 @@ export { LessonPlaylist } from "./LessonPlaylist";
 export { LessonPlaylistItem } from "./LessonPlaylistItem";
 export { AboutCourseCard } from "./AboutCourseCard";
 export { Paywall } from "./Paywall";
+export { PackagePaywall } from "./PackagePaywall";
+export { PlanCompareModal } from "./PlanCompareModal";
 export { renderMarkdown } from "./MarkdownRenderer";
 

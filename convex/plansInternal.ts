@@ -724,6 +724,35 @@ export const getPlanByIdInternal = internalQuery({
   },
 });
 
+/** Resolve subscription plan from a Stripe price id (current or archived). */
+export const resolvePlanFromStripePriceId = internalQuery({
+  args: { stripePriceId: v.string() },
+  returns: v.union(v.id("subscriptionPlans"), v.null()),
+  handler: async (ctx, { stripePriceId }) => {
+    const plans = await ctx.db.query("subscriptionPlans").collect();
+    for (const plan of plans) {
+      if (plan.deletedAt !== undefined) {
+        continue;
+      }
+      if (plan.stripePriceId === stripePriceId) {
+        return plan._id;
+      }
+    }
+
+    const historyEntries = await ctx.db.query("subscriptionPlanPriceHistory").collect();
+    for (const entry of historyEntries) {
+      if (entry.stripePriceId === stripePriceId) {
+        const plan = await ctx.db.get(entry.planId);
+        if (plan && plan.deletedAt === undefined) {
+          return plan._id;
+        }
+      }
+    }
+
+    return null;
+  },
+});
+
 /** For plan checkout: whether the plan has reached its subscriber cap. */
 export const getPlanCapacityStatus = internalQuery({
   args: { planId: v.id("subscriptionPlans") },

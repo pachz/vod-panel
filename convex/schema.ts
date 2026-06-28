@@ -19,8 +19,13 @@ export default defineSchema({
     isTech: v.optional(v.boolean()),
     deletedAt: v.optional(v.number()),
     stripeCustomerId: v.optional(v.string()), // Stripe customer ID
+    /** When "packages", user sees plan-based billing; unset/legacy = all-access subscription. */
+    subscriptionModel: v.optional(
+      v.union(v.literal("legacy"), v.literal("packages")),
+    ),
   })
     .index("email", ["email", "deletedAt"])
+    .index("by_deletedAt_subscriptionModel", ["deletedAt", "subscriptionModel"])
     .index("stripeCustomerId", ["stripeCustomerId"])
     .index("by_deletedAt", ["deletedAt"])
     .index("by_deletedAt_isGod", ["deletedAt", "isGod"])

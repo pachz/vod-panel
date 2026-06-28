@@ -483,15 +483,16 @@ export const getMySubscriptionForUser = internalQuery({
       canceledAt: v.optional(v.number()),
       interval: v.optional(v.string()),
       intervalCount: v.optional(v.number()),
+      planId: v.optional(v.id("subscriptionPlans")),
     }),
     v.null()
   ),
   handler: async (ctx, args) => {
-    const subscription = await ctx.db
+    const allForUser = await ctx.db
       .query("subscriptions")
       .withIndex("userId", (q) => q.eq("userId", args.userId))
-      .order("desc")
-      .first();
+      .collect();
+    const subscription = pickPrimarySubscriptionForUserDisplay(allForUser, Date.now());
 
     if (!subscription) {
       return null;
@@ -506,6 +507,7 @@ export const getMySubscriptionForUser = internalQuery({
       canceledAt: subscription.canceledAt,
       interval: subscription.interval,
       intervalCount: subscription.intervalCount,
+      planId: subscription.planId,
     };
   },
 });

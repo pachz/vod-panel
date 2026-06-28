@@ -272,6 +272,41 @@ export const listPlans = query({
   },
 });
 
+const adminGrantPlanOptionValidator = v.object({
+  _id: v.id("subscriptionPlans"),
+  name: v.string(),
+  name_ar: v.string(),
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  isHidden: v.boolean(),
+  isActive: v.boolean(),
+});
+
+/** All non-archived plans for admin grant (includes hidden and inactive). */
+export const listPlansForAdminGrant = query({
+  args: {},
+  returns: v.array(adminGrantPlanOptionValidator),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGod: true });
+
+    const plans = await ctx.db.query("subscriptionPlans").collect();
+    return plans
+      .filter((plan) => plan.deletedAt === undefined)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((plan) => ({
+        _id: plan._id,
+        name: plan.name,
+        name_ar: plan.name_ar,
+        billingInterval: plan.billingInterval,
+        priceAmount: plan.priceAmount,
+        priceCurrency: plan.priceCurrency,
+        isHidden: plan.isHidden === true,
+        isActive: plan.isActive,
+      }));
+  },
+});
+
 const planDetailValidator = v.object({
   plan: planDocValidator,
   activeSubscriberCount: v.number(),

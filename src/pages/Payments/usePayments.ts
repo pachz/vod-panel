@@ -73,7 +73,8 @@ export type UserWithMultipleActiveSubscriptions = {
 
 export function usePayments() {
   const [searchParams, setSearchParams] = useSearchParams();
-  const { t, isRTL, translateInterval } = useLanguage();
+  const { t, isRTL, translateInterval, language } = useLanguage();
+  const [packagePlansNow] = useState(() => Date.now());
 
   const createCheckoutSession = useAction(api.payment.createCheckoutSession);
   const syncSubscriptionStatus = useAction(api.payment.syncSubscriptionStatus);
@@ -86,6 +87,9 @@ export function usePayments() {
   const subscription = useQuery(api.paymentInternal.getMySubscription) as Subscription | null | undefined;
   const currentUser = useQuery(api.user.getCurrentUser);
   const paymentSettings = useQuery(api.paymentInternal.getPaymentSettingsPublic) as PaymentSettings | null | undefined;
+  const packagePlansData = useQuery(api.courseAccess.listSubscriberPackagePlans, {
+    now: packagePlansNow,
+  });
 
   const [isLoading, setIsLoading] = useState(false);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -101,6 +105,9 @@ export function usePayments() {
   const [isSavingSettings, setIsSavingSettings] = useState(false);
 
   const isAdmin = currentUser?.isGod ?? false;
+  const usesPackageModel = packagePlansData?.usesPackageModel ?? false;
+  const packagePlans = packagePlansData?.plans ?? [];
+  const hasActivePackageSubscription = packagePlansData?.hasActiveSubscription ?? false;
   const usersWithMultipleActiveSubscriptions = useQuery(
     api.paymentInternal.getUsersWithMultipleActiveSubscriptions,
     isAdmin ? {} : "skip",
@@ -335,9 +342,13 @@ export function usePayments() {
   return {
     t,
     isRTL,
+    language,
     translateInterval,
     subscription,
     paymentSettings,
+    usesPackageModel,
+    packagePlans,
+    hasActivePackageSubscription,
     isAdmin,
     usersWithMultipleActiveSubscriptions,
     isLoading,

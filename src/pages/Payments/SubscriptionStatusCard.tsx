@@ -10,6 +10,7 @@ import type { CycleInfo } from "./utils";
 type SubscriptionStatusCardProps = {
   subscription: Subscription | null | undefined;
   paymentSettings: PaymentSettings | null | undefined;
+  usesPackageModel: boolean;
   isSyncing: boolean;
   effectiveStatus: string;
   cycleInfo: CycleInfo | null;
@@ -30,6 +31,7 @@ type SubscriptionStatusCardProps = {
 export function SubscriptionStatusCard({
   subscription,
   paymentSettings,
+  usesPackageModel,
   isSyncing,
   effectiveStatus,
   cycleInfo,
@@ -69,14 +71,18 @@ export function SubscriptionStatusCard({
             <p>{t("syncingSubscriptionStatus")}</p>
           </div>
         ) : subscription === null ? (
-          <SubscriptionNoPlan
-            paymentSettings={paymentSettings}
-            isLoading={isLoading}
-            isRTL={isRTL}
-            t={t}
-            translateInterval={translateInterval}
-            onSubscribe={onSubscribe}
-          />
+          usesPackageModel ? (
+            <p className="text-sm text-muted-foreground">{t("noActiveSubscription")}</p>
+          ) : (
+            <SubscriptionNoPlan
+              paymentSettings={paymentSettings}
+              isLoading={isLoading}
+              isRTL={isRTL}
+              t={t}
+              translateInterval={translateInterval}
+              onSubscribe={onSubscribe}
+            />
+          )
         ) : (
           <SubscriptionActive
             subscription={subscription}
