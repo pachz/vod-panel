@@ -229,7 +229,7 @@ export const listPlans = query({
   },
   returns: v.array(planListItemValidator),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const plans = await ctx.db.query("subscriptionPlans").collect();
     const filtered = plans
@@ -328,7 +328,7 @@ export const getPlan = query({
   args: { planId: v.id("subscriptionPlans") },
   returns: v.union(planDetailValidator, v.null()),
   handler: async (ctx, { planId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const plan = await ctx.db.get(planId);
     if (!plan) {
@@ -370,7 +370,7 @@ export const listCoursesForPicker = query({
     }),
   ),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const courses = await ctx.db
       .query("courses")
@@ -403,7 +403,7 @@ export const listCategoriesForPicker = query({
     }),
   ),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const categories = await ctx.db.query("categories").collect();
     return categories
@@ -441,7 +441,7 @@ export const getCoursePlanMembership = query({
     ),
   }),
   handler: async (ctx, { courseId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const course = await ctx.db.get(courseId);
     if (!course || course.deletedAt !== undefined) {
@@ -495,7 +495,7 @@ export const addCourseToPlan = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
@@ -525,7 +525,7 @@ export const removeCourseFromPlan = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
@@ -583,7 +583,7 @@ export const updatePlan = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
@@ -677,7 +677,7 @@ export const updatePlanPrice = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });
@@ -707,7 +707,7 @@ export const archivePlan = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new ConvexError({ code: "UNAUTHENTICATED", message: "Not authenticated." });

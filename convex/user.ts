@@ -365,12 +365,22 @@ export const getCurrentUserInternal = internalQuery({
   },
 });
 
-// Internal query to check if user is tech staff (for subscription plans and related actions)
+// Internal query to check if user is tech staff
 export const requireTechQuery = internalQuery({
   args: {},
   returns: v.null(),
   handler: async (ctx) => {
     await requireUser(ctx, { requireTech: true });
+    return null;
+  },
+});
+
+/** Admin or tech — subscription plan management. */
+export const requireGodOrTechQuery = internalQuery({
+  args: {},
+  returns: v.null(),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireGodOrTech: true });
     return null;
   },
 });

@@ -258,10 +258,10 @@ const App = () => (
               <Route path="/users" element={<Users />} />
               <Route path="/users/:id/info" element={<UserInfo />} />
             </Route>
+            <Route path="/subscription-plans" element={<SubscriptionPlans />} />
+            <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
             <Route element={<TechRoute />}>
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
-              <Route path="/subscription-plans" element={<SubscriptionPlans />} />
-              <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
             </Route>
           </Route>
         </Route>

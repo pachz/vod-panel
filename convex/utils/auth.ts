@@ -8,6 +8,8 @@ type UserDoc = Doc<"users">;
 type RequireUserOptions = {
   requireGod?: boolean;
   requireTech?: boolean;
+  /** Admin (isGod) or tech staff (isTech). */
+  requireGodOrTech?: boolean;
 };
 
 type RequireUserResult<T extends boolean = false> = T extends true
@@ -35,7 +37,8 @@ export const requireUser = async <T extends boolean = false>(
     });
   }
 
-  const needsRoleCheck = options?.requireGod || options?.requireTech;
+  const needsRoleCheck =
+    options?.requireGod || options?.requireTech || options?.requireGodOrTech;
   if (!needsRoleCheck) {
     return { identity } as RequireUserResult<T>;
   }
@@ -67,18 +70,27 @@ export const requireUser = async <T extends boolean = false>(
     });
   }
 
-  if (options?.requireTech && !user.isTech) {
-    throw new ConvexError({
-      code: "UNAUTHORIZED",
-      message: "You must be a tech administrator to access this resource.",
-    });
-  }
+  if (options?.requireGodOrTech) {
+    if (!user.isGod && !user.isTech) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "You must be an administrator or tech staff to access this resource.",
+      });
+    }
+  } else {
+    if (options?.requireTech && !user.isTech) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "You must be a tech administrator to access this resource.",
+      });
+    }
 
-  if (options?.requireGod && !user.isGod) {
-    throw new ConvexError({
-      code: "UNAUTHORIZED",
-      message: "You must be an administrator to access this resource.",
-    });
+    if (options?.requireGod && !user.isGod) {
+      throw new ConvexError({
+        code: "UNAUTHORIZED",
+        message: "You must be an administrator to access this resource.",
+      });
+    }
   }
 
   return { identity, user } as RequireUserResult<T>;

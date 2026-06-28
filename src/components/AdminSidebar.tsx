@@ -33,6 +33,12 @@ type MenuItem = {
   icon: LucideIcon;
 };
 
+const subscriptionPlansMenuItem: MenuItem = {
+  title: "Subscription Plans",
+  url: "/subscription-plans",
+  icon: Layers,
+};
+
 const adminMenuItems: MenuItem[] = [
   { title: "Dashboard", url: "/dashboard", icon: LayoutDashboard },
   { title: "Categories", url: "/categories", icon: FolderTree },
@@ -45,7 +51,6 @@ const adminMenuItems: MenuItem[] = [
 
 const techMenuItems: MenuItem[] = [
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
-  { title: "Subscription Plans", url: "/subscription-plans", icon: Layers },
 ];
 
 const memberMenuItems: MenuItem[] = [
@@ -69,6 +74,9 @@ export function AdminSidebar() {
     const items: MenuItem[] = [];
     if (isAdmin) {
       items.push(...adminMenuItems);
+    }
+    if (isAdmin || isTech) {
+      items.push(subscriptionPlansMenuItem);
     }
     if (isTech) {
       items.push(...techMenuItems);

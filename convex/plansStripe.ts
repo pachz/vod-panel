@@ -80,7 +80,7 @@ export const createPlanWithStripe = action({
   returns: v.id("subscriptionPlans"),
   handler: async (ctx, args) => {
     const { userId } = await requireUserAction(ctx);
-    await ctx.runQuery(internal.user.requireTechQuery, {});
+    await ctx.runQuery(internal.user.requireGodOrTechQuery, {});
 
     const parsed = planCreateInputSchema.safeParse({
       name: args.name,
@@ -206,7 +206,7 @@ export const updatePlanPriceWithStripe = action({
   returns: v.null(),
   handler: async (ctx, args) => {
     const { userId } = await requireUserAction(ctx);
-    await ctx.runQuery(internal.user.requireTechQuery, {});
+    await ctx.runQuery(internal.user.requireGodOrTechQuery, {});
 
     const parsed = planPriceUpdateSchema.safeParse({ priceAmount: args.priceAmount });
     if (!parsed.success) {
