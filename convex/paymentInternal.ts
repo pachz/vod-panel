@@ -159,7 +159,9 @@ export const upsertSubscription = internalMutation({
       .first();
 
     if (existing) {
-      // Update existing subscription
+      const preserveMigratedPlan =
+        existing.legacyMigrationStatus === "migrated" && existing.planId != null;
+
       await ctx.db.patch(existing._id, {
         status: args.status,
         currentPeriodStart: args.currentPeriodStart,
@@ -168,8 +170,10 @@ export const upsertSubscription = internalMutation({
         canceledAt: args.canceledAt,
         ...(args.interval !== undefined && { interval: args.interval }),
         ...(args.intervalCount !== undefined && { intervalCount: args.intervalCount }),
-        ...(args.planId !== undefined && { planId: args.planId }),
-        ...(args.stripePriceId !== undefined && { stripePriceId: args.stripePriceId }),
+        ...(args.planId !== undefined &&
+          !preserveMigratedPlan && { planId: args.planId }),
+        ...(args.stripePriceId !== undefined &&
+          !preserveMigratedPlan && { stripePriceId: args.stripePriceId }),
         updatedAt: Date.now(),
       });
       await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import { useNavigate } from "react-router-dom";
-import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift, Search, Loader2 } from "lucide-react";
+import { useNavigate, Link } from "react-router-dom";
+import { Plus, Pencil, Trash2, Lock, Eye, Download, Gift, Search, Loader2, ArrowRightLeft } from "lucide-react";
 import { useMutation, useQuery, useAction } from "convex/react";
 
 import { api } from "../../convex/_generated/api";
@@ -138,7 +138,12 @@ const Users = () => {
     api.user.getUserListMetadataForUsers,
     regularUserIds.length > 0 ? { userIds: regularUserIds } : "skip"
   );
-  const migrationStats = useQuery(api.user.getPackageMigrationStats);
+  const isTechUser = currentUser?.isTech === true;
+
+  const migrationStats = useQuery(
+    api.user.getPackageMigrationStats,
+    isTechUser ? {} : "skip",
+  );
   const migrateNoPlanUsersToPackages = useMutation(api.user.migrateNoPlanUsersToPackages);
 
   const [isDialogOpen, setIsDialogOpen] = useState(false);
@@ -523,21 +528,31 @@ const Users = () => {
           </p>
         </div>
         <div className="flex gap-2">
-          {migrationStats && (
+          {isTechUser && migrationStats && (
             <div className="hidden items-center gap-3 rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground lg:flex">
               <span>Legacy: {migrationStats.legacyCount}</span>
               <span>Packages: {migrationStats.packagesCount}</span>
               <span>Eligible: {migrationStats.eligibleForMigrationCount}</span>
             </div>
           )}
-          <Button
-            variant="outline"
-            onClick={handleMigrateNoPlanUsers}
-            disabled={isMigratingUsers || (migrationStats?.eligibleForMigrationCount ?? 0) === 0}
-            title="Move users without an active subscription to package billing"
-          >
-            {isMigratingUsers ? "Migrating…" : "Migrate no-plan users"}
-          </Button>
+          {isTechUser && (
+            <Button variant="outline" asChild>
+              <Link to="/legacy-subscription-migration" title="Migrate active legacy Stripe subscribers">
+                <ArrowRightLeft className="mr-2 h-4 w-4" />
+                Legacy migration
+              </Link>
+            </Button>
+          )}
+          {isTechUser && (
+            <Button
+              variant="outline"
+              onClick={handleMigrateNoPlanUsers}
+              disabled={isMigratingUsers || (migrationStats?.eligibleForMigrationCount ?? 0) === 0}
+              title="Move users without an active subscription to package billing"
+            >
+              {isMigratingUsers ? "Migrating…" : "Migrate no-plan users"}
+            </Button>
+          )}
           <div className="relative">
             <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
             <Input

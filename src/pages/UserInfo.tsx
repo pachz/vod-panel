@@ -329,6 +329,9 @@ const UserInfo = () => {
                     {subscription?.isAdminGranted && (
                       <Badge variant="secondary">Admin granted</Badge>
                     )}
+                    {subscription?.legacyMigrationStatus === "migrated" && (
+                      <Badge variant="outline">Legacy migrated</Badge>
+                    )}
                   </div>
                 </div>
                 <div className="space-y-1">

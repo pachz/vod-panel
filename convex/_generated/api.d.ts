@@ -21,6 +21,8 @@ import type * as dashboard from "../dashboard.js";
 import type * as http from "../http.js";
 import type * as image from "../image.js";
 import type * as landing from "../landing.js";
+import type * as legacySubscriptionMigration from "../legacySubscriptionMigration.js";
+import type * as legacySubscriptionMigrationStripe from "../legacySubscriptionMigrationStripe.js";
 import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
 import type * as mailchimp from "../mailchimp.js";
@@ -60,6 +62,8 @@ declare const fullApi: ApiFromModules<{
   http: typeof http;
   image: typeof image;
   landing: typeof landing;
+  legacySubscriptionMigration: typeof legacySubscriptionMigration;
+  legacySubscriptionMigrationStripe: typeof legacySubscriptionMigrationStripe;
   lesson: typeof lesson;
   lessonProgress: typeof lessonProgress;
   mailchimp: typeof mailchimp;

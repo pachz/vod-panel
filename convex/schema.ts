@@ -242,6 +242,9 @@ export default defineSchema({
     planId: v.optional(v.id("subscriptionPlans")),
     /** Stripe price ID at time of subscription (for capacity counting across price changes). */
     stripePriceId: v.optional(v.string()),
+    /** Set when a legacy subscription is migrated to the package model (Stripe cancel-at-period-end). */
+    legacyMigrationStatus: v.optional(v.literal("migrated")),
+    legacyMigratedAt: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
   })

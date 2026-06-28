@@ -2,6 +2,7 @@ import { useMemo } from "react";
 import {
   LayoutDashboard,
   FolderTree,
+  ArrowRightLeft,
   BookOpen,
   GraduationCap,
   Users,
@@ -43,6 +44,7 @@ const adminMenuItems: MenuItem[] = [
 ];
 
 const techMenuItems: MenuItem[] = [
+  { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
   { title: "Subscription Plans", url: "/subscription-plans", icon: Layers },
 ];
 

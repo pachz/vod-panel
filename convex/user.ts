@@ -1146,6 +1146,7 @@ export const getUserInfo = query({
             planId: subscription.planId,
             planName: activePlan?.name,
             interval: subscription.interval,
+            legacyMigrationStatus: subscription.legacyMigrationStatus ?? null,
           }
         : null,
       subscriptionHistory,
@@ -1311,7 +1312,7 @@ export const getPackageMigrationStats = query({
     eligibleForMigrationCount: v.number(),
   }),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireGod: true });
+    await requireUser(ctx, { requireTech: true });
 
     const users = await ctx.db
       .query("users")
@@ -1361,7 +1362,7 @@ export const migrateNoPlanUsersToPackages = mutation({
     remaining: v.number(),
   }),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireGod: true });
+    await requireUser(ctx, { requireTech: true });
 
     const users = await ctx.db
       .query("users")
