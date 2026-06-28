@@ -8,6 +8,7 @@ import { planCreateInputSchema, planPriceUpdateSchema } from "../shared/validati
 import { formatPlanValidationMessage } from "../shared/validation/planFormValidation";
 import { requireUserAction } from "./utils/auth";
 import { internal } from "./_generated/api";
+import { usesPackageSubscriptionModel } from "../shared/subscriptionModel";
 
 const planThemeValidator = v.object({
   primary: v.string(),
@@ -378,7 +379,7 @@ export const createPlanCheckoutSession = action({
     if (!user || user.deletedAt) {
       throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
     }
-    if (user.subscriptionModel !== "packages") {
+    if (!usesPackageSubscriptionModel(user)) {
       throw new ConvexError({
         code: "LEGACY_BILLING",
         message: "Plan checkout is only available on the package billing model.",
@@ -467,7 +468,7 @@ export const upgradePlanSubscription = action({
     if (!user || user.deletedAt) {
       throw new ConvexError({ code: "NOT_FOUND", message: "User not found." });
     }
-    if (user.subscriptionModel !== "packages") {
+    if (!usesPackageSubscriptionModel(user)) {
       throw new ConvexError({
         code: "LEGACY_BILLING",
         message: "Plan upgrades are only available on the package billing model.",

@@ -8,9 +8,15 @@ export type SubscriptionModel =
 
 /** Users without an explicit model use legacy billing (all-access subscription). */
 export function usesPackageSubscriptionModel(
-  user: { subscriptionModel?: SubscriptionModel } | null | undefined,
+  user:
+    | { subscriptionModel?: SubscriptionModel; isGod?: boolean }
+    | null
+    | undefined,
 ): boolean {
-  return user?.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES;
+  return (
+    user?.isGod === true ||
+    user?.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES
+  );
 }
 
 export function subscriptionModelLabel(

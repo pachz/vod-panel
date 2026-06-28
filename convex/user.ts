@@ -272,10 +272,9 @@ export const getUserListMetadataForUsers = query({
           sub.currentPeriodEnd >= nowMs
             ? "active"
             : "none",
-        subscriptionModel:
-          user?.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES
-            ? SUBSCRIPTION_MODEL.PACKAGES
-            : SUBSCRIPTION_MODEL.LEGACY,
+        subscriptionModel: usesPackageSubscriptionModel(user)
+          ? SUBSCRIPTION_MODEL.PACKAGES
+          : SUBSCRIPTION_MODEL.LEGACY,
       };
     }
     return result;
@@ -504,7 +503,7 @@ export const createUserRecord = internalMutation({
         emailVerificationTime: existing.emailVerificationTime ?? Date.now(),
         deletedAt: undefined,
       };
-      if (existing.subscriptionModel === undefined) {
+      if (args.isAdmin || existing.subscriptionModel === undefined) {
         patch.subscriptionModel = SUBSCRIPTION_MODEL.PACKAGES;
       }
 
@@ -842,6 +841,7 @@ export const updateUserRole = mutation({
 
     await ctx.db.patch(id, {
       isGod: isAdmin,
+      ...(isAdmin ? { subscriptionModel: SUBSCRIPTION_MODEL.PACKAGES } : {}),
     });
 
     await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, { userId: id });
@@ -1128,10 +1128,9 @@ export const getUserInfo = query({
         emailVerificationTime: user.emailVerificationTime,
         createdAt: user._creationTime,
         stripeCustomerId: user.stripeCustomerId,
-        subscriptionModel:
-          user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES
-            ? SUBSCRIPTION_MODEL.PACKAGES
-            : SUBSCRIPTION_MODEL.LEGACY,
+        subscriptionModel: usesPackageSubscriptionModel(user)
+          ? SUBSCRIPTION_MODEL.PACKAGES
+          : SUBSCRIPTION_MODEL.LEGACY,
       },
       subscription: subscription
         ? {
@@ -1325,16 +1324,15 @@ export const getPackageMigrationStats = query({
     let eligibleForMigrationCount = 0;
 
     for (const user of users) {
-      if (user.isGod) {
-        continue;
+      if (usesPackageSubscriptionModel(user)) {
+        packagesCount += 1;
+      } else {
+        legacyCount += 1;
       }
 
       if (user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES) {
-        packagesCount += 1;
         continue;
       }
-
-      legacyCount += 1;
 
       const subs = await ctx.db
         .query("subscriptions")
@@ -1373,9 +1371,6 @@ export const migrateNoPlanUsersToPackages = mutation({
     let updated = 0;
 
     for (const user of users) {
-      if (user.isGod) {
-        continue;
-      }
       if (user.subscriptionModel === SUBSCRIPTION_MODEL.PACKAGES) {
         continue;
       }
