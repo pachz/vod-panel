@@ -2,7 +2,7 @@ import { useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useAction, useQuery } from "convex/react";
-import { ArrowRightLeft, CheckCircle2, Loader2, XCircle } from "lucide-react";
+import { ArrowRightLeft, CheckCircle2, Download, Loader2, XCircle } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -45,6 +45,16 @@ type MigrationRow = {
   currentPeriodEnd: number;
   assignedPlanName: string | null;
   legacyMigrationStatus: "migrated" | null;
+  segment:
+    | "stripe_monthly"
+    | "stripe_yearly"
+    | "admin_manual"
+    | "stripe_unknown"
+    | "already_migrated";
+  legacyPlanName: string;
+  amountCents: number | null;
+  currency: string | null;
+  cancelAtPeriodEnd: boolean;
 };
 
 type PlanOption = {
@@ -89,6 +99,52 @@ function planLabel(plan: PlanOption) {
     .join(", ");
   const interval = plan.billingInterval === "month" ? "monthly" : "yearly";
   return flags ? `${plan.name} (${interval}, ${flags})` : `${plan.name} (${interval})`;
+}
+
+const SEGMENT_LABELS: Record<MigrationRow["segment"], string> = {
+  stripe_monthly: "Stripe monthly",
+  stripe_yearly: "Stripe yearly",
+  admin_manual: "Admin manual",
+  stripe_unknown: "Stripe unclassified",
+  already_migrated: "Already migrated",
+};
+
+function escapeCsv(value: string): string {
+  if (/[",\n\r]/.test(value)) {
+    return `"${value.replace(/"/g, '""')}"`;
+  }
+  return value;
+}
+
+function formatAmount(amountCents: number | null, currency: string | null): string {
+  if (amountCents == null) {
+    return "";
+  }
+  const amount = (amountCents / 100).toFixed(2);
+  return currency ? `${amount} ${currency.toUpperCase()}` : amount;
+}
+
+function buildMigrationExportCsv(rows: MigrationRow[]): string {
+  const header =
+    "Name,Email,Segment,Legacy Plan,Status,Period End,Amount,Migration Status,Assigned Plan,Cancel At Period End,Subscription ID\n";
+  const lines = rows.map((row) => {
+    const migrationStatus =
+      row.legacyMigrationStatus === "migrated" ? "Migrated" : "Not migrated";
+    return [
+      escapeCsv(row.userName),
+      escapeCsv(row.userEmail),
+      escapeCsv(SEGMENT_LABELS[row.segment]),
+      escapeCsv(row.legacyPlanName),
+      escapeCsv(row.status),
+      escapeCsv(format(row.currentPeriodEnd, "yyyy-MM-dd")),
+      escapeCsv(formatAmount(row.amountCents, row.currency)),
+      escapeCsv(migrationStatus),
+      escapeCsv(row.assignedPlanName ?? ""),
+      row.cancelAtPeriodEnd ? "Yes" : "No",
+      escapeCsv(row.subscriptionId),
+    ].join(",");
+  });
+  return header + lines.join("\n");
 }
 
 function MigrationStatusBadge({
@@ -355,6 +411,44 @@ export default function LegacySubscriptionMigration() {
 
   const [rowProgress, setRowProgress] = useState<Record<string, RowProgress>>({});
   const [rowErrors, setRowErrors] = useState<Record<string, string>>({});
+  const [isExporting, setIsExporting] = useState(false);
+
+  const handleExport = () => {
+    if (!overview) {
+      return;
+    }
+
+    setIsExporting(true);
+    try {
+      const segmentOrder: MigrationRow["segment"][] = [
+        "stripe_monthly",
+        "stripe_yearly",
+        "stripe_unknown",
+        "admin_manual",
+        "already_migrated",
+      ];
+      const rows = segmentOrder.flatMap((key) => overview.segments[key] as MigrationRow[]);
+      const csvContent = buildMigrationExportCsv(rows);
+      const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+      const link = document.createElement("a");
+      const url = URL.createObjectURL(blob);
+
+      link.setAttribute("href", url);
+      link.setAttribute(
+        "download",
+        `legacy-migration-users-${new Date().toISOString().split("T")[0]}.csv`,
+      );
+      link.style.visibility = "hidden";
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+
+      toast.success(`Exported ${rows.length} user(s)`);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
   const handleMigrateStripe = async (
     _segment: StripeSegmentKey,
@@ -417,15 +511,26 @@ export default function LegacySubscriptionMigration() {
 
   return (
     <div className="space-y-8">
-      <div>
-        <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
-          <ArrowRightLeft className="h-8 w-8" />
-          Legacy subscription migration
-        </h1>
-        <p className="mt-2 max-w-3xl text-muted-foreground">
-          Move active legacy Stripe subscribers onto package plans. Each user is updated one at a
-          time — Stripe cancel-at-period-end, then local plan assignment. Progress is shown per row.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="flex items-center gap-2 text-3xl font-bold tracking-tight">
+            <ArrowRightLeft className="h-8 w-8" />
+            Legacy subscription migration
+          </h1>
+          <p className="mt-2 max-w-3xl text-muted-foreground">
+            Move active legacy Stripe subscribers onto package plans. Each user is updated one at a
+            time — Stripe cancel-at-period-end, then local plan assignment. Progress is shown per
+            row.
+          </p>
+        </div>
+        <Button variant="outline" disabled={isExporting} onClick={handleExport}>
+          {isExporting ? (
+            <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+          ) : (
+            <Download className="mr-2 h-4 w-4" />
+          )}
+          Export CSV
+        </Button>
       </div>
 
       <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">

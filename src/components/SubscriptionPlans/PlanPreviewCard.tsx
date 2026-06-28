@@ -15,7 +15,21 @@ export const planCardWidthClass =
   "mx-auto w-[min(100%,360px)] shrink-0 min-w-[280px] max-w-[360px]";
 /** Up to 3 fixed-width cards per row on large screens; partial rows stay centered with normal gap. */
 export const planCardGridClass =
-  "mx-auto flex w-full max-w-6xl flex-wrap items-stretch justify-center gap-4";
+  "mx-auto flex w-full max-w-6xl flex-wrap items-start justify-center gap-4";
+/** Compare modal: equal-width columns, top-aligned cards, up to 3 per row. */
+export const planCompareGridClass =
+  "mx-auto grid w-full max-w-[1128px] grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3";
+
+export function planCompareGridClassForCount(planCount: number): string {
+  if (planCount <= 1) {
+    return "mx-auto flex justify-center";
+  }
+  if (planCount === 2) {
+    // w-fit + fixed 2-col grid keeps normal gap-6; flex + mx-auto on cards spreads them apart
+    return "mx-auto grid w-fit grid-cols-1 items-start gap-6 sm:grid-cols-2";
+  }
+  return planCompareGridClass;
+}
 
 export type PlanPreviewFeature = {
   icon: string;
@@ -98,7 +112,7 @@ export function PlanPreviewCard({
     <div
       className={cn(
         "relative",
-        layout === "grid" ? cn("h-full", planCardWidthClass) : "mx-auto w-full max-w-[340px]",
+        layout === "grid" ? planCardWidthClass : "mx-auto w-full max-w-[340px]",
         className,
       )}
       dir={isRTL ? "rtl" : "ltr"}

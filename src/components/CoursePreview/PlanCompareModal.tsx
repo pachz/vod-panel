@@ -9,8 +9,7 @@ import { cn } from "@/lib/utils";
 import {
   PlanPreviewCard,
   type PlanPreviewData,
-  planCardGridClass,
-  planCardWidthClass,
+  planCompareGridClassForCount,
 } from "@/components/SubscriptionPlans/PlanPreviewCard";
 import type { PackagePlan } from "@/components/SubscriptionPlans/PackagePlansGrid";
 
@@ -62,25 +61,24 @@ export function PlanCompareModal({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent
         className={cn(
-          "flex max-h-[92vh] flex-col gap-0 overflow-hidden p-0",
-          plans.length === 1 ? "max-w-md" : "max-w-6xl",
+          "!flex max-h-[92vh] min-h-0 flex-col gap-0 overflow-hidden p-0",
+          plans.length === 1
+            ? "w-[min(100vw-2rem,28rem)] max-w-[min(100vw-2rem,28rem)]"
+            : "w-[min(100vw-2rem,72rem)] max-w-[min(100vw-2rem,72rem)]",
         )}
         dir={isRTL ? "rtl" : "ltr"}
       >
-        <DialogHeader className="space-y-2 border-b px-6 py-5 text-start">
+        <DialogHeader className="shrink-0 space-y-2 border-b px-6 py-5 text-start">
           <DialogTitle className="text-xl">{title}</DialogTitle>
           <DialogDescription className="text-sm leading-relaxed">
             {modalDescription}
           </DialogDescription>
         </DialogHeader>
 
-        <div className="flex-1 overflow-y-auto px-6 py-5">
-          <div className={planCardGridClass}>
+        <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain px-6 py-6">
+          <div className={planCompareGridClassForCount(plans.length)}>
             {plans.map((plan) => {
               const isUpgradeMode = paywallMode === "packages_upgrade";
-              const inheritsText = useArabic
-                ? plan.inheritsDescription_ar?.trim() || plan.inheritsDescription?.trim()
-                : plan.inheritsDescription?.trim();
               const actionLabel = plan.isCurrentPlan
                 ? currentPlanLabel
                 : plan.isAtCapacity
@@ -90,30 +88,24 @@ export function PlanCompareModal({
                     : subscribeLabel;
 
               return (
-                <div key={plan._id} className={cn("space-y-2", planCardWidthClass)}>
-                  {inheritsText ? (
-                    <p className="rounded-lg bg-muted/40 px-3 py-2 text-xs text-muted-foreground">
-                      {inheritsText}
-                    </p>
-                  ) : null}
-                  <PlanPreviewCard
-                    plan={plan}
-                    isRTL={isRTL}
-                    useArabic={useArabic}
-                    layout="grid"
-                    actionLabel={actionLabel}
-                    actionDisabled={plan.isCurrentPlan || plan.isAtCapacity}
-                    actionLoading={loadingPlanId === plan._id}
-                    onAction={
-                      plan.isCurrentPlan || plan.isAtCapacity
-                        ? undefined
-                        : () => {
-                            onSelectPlan(plan._id);
-                            onOpenChange(false);
-                          }
-                    }
-                  />
-                </div>
+                <PlanPreviewCard
+                  key={plan._id}
+                  plan={plan}
+                  isRTL={isRTL}
+                  useArabic={useArabic}
+                  layout="grid"
+                  actionLabel={actionLabel}
+                  actionDisabled={plan.isCurrentPlan || plan.isAtCapacity}
+                  actionLoading={loadingPlanId === plan._id}
+                  onAction={
+                    plan.isCurrentPlan || plan.isAtCapacity
+                      ? undefined
+                      : () => {
+                          onSelectPlan(plan._id);
+                          onOpenChange(false);
+                        }
+                  }
+                />
               );
             })}
           </div>

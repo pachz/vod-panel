@@ -28,6 +28,17 @@ const migrationUserRowValidator = v.object({
   legacyMigrationStatus: v.union(v.literal("migrated"), v.null()),
   assignedPlanId: v.union(v.id("subscriptionPlans"), v.null()),
   assignedPlanName: v.union(v.string(), v.null()),
+  segment: v.union(
+    v.literal("stripe_monthly"),
+    v.literal("stripe_yearly"),
+    v.literal("admin_manual"),
+    v.literal("stripe_unknown"),
+    v.literal("already_migrated"),
+  ),
+  legacyPlanName: v.string(),
+  amountCents: v.union(v.number(), v.null()),
+  currency: v.union(v.string(), v.null()),
+  cancelAtPeriodEnd: v.boolean(),
 });
 
 const planPickerValidator = v.object({
@@ -85,6 +96,77 @@ function classifyLegacySubscription(
   return "stripe_unknown";
 }
 
+function resolveLegacyPlanName(
+  segment: LegacyMigrationSegment,
+  paymentSettings: Doc<"paymentSettings"> | null,
+  assignedPlanName: string | null,
+): string {
+  if (segment === "already_migrated" && assignedPlanName) {
+    return assignedPlanName;
+  }
+
+  const productName = paymentSettings?.productName?.trim();
+  switch (segment) {
+    case "stripe_monthly":
+      return productName ? `${productName} (Monthly)` : "Legacy Stripe Monthly";
+    case "stripe_yearly":
+      return productName ? `${productName} (Yearly)` : "Legacy Stripe Yearly";
+    case "admin_manual":
+      return "Admin manual grant";
+    case "stripe_unknown":
+      return productName ? `${productName} (Stripe)` : "Legacy Stripe (unclassified)";
+    case "already_migrated":
+      return assignedPlanName ?? "Migrated package plan";
+  }
+}
+
+function resolveLegacyAmount(
+  segment: LegacyMigrationSegment,
+  sub: Doc<"subscriptions">,
+  paymentSettings: Doc<"paymentSettings"> | null,
+  assignedPlan: Doc<"subscriptionPlans"> | null,
+): { amountCents: number | null; currency: string | null } {
+  if (segment === "already_migrated" && assignedPlan) {
+    return {
+      amountCents: assignedPlan.priceAmount,
+      currency: assignedPlan.priceCurrency,
+    };
+  }
+
+  if (!paymentSettings) {
+    return { amountCents: null, currency: null };
+  }
+
+  const monthlyPriceId = paymentSettings.selectedPriceId;
+  const yearlyPriceId = paymentSettings.selectedYearlyPriceId;
+
+  if (
+    segment === "stripe_monthly" ||
+    (sub.stripePriceId && sub.stripePriceId === monthlyPriceId)
+  ) {
+    return {
+      amountCents: paymentSettings.priceAmount,
+      currency: paymentSettings.priceCurrency,
+    };
+  }
+
+  if (
+    segment === "stripe_yearly" ||
+    (sub.stripePriceId && yearlyPriceId && sub.stripePriceId === yearlyPriceId)
+  ) {
+    return {
+      amountCents: paymentSettings.yearlyPriceAmount ?? null,
+      currency: paymentSettings.yearlyPriceCurrency ?? paymentSettings.priceCurrency,
+    };
+  }
+
+  if (segment === "admin_manual") {
+    return { amountCents: null, currency: null };
+  }
+
+  return { amountCents: null, currency: null };
+}
+
 async function buildMigrationOverview(ctx: { db: import("./_generated/server").QueryCtx["db"] }) {
   const nowMs = Date.now();
   const paymentSettings = await ctx.db.query("paymentSettings").order("desc").first();
@@ -109,6 +191,11 @@ async function buildMigrationOverview(ctx: { db: import("./_generated/server").Q
     legacyMigrationStatus: "migrated" | null;
     assignedPlanId: Id<"subscriptionPlans"> | null;
     assignedPlanName: string | null;
+    segment: LegacyMigrationSegment;
+    legacyPlanName: string;
+    amountCents: number | null;
+    currency: string | null;
+    cancelAtPeriodEnd: boolean;
   }>> = {
     stripe_monthly: [],
     stripe_yearly: [],
@@ -144,6 +231,13 @@ async function buildMigrationOverview(ctx: { db: import("./_generated/server").Q
 
     const assignedPlan =
       primary.planId != null ? await ctx.db.get(primary.planId) : null;
+    const assignedPlanName = assignedPlan?.name ?? null;
+    const { amountCents, currency } = resolveLegacyAmount(
+      segment,
+      primary,
+      paymentSettings,
+      assignedPlan,
+    );
 
     segments[segment].push({
       userId: user._id,
@@ -157,7 +251,12 @@ async function buildMigrationOverview(ctx: { db: import("./_generated/server").Q
       currentPeriodEnd: primary.currentPeriodEnd,
       legacyMigrationStatus: primary.legacyMigrationStatus ?? null,
       assignedPlanId: primary.planId ?? null,
-      assignedPlanName: assignedPlan?.name ?? null,
+      assignedPlanName,
+      segment,
+      legacyPlanName: resolveLegacyPlanName(segment, paymentSettings, assignedPlanName),
+      amountCents,
+      currency,
+      cancelAtPeriodEnd: primary.cancelAtPeriodEnd,
     });
   }
 
