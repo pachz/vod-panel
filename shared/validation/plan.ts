@@ -135,6 +135,7 @@ const planInputFieldsSchema = z.object({
   features: z.array(planFeatureSchema).max(PLAN_FIELD_LIMITS.maxFeatures),
   displayOrder: z.number().int().min(0).max(PLAN_FIELD_LIMITS.displayOrder),
   isActive: z.boolean(),
+  isHidden: z.boolean().optional().default(false),
   maxCapacity: z.number().int().min(1).max(PLAN_FIELD_LIMITS.maxCapacity).optional(),
 });
 

@@ -72,6 +72,7 @@ export const createPlanWithStripe = action({
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    isHidden: v.optional(v.boolean()),
     maxCapacity: v.optional(v.number()),
   },
   returns: v.id("subscriptionPlans"),
@@ -113,6 +114,7 @@ export const createPlanWithStripe = action({
       })),
       displayOrder: args.displayOrder,
       isActive: args.isActive,
+      isHidden: args.isHidden,
       maxCapacity: args.maxCapacity,
     });
 
@@ -182,6 +184,7 @@ export const createPlanWithStripe = action({
         features: args.features,
         displayOrder: args.displayOrder,
         isActive: args.isActive,
+        isHidden: parsed.data.isHidden,
         maxCapacity: args.maxCapacity,
         updatedBy: userId as Id<"users">,
       },

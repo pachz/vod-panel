@@ -86,6 +86,7 @@ export type PlanFormState = {
   features: PlanFeature[];
   displayOrder: number;
   isActive: boolean;
+  isHidden: boolean;
   maxCapacity: string;
 };
 
@@ -112,6 +113,7 @@ const defaultFormState = (): PlanFormState => ({
   features: [],
   displayOrder: 0,
   isActive: true,
+  isHidden: false,
   maxCapacity: "",
 });
 
@@ -304,6 +306,7 @@ export function useSubscriptionPlanEditor() {
       })),
       displayOrder: p.displayOrder,
       isActive: p.isActive,
+      isHidden: p.isHidden === true,
       maxCapacity: p.maxCapacity != null ? String(p.maxCapacity) : "",
     });
     setNewPriceDollars(centsToDollars(p.priceAmount));
@@ -354,6 +357,7 @@ export function useSubscriptionPlanEditor() {
       inheritsDescription: form.inheritsDescription.trim() || undefined,
       inheritsDescription_ar: form.inheritsDescriptionAr.trim() || undefined,
       isActive: form.isActive,
+      isHidden: form.isHidden,
     };
     },
     [form, planDetail?.plan.priceAmount, isNew, newPriceDollars, courseStats],
@@ -392,6 +396,7 @@ export function useSubscriptionPlanEditor() {
     features: form.features,
     displayOrder: form.displayOrder,
     isActive: form.isActive,
+    isHidden: form.isHidden,
     maxCapacity: parseMaxCapacity(form.maxCapacity),
   });
 
@@ -582,6 +587,7 @@ const SubscriptionPlanEditor = () => {
           })),
           displayOrder: args.displayOrder,
           isActive: args.isActive,
+          isHidden: args.isHidden,
           maxCapacity: args.maxCapacity,
         });
         toast.success("Plan created.");
@@ -1004,6 +1010,13 @@ const SubscriptionPlanEditor = () => {
                 <Switch checked={form.isActive} onCheckedChange={(v) => setField("isActive", v)} />
                 <Label>Active</Label>
               </div>
+              <div className="flex items-center gap-2">
+                <Switch checked={form.isHidden} onCheckedChange={(v) => setField("isHidden", v)} />
+                <Label>Hidden</Label>
+              </div>
+              <p className="w-full text-xs text-muted-foreground">
+                Hidden plans stay editable here but won&apos;t be shown to users when public listing is enabled.
+              </p>
               <div className="flex items-center gap-2">
                 <Label>Display order</Label>
                 <Input

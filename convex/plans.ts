@@ -85,6 +85,7 @@ const planDocValidator = v.object({
   ),
   displayOrder: v.number(),
   isActive: v.boolean(),
+  isHidden: v.optional(v.boolean()),
   maxCapacity: v.optional(v.number()),
   updatedBy: v.id("users"),
   updatedAt: v.number(),
@@ -215,6 +216,7 @@ const planListItemValidator = v.object({
   ),
   displayOrder: v.number(),
   isActive: v.boolean(),
+  isHidden: v.optional(v.boolean()),
   resolvedCourseCount: v.number(),
   activeSubscriberCount: v.number(),
   maxCapacity: v.optional(v.number()),
@@ -259,6 +261,7 @@ export const listPlans = query({
         features: resolveStoredFeatures(plan.features, courseStats),
         displayOrder: plan.displayOrder,
         isActive: plan.isActive,
+        isHidden: plan.isHidden === true,
         resolvedCourseCount: plan.resolvedCourseIds.length,
         activeSubscriberCount,
         maxCapacity: plan.maxCapacity,
@@ -538,6 +541,7 @@ export const updatePlan = mutation({
     features: v.array(planFeatureInputValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    isHidden: v.optional(v.boolean()),
     maxCapacity: v.optional(v.number()),
   },
   returns: v.null(),
@@ -584,6 +588,7 @@ export const updatePlan = mutation({
       })),
       displayOrder: args.displayOrder,
       isActive: args.isActive,
+      isHidden: args.isHidden,
       maxCapacity: args.maxCapacity,
     });
 
@@ -617,6 +622,7 @@ export const updatePlan = mutation({
       features: mapFeatures(parsed.data.features),
       displayOrder: parsed.data.displayOrder,
       isActive: parsed.data.isActive,
+      isHidden: parsed.data.isHidden,
       maxCapacity: parsed.data.maxCapacity,
       updatedBy: userId as Id<"users">,
     });

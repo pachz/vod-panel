@@ -32,6 +32,7 @@ export const PLAN_PREVIEW_COPY = {
     joinVip: "Join VIP",
     securePayment: "Secure payment · Powered by Stripe",
     draftInactive: "Draft / Inactive",
+    hiddenPlan: "Hidden from users",
     noPlansToPreview: "No plans to preview",
   },
   ar: {
@@ -44,6 +45,7 @@ export const PLAN_PREVIEW_COPY = {
     joinVip: "انضم إلى VIP",
     securePayment: "دفع آمن · مدعوم من Stripe",
     draftInactive: "مسودة / غير نشطة",
+    hiddenPlan: "مخفية عن المستخدمين",
     noPlansToPreview: "لا توجد خطط للمعاينة",
   },
 } as const;

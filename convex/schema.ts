@@ -322,6 +322,8 @@ export default defineSchema({
     ),
     displayOrder: v.number(),
     isActive: v.boolean(),
+    /** When true, plan is excluded from public plan pickers (admin-only visibility). */
+    isHidden: v.optional(v.boolean()),
     /** Max concurrent active subscribers; unset = unlimited. */
     maxCapacity: v.optional(v.number()),
     updatedBy: v.id("users"),

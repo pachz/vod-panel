@@ -28,6 +28,7 @@ type PlanListItem = {
   features: PlanPreviewData["features"];
   displayOrder: number;
   isActive: boolean;
+  isHidden: boolean;
   resolvedCourseCount: number;
   activeSubscriberCount: number;
   maxCapacity?: number;
@@ -57,6 +58,7 @@ const SubscriptionPlans = () => {
       inheritsDescription_ar: p.inheritsDescription_ar,
       features: p.features,
       isActive: p.isActive,
+      isHidden: p.isHidden,
     }));
   }, [plans]);
 
@@ -111,9 +113,14 @@ const SubscriptionPlans = () => {
     {
       header: "Status",
       render: (row) => (
-        <Badge variant={row.isActive ? "default" : "outline"}>
-          {row.isActive ? "Active" : "Inactive"}
-        </Badge>
+        <div className="flex flex-wrap gap-1">
+          <Badge variant={row.isActive ? "default" : "outline"}>
+            {row.isActive ? "Active" : "Inactive"}
+          </Badge>
+          {row.isHidden && (
+            <Badge variant="secondary">Hidden</Badge>
+          )}
+        </div>
       ),
     },
   ];
