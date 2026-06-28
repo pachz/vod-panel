@@ -284,6 +284,60 @@ http.route({
 });
 
 http.route({
+  path: "/landing/packages",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const packages = await ctx.runQuery(internal.landing.listLandingPackages, {});
+
+      return new Response(JSON.stringify({ packages }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing packages endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load packages",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
+http.route({
   path: "/landing/subscription",
   method: "GET",
   handler: httpAction(async (ctx, request) => {
@@ -426,11 +480,15 @@ http.route({
           })
         : null;
       const paymentSettings = await ctx.runQuery(internal.paymentInternal.getPaymentSettings, {});
+      const packages = await ctx.runQuery(internal.landing.getLandingPlansForCourse, {
+        courseId: course.id,
+      });
 
       const body = {
         ...course,
         coach: coach ?? null,
         pricing: paymentSettings ?? null,
+        packages,
       };
 
       return new Response(JSON.stringify(body), {

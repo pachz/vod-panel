@@ -1,7 +1,13 @@
 import { internalQuery } from "./_generated/server";
+import type { QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
 import { internal } from "./_generated/api";
+import {
+  countActiveSubscribersForPlan,
+  getStoredPlanCourseStats,
+} from "./plansInternal";
+import { resolvePlanFeaturesForDisplay } from "../shared/planFeatureTemplate";
 
 type CategoryItem = {
   id: Id<"categories">;
@@ -435,6 +441,282 @@ export const getCoachById = internalQuery({
       courseCount: coach.course_count ?? null,
       lastUpdatedAt: coach.updatedAt,
     };
+  },
+});
+
+const landingPlanThemeValidator = v.object({
+  primary: v.string(),
+  secondary: v.string(),
+  border: v.string(),
+  headerBg: v.string(),
+  buttonBg: v.string(),
+});
+
+const landingPackageFeatureValidator = v.object({
+  icon: v.string(),
+  titleEn: v.string(),
+  titleAr: v.string(),
+  subtitleEn: v.union(v.string(), v.null()),
+  subtitleAr: v.union(v.string(), v.null()),
+  isChecklistItem: v.boolean(),
+  displayOrder: v.number(),
+});
+
+const landingPackageValidator = v.object({
+  id: v.id("subscriptionPlans"),
+  slug: v.string(),
+  nameEn: v.string(),
+  nameAr: v.string(),
+  titleIcon: v.union(v.string(), v.null()),
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  stripeProductId: v.string(),
+  stripePriceId: v.string(),
+  priceAmountCents: v.number(),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  compareAtPriceAmountCents: v.union(v.number(), v.null()),
+  priceSubtitleEn: v.union(v.string(), v.null()),
+  priceSubtitleAr: v.union(v.string(), v.null()),
+  intervalLabel: v.string(),
+  priceDisplay: v.string(),
+  theme: landingPlanThemeValidator,
+  badgeTag: v.union(
+    v.literal("start_here"),
+    v.literal("best_value"),
+    v.literal("most_popular"),
+    v.literal("limited"),
+    v.literal("vip"),
+    v.literal("none"),
+  ),
+  ribbonTextEn: v.union(v.string(), v.null()),
+  ribbonTextAr: v.union(v.string(), v.null()),
+  inheritsDescriptionEn: v.union(v.string(), v.null()),
+  inheritsDescriptionAr: v.union(v.string(), v.null()),
+  includesPlanSlug: v.union(v.string(), v.null()),
+  includesPlanNameEn: v.union(v.string(), v.null()),
+  includesPlanNameAr: v.union(v.string(), v.null()),
+  courseStats: v.object({
+    courses: v.number(),
+    lessons: v.number(),
+    hours: v.number(),
+  }),
+  features: v.array(landingPackageFeatureValidator),
+  displayOrder: v.number(),
+  isAtCapacity: v.boolean(),
+});
+
+const landingCoursePackagePillValidator = v.object({
+  id: v.id("subscriptionPlans"),
+  slug: v.string(),
+  nameEn: v.string(),
+  nameAr: v.string(),
+  color: v.string(),
+  theme: landingPlanThemeValidator,
+});
+
+type LandingPlanTheme = {
+  primary: string;
+  secondary: string;
+  border: string;
+  headerBg: string;
+  buttonBg: string;
+};
+
+type LandingPackage = {
+  id: Id<"subscriptionPlans">;
+  slug: string;
+  nameEn: string;
+  nameAr: string;
+  titleIcon: string | null;
+  billingInterval: "month" | "year";
+  stripeProductId: string;
+  stripePriceId: string;
+  priceAmountCents: number;
+  priceAmount: number;
+  priceCurrency: string;
+  compareAtPriceAmountCents: number | null;
+  priceSubtitleEn: string | null;
+  priceSubtitleAr: string | null;
+  intervalLabel: string;
+  priceDisplay: string;
+  theme: LandingPlanTheme;
+  badgeTag: Doc<"subscriptionPlans">["badgeTag"];
+  ribbonTextEn: string | null;
+  ribbonTextAr: string | null;
+  inheritsDescriptionEn: string | null;
+  inheritsDescriptionAr: string | null;
+  includesPlanSlug: string | null;
+  includesPlanNameEn: string | null;
+  includesPlanNameAr: string | null;
+  courseStats: { courses: number; lessons: number; hours: number };
+  features: Array<{
+    icon: string;
+    titleEn: string;
+    titleAr: string;
+    subtitleEn: string | null;
+    subtitleAr: string | null;
+    isChecklistItem: boolean;
+    displayOrder: number;
+  }>;
+  displayOrder: number;
+  isAtCapacity: boolean;
+};
+
+const INTERVAL_LABELS: Record<Doc<"subscriptionPlans">["billingInterval"], string> = {
+  month: "Monthly",
+  year: "Yearly",
+};
+
+function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
+  return (
+    plan.deletedAt === undefined &&
+    plan.isActive &&
+    plan.isHidden !== true
+  );
+}
+
+function resolveLandingFeatures(plan: Doc<"subscriptionPlans">) {
+  const stats = getStoredPlanCourseStats(plan);
+  const resolved = resolvePlanFeaturesForDisplay(
+    plan.features.map((feature) => ({
+      icon: feature.icon,
+      title: feature.title,
+      title_ar: feature.title_ar,
+      subtitle: feature.subtitle,
+      subtitleAr: feature.subtitle_ar,
+      subtitleMode: feature.subtitleMode,
+      subtitleTemplate: feature.subtitleTemplate,
+      subtitleTemplateAr: feature.subtitleTemplate_ar,
+      isChecklistItem: feature.isChecklistItem,
+      displayOrder: feature.displayOrder,
+    })),
+    stats,
+  );
+
+  return resolved.map((feature) => ({
+    icon: feature.icon,
+    titleEn: feature.title,
+    titleAr: feature.title_ar ?? feature.title,
+    subtitleEn: feature.subtitle ?? null,
+    subtitleAr: feature.subtitle_ar ?? null,
+    isChecklistItem: feature.isChecklistItem,
+    displayOrder: feature.displayOrder,
+  }));
+}
+
+async function mapPlanToLandingPackage(
+  ctx: QueryCtx,
+  plan: Doc<"subscriptionPlans">,
+  nowMs: number,
+  includedPlan?: Doc<"subscriptionPlans"> | null,
+): Promise<LandingPackage> {
+  const amount = plan.priceAmount / 100;
+  const intervalLabel = INTERVAL_LABELS[plan.billingInterval];
+  const currency = plan.priceCurrency.toUpperCase();
+  const activeSubscriberCount = await countActiveSubscribersForPlan(ctx, plan, nowMs);
+  const maxCapacity = plan.maxCapacity ?? null;
+  const isAtCapacity = maxCapacity !== null && activeSubscriberCount >= maxCapacity;
+
+  return {
+    id: plan._id,
+    slug: plan.slug,
+    nameEn: plan.name,
+    nameAr: plan.name_ar,
+    titleIcon: plan.titleIcon ?? null,
+    billingInterval: plan.billingInterval,
+    stripeProductId: plan.stripeProductId,
+    stripePriceId: plan.stripePriceId,
+    priceAmountCents: plan.priceAmount,
+    priceAmount: amount,
+    priceCurrency: currency,
+    compareAtPriceAmountCents: plan.compareAtPriceAmount ?? null,
+    priceSubtitleEn: plan.priceSubtitle ?? null,
+    priceSubtitleAr: plan.priceSubtitle_ar ?? null,
+    intervalLabel,
+    priceDisplay: `${currency} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
+    theme: plan.theme,
+    badgeTag: plan.badgeTag,
+    ribbonTextEn: plan.ribbonText ?? null,
+    ribbonTextAr: plan.ribbonText_ar ?? null,
+    inheritsDescriptionEn: plan.inheritsDescription ?? null,
+    inheritsDescriptionAr: plan.inheritsDescription_ar ?? null,
+    includesPlanSlug: includedPlan?.slug ?? null,
+    includesPlanNameEn: includedPlan?.name ?? null,
+    includesPlanNameAr: includedPlan?.name_ar ?? null,
+    courseStats: getStoredPlanCourseStats(plan),
+    features: resolveLandingFeatures(plan),
+    displayOrder: plan.displayOrder,
+    isAtCapacity,
+  };
+}
+
+export const listLandingPackages = internalQuery({
+  args: {},
+  returns: v.array(landingPackageValidator),
+  handler: async (ctx): Promise<Array<LandingPackage>> => {
+    const nowMs = Date.now();
+    const plans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    const publicPlans = plans
+      .filter(isPublicPlan)
+      .sort((a, b) => a.displayOrder - b.displayOrder);
+
+    const includedPlanIds = publicPlans
+      .map((plan) => plan.includesPlanId)
+      .filter((planId): planId is Id<"subscriptionPlans"> => planId !== undefined);
+    const includedPlans = await Promise.all(
+      includedPlanIds.map(async (planId) => {
+        const plan = await ctx.db.get(planId);
+        return plan && plan.deletedAt === undefined ? plan : null;
+      }),
+    );
+    const includedPlanById = new Map<Id<"subscriptionPlans">, Doc<"subscriptionPlans">>();
+    for (const plan of includedPlans) {
+      if (plan) {
+        includedPlanById.set(plan._id, plan);
+      }
+    }
+
+    const packages: Array<LandingPackage> = [];
+    for (const plan of publicPlans) {
+      const includedPlan = plan.includesPlanId
+        ? includedPlanById.get(plan.includesPlanId) ?? null
+        : null;
+      packages.push(await mapPlanToLandingPackage(ctx, plan, nowMs, includedPlan));
+    }
+
+    return packages;
+  },
+});
+
+export const getLandingPlansForCourse = internalQuery({
+  args: {
+    courseId: v.id("courses"),
+  },
+  returns: v.array(landingCoursePackagePillValidator),
+  handler: async (ctx, args) => {
+    const plans = await ctx.db
+      .query("subscriptionPlans")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+
+    return plans
+      .filter(
+        (plan) =>
+          isPublicPlan(plan) && plan.resolvedCourseIds.includes(args.courseId),
+      )
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((plan) => ({
+        id: plan._id,
+        slug: plan.slug,
+        nameEn: plan.name,
+        nameAr: plan.name_ar,
+        color: plan.theme.primary,
+        theme: plan.theme,
+      }));
   },
 });
 
