@@ -20,15 +20,23 @@ export const planCardGridClass =
 export const planCompareGridClass =
   "mx-auto grid w-full max-w-[1128px] grid-cols-1 justify-items-center gap-6 sm:grid-cols-2 lg:grid-cols-3";
 
-export function planCompareGridClassForCount(planCount: number): string {
+export function planCompareGridClassForCount(planCount: number, gapClass = "gap-6"): string {
   if (planCount <= 1) {
-    return "mx-auto flex justify-center";
+    return cn("mx-auto flex justify-center", gapClass);
   }
   if (planCount === 2) {
-    // w-fit + fixed 2-col grid keeps normal gap-6; flex + mx-auto on cards spreads them apart
-    return "mx-auto grid w-fit grid-cols-1 items-start gap-6 sm:grid-cols-2";
+    // w-fit + fixed 2-col grid keeps normal gap; flex + mx-auto on cards spreads them apart
+    return cn("mx-auto grid w-fit grid-cols-1 items-stretch sm:grid-cols-2", gapClass);
   }
-  return planCompareGridClass;
+  return cn(
+    "mx-auto grid w-full max-w-[1128px] grid-cols-1 items-stretch justify-items-center sm:grid-cols-2 lg:grid-cols-3",
+    gapClass,
+  );
+}
+
+/** Subscription plans page — same layout rules as compare modal, tighter gap. */
+export function planPackageGridClassForCount(planCount: number): string {
+  return planCompareGridClassForCount(planCount, "gap-4");
 }
 
 export type PlanPreviewFeature = {
@@ -112,7 +120,7 @@ export function PlanPreviewCard({
     <div
       className={cn(
         "relative",
-        layout === "grid" ? planCardWidthClass : "mx-auto w-full max-w-[340px]",
+        layout === "grid" ? cn("h-full self-stretch", planCardWidthClass) : "mx-auto w-full max-w-[340px]",
         className,
       )}
       dir={isRTL ? "rtl" : "ltr"}
@@ -254,7 +262,7 @@ export function PlanPreviewCard({
       </div>
 
       {showFooter && (
-        <div className="px-5 pb-5 pt-2">
+        <div className="mt-auto px-5 pb-5 pt-2">
           <button
             type="button"
             className="w-full rounded-xl py-3 text-sm font-semibold text-white transition-opacity hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-60"

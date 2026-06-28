@@ -4,9 +4,6 @@ import { toast } from "sonner";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import { PackagePlansGrid } from "@/components/SubscriptionPlans/PackagePlansGrid";
-import { PlanCompareModal } from "@/components/CoursePreview/PlanCompareModal";
-import { Button } from "@/components/ui/button";
-import { Layers } from "lucide-react";
 
 type SubscriptionPackagePlansProps = {
   plans: Array<{
@@ -63,7 +60,6 @@ export function SubscriptionPackagePlans({
   language,
   t,
 }: SubscriptionPackagePlansProps) {
-  const [compareOpen, setCompareOpen] = useState(false);
   const [processingPlanId, setProcessingPlanId] = useState<Id<"subscriptionPlans"> | null>(null);
   const createPlanCheckoutSession = useAction(api.plansStripe.createPlanCheckoutSession);
   const upgradePlanSubscription = useAction(api.plansStripe.upgradePlanSubscription);
@@ -105,46 +101,18 @@ export function SubscriptionPackagePlans({
   };
 
   return (
-    <div className="space-y-6">
-      <PackagePlansGrid
-        plans={plans}
-        isRTL={isRTL}
-        useArabic={useArabic}
-        isUpgradeMode={isUpgradeMode}
-        isProcessing={processingPlanId !== null}
-        processingPlanId={processingPlanId}
-        onSelectPlan={handleSelectPlan}
-        subscribeLabel={t("subscribeUnlock")}
-        upgradeLabel={t("packagePaywallUpgrade")}
-        currentPlanLabel={t("packagePaywallCurrentPlan")}
-        unavailableLabel={t("packagePaywallUnavailable")}
-      />
-
-      {plans.length > 1 && (
-        <div className="flex justify-center">
-          <Button variant="outline" className="gap-2" onClick={() => setCompareOpen(true)}>
-            <Layers className="h-4 w-4" />
-            {t("packagePaywallComparePlans")}
-          </Button>
-        </div>
-      )}
-
-      <PlanCompareModal
-        open={compareOpen}
-        onOpenChange={setCompareOpen}
-        plans={plans}
-        isRTL={isRTL}
-        useArabic={useArabic}
-        title={t("packagePaywallComparePlans")}
-        description={t("packagePaywallCompareDescription")}
-        subscribeLabel={t("subscribeUnlock")}
-        upgradeLabel={t("packagePaywallUpgrade")}
-        currentPlanLabel={t("packagePaywallCurrentPlan")}
-        unavailableLabel={t("packagePaywallUnavailable")}
-        loadingPlanId={processingPlanId}
-        paywallMode={isUpgradeMode ? "packages_upgrade" : "packages_subscribe"}
-        onSelectPlan={(planId) => handleSelectPlan(planId as Id<"subscriptionPlans">)}
-      />
-    </div>
+    <PackagePlansGrid
+      plans={plans}
+      isRTL={isRTL}
+      useArabic={useArabic}
+      isUpgradeMode={isUpgradeMode}
+      isProcessing={processingPlanId !== null}
+      processingPlanId={processingPlanId}
+      onSelectPlan={handleSelectPlan}
+      subscribeLabel={t("subscribeUnlock")}
+      upgradeLabel={t("packagePaywallUpgrade")}
+      currentPlanLabel={t("packagePaywallCurrentPlan")}
+      unavailableLabel={t("packagePaywallUnavailable")}
+    />
   );
 }

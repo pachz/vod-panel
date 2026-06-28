@@ -3,7 +3,7 @@ import type { Id } from "../../../convex/_generated/dataModel";
 import {
   PlanPreviewCard,
   type PlanPreviewData,
-  planCardGridClass,
+  planPackageGridClassForCount,
 } from "./PlanPreviewCard";
 
 export type PackagePlan = PlanPreviewData & {
@@ -51,7 +51,7 @@ export function PackagePlansGrid({
   }
 
   return (
-    <div className={cn(planCardGridClass, "w-full", className)}>
+    <div className={cn(planPackageGridClassForCount(plans.length), "w-full", className)}>
       {plans.map((plan) => {
         const actionLabel = plan.isCurrentPlan
           ? currentPlanLabel
