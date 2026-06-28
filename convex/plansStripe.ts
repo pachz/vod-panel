@@ -69,6 +69,7 @@ export const createPlanWithStripe = action({
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
+    excludedCourseIds: v.array(v.id("courses")),
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
@@ -100,6 +101,7 @@ export const createPlanWithStripe = action({
       includeAllCourses: args.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,
+      excludedCourseIds: args.excludedCourseIds,
       features: args.features.map((f) => ({
         icon: f.icon,
         title: f.title,
@@ -181,6 +183,7 @@ export const createPlanWithStripe = action({
         includeAllCourses: args.includeAllCourses,
         includedCourseIds: args.includedCourseIds,
         includedCategoryIds: args.includedCategoryIds,
+        excludedCourseIds: args.excludedCourseIds,
         features: args.features,
         displayOrder: args.displayOrder,
         isActive: args.isActive,

@@ -118,6 +118,7 @@ export const planDocValidator = v.object({
   includeAllCourses: v.boolean(),
   includedCourseIds: v.array(v.id("courses")),
   includedCategoryIds: v.array(v.id("categories")),
+  excludedCourseIds: v.optional(v.array(v.id("courses"))),
   resolvedCourseIds: v.array(v.id("courses")),
   courseStats: v.optional(
     v.object({
@@ -226,17 +227,22 @@ async function resolvePlanCourseIds(
   ctx: QueryCtx | MutationCtx,
   plan: Pick<
     Doc<"subscriptionPlans">,
-    "includeAllCourses" | "includedCourseIds" | "includedCategoryIds"
+    | "includeAllCourses"
+    | "includedCourseIds"
+    | "includedCategoryIds"
+    | "excludedCourseIds"
   >,
 ): Promise<Id<"courses">[]> {
   const ownIds = await computeOwnCourseIds(ctx, plan);
-  return [...ownIds].sort();
+  const excludeSet = new Set(plan.excludedCourseIds ?? []);
+  return [...ownIds].filter((courseId) => !excludeSet.has(courseId)).sort();
 }
 
 type CoursePickerConfig = {
   includeAllCourses: boolean;
   includedCourseIds: Id<"courses">[];
   includedCategoryIds: Id<"categories">[];
+  excludedCourseIds: Id<"courses">[];
 };
 
 async function resolveCourseIdsFromPicker(
@@ -424,6 +430,9 @@ async function planNeedsRecomputeForCourse(
   if (plan.includedCourseIds.includes(courseId)) {
     return true;
   }
+  if ((plan.excludedCourseIds ?? []).includes(courseId)) {
+    return true;
+  }
   const categorySet = new Set(categoryIds);
   return plan.includedCategoryIds.some((id) => categorySet.has(id));
 }
@@ -513,6 +522,7 @@ export const insertPlanRecord = internalMutation({
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
+    excludedCourseIds: v.optional(v.array(v.id("courses"))),
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
@@ -565,6 +575,7 @@ export const patchPlanRecord = internalMutation({
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
+    excludedCourseIds: v.optional(v.array(v.id("courses"))),
     features: v.array(planFeatureValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),

@@ -36,6 +36,7 @@ import { PlanPreviewCard, type PlanPreviewData } from "@/components/Subscription
 import { PlanFeaturesEditor } from "@/components/SubscriptionPlans/PlanFeaturesEditor";
 import { LimitedInput, PlanIconSelect } from "@/components/SubscriptionPlans/planFormFields";
 import { PlanCourseCategoryPicker } from "@/components/SubscriptionPlans/PlanCourseCategoryPicker";
+import { PlanCourseExcludePicker } from "@/components/SubscriptionPlans/PlanCourseExcludePicker";
 import { BADGE_TAG_OPTIONS } from "@/components/SubscriptionPlans/planIcons";
 import {
   DEFAULT_PLAN_THEME_INPUT,
@@ -83,6 +84,7 @@ export type PlanFormState = {
   includeAllCourses: boolean;
   includedCourseIds: Id<"courses">[];
   includedCategoryIds: Id<"categories">[];
+  excludedCourseIds: Id<"courses">[];
   features: PlanFeature[];
   displayOrder: number;
   isActive: boolean;
@@ -110,6 +112,7 @@ const defaultFormState = (): PlanFormState => ({
   includeAllCourses: false,
   includedCourseIds: [],
   includedCategoryIds: [],
+  excludedCourseIds: [],
   features: [],
   displayOrder: 0,
   isActive: true,
@@ -253,6 +256,7 @@ export function useSubscriptionPlanEditor() {
         includeAllCourses: form.includeAllCourses,
         includedCourseIds: form.includedCourseIds,
         includedCategoryIds: form.includedCategoryIds,
+        excludedCourseIds: form.excludedCourseIds,
       },
       pickerCourses,
     );
@@ -263,6 +267,7 @@ export function useSubscriptionPlanEditor() {
     form.includeAllCourses,
     form.includedCourseIds,
     form.includedCategoryIds,
+    form.excludedCourseIds,
   ]);
 
   useEffect(() => {
@@ -292,6 +297,7 @@ export function useSubscriptionPlanEditor() {
       includeAllCourses: p.includeAllCourses,
       includedCourseIds: p.includedCourseIds,
       includedCategoryIds: p.includedCategoryIds,
+      excludedCourseIds: p.excludedCourseIds ?? [],
       features: p.features.map((f) => ({
         icon: f.icon,
         title: f.title,
@@ -393,6 +399,7 @@ export function useSubscriptionPlanEditor() {
     includeAllCourses: form.includeAllCourses,
     includedCourseIds: form.includedCourseIds,
     includedCategoryIds: form.includedCategoryIds,
+    excludedCourseIds: form.excludedCourseIds,
     features: form.features,
     displayOrder: form.displayOrder,
     isActive: form.isActive,
@@ -510,6 +517,7 @@ const SubscriptionPlanEditor = () => {
       ...args,
       includedCourseIds: args.includedCourseIds.map(String),
       includedCategoryIds: args.includedCategoryIds.map(String),
+      excludedCourseIds: args.excludedCourseIds.map(String),
     };
 
     const parsed = isNew
@@ -573,6 +581,7 @@ const SubscriptionPlanEditor = () => {
           includeAllCourses: args.includeAllCourses,
           includedCourseIds: args.includedCourseIds,
           includedCategoryIds: args.includedCategoryIds,
+          excludedCourseIds: args.excludedCourseIds,
           features: args.features.map((f) => ({
             icon: f.icon,
             title: f.title,
@@ -940,10 +949,19 @@ const SubscriptionPlanEditor = () => {
                   onCategoriesChange={(ids) => setField("includedCategoryIds", ids)}
                 />
               )}
-              {planDetail && (
+              <PlanCourseExcludePicker
+                excludedCourseIds={form.excludedCourseIds}
+                onExcludedCoursesChange={(ids) => setField("excludedCourseIds", ids)}
+              />
+              {(planDetail || courseStats) && (
                 <p className="text-sm text-muted-foreground">
-                  Resolved: {planDetail.resolvedCourses.length} course
-                  {planDetail.resolvedCourses.length !== 1 ? "s" : ""}
+                  Resolved: {courseStats?.courses ?? planDetail?.resolvedCourses.length ?? 0} course
+                  {(courseStats?.courses ?? planDetail?.resolvedCourses.length ?? 0) !== 1
+                    ? "s"
+                    : ""}
+                  {form.excludedCourseIds.length > 0 && (
+                    <> ({form.excludedCourseIds.length} excluded)</>
+                  )}
                 </p>
               )}
             </CardContent>

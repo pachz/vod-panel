@@ -132,6 +132,7 @@ const planInputFieldsSchema = z.object({
   includeAllCourses: z.boolean(),
   includedCourseIds: z.array(z.string()),
   includedCategoryIds: z.array(z.string()),
+  excludedCourseIds: z.array(z.string()),
   features: z.array(planFeatureSchema).max(PLAN_FIELD_LIMITS.maxFeatures),
   displayOrder: z.number().int().min(0).max(PLAN_FIELD_LIMITS.displayOrder),
   isActive: z.boolean(),

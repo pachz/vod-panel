@@ -15,43 +15,62 @@ export type PlanCoursePickerInput = {
   includeAllCourses: boolean;
   includedCourseIds: string[];
   includedCategoryIds: string[];
+  excludedCourseIds: string[];
 };
+
+export function applyExcludedCourseIds(
+  includedIds: readonly string[],
+  excludedCourseIds: readonly string[],
+): string[] {
+  if (excludedCourseIds.length === 0) {
+    return [...includedIds];
+  }
+  const excludeSet = new Set(excludedCourseIds);
+  return includedIds.filter((courseId) => !excludeSet.has(courseId));
+}
 
 export function resolveOwnCourseIdsFromPicker(
   config: Pick<
     PlanCoursePickerInput,
-    "includeAllCourses" | "includedCourseIds" | "includedCategoryIds"
+    | "includeAllCourses"
+    | "includedCourseIds"
+    | "includedCategoryIds"
+    | "excludedCourseIds"
   >,
   publishedCourses: readonly PlanCoursePickerCourse[],
 ): string[] {
+  let includedIds: string[];
+
   if (config.includeAllCourses) {
-    return publishedCourses.map((course) => course._id).sort();
-  }
+    includedIds = publishedCourses.map((course) => course._id);
+  } else {
+    const courseById = new Map(publishedCourses.map((course) => [course._id, course]));
+    const result = new Set<string>();
 
-  const courseById = new Map(publishedCourses.map((course) => [course._id, course]));
-  const result = new Set<string>();
-
-  for (const courseId of config.includedCourseIds) {
-    if (courseById.has(courseId)) {
-      result.add(courseId);
-    }
-  }
-
-  if (config.includedCategoryIds.length > 0) {
-    const categorySet = new Set(config.includedCategoryIds);
-    for (const course of publishedCourses) {
-      if (categorySet.has(course.category_id)) {
-        result.add(course._id);
+    for (const courseId of config.includedCourseIds) {
+      if (courseById.has(courseId)) {
+        result.add(courseId);
       }
-      for (const categoryId of course.additional_category_ids ?? []) {
-        if (categorySet.has(categoryId)) {
+    }
+
+    if (config.includedCategoryIds.length > 0) {
+      const categorySet = new Set(config.includedCategoryIds);
+      for (const course of publishedCourses) {
+        if (categorySet.has(course.category_id)) {
           result.add(course._id);
+        }
+        for (const categoryId of course.additional_category_ids ?? []) {
+          if (categorySet.has(categoryId)) {
+            result.add(course._id);
+          }
         }
       }
     }
+
+    includedIds = [...result];
   }
 
-  return [...result].sort();
+  return applyExcludedCourseIds(includedIds, config.excludedCourseIds).sort();
 }
 
 export function resolveCourseIdsFromPickerData(

@@ -61,6 +61,7 @@ const planDocValidator = v.object({
   includeAllCourses: v.boolean(),
   includedCourseIds: v.array(v.id("courses")),
   includedCategoryIds: v.array(v.id("categories")),
+  excludedCourseIds: v.optional(v.array(v.id("courses"))),
   resolvedCourseIds: v.array(v.id("courses")),
   courseStats: v.optional(
     v.object({
@@ -538,6 +539,7 @@ export const updatePlan = mutation({
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
+    excludedCourseIds: v.array(v.id("courses")),
     features: v.array(planFeatureInputValidator),
     displayOrder: v.number(),
     isActive: v.boolean(),
@@ -574,6 +576,7 @@ export const updatePlan = mutation({
       includeAllCourses: args.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,
+      excludedCourseIds: args.excludedCourseIds,
       features: args.features.map((f) => ({
         icon: f.icon,
         title: f.title,
@@ -619,6 +622,7 @@ export const updatePlan = mutation({
       includeAllCourses: parsed.data.includeAllCourses,
       includedCourseIds: args.includedCourseIds,
       includedCategoryIds: args.includedCategoryIds,
+      excludedCourseIds: args.excludedCourseIds,
       features: mapFeatures(parsed.data.features),
       displayOrder: parsed.data.displayOrder,
       isActive: parsed.data.isActive,

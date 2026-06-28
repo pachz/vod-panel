@@ -298,6 +298,8 @@ export default defineSchema({
     includeAllCourses: v.boolean(),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
+    /** Published courses removed from the resolved set after inclusion rules apply. */
+    excludedCourseIds: v.optional(v.array(v.id("courses"))),
     resolvedCourseIds: v.array(v.id("courses")),
     courseStats: v.optional(
       v.object({
