@@ -512,6 +512,16 @@ const landingCoursePackagePillValidator = v.object({
   nameAr: v.string(),
   color: v.string(),
   theme: landingPlanThemeValidator,
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  priceAmountCents: v.number(),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  compareAtPriceAmountCents: v.union(v.number(), v.null()),
+  intervalLabel: v.string(),
+  priceDisplay: v.string(),
+  priceSubtitleEn: v.union(v.string(), v.null()),
+  priceSubtitleAr: v.union(v.string(), v.null()),
+  stripePriceId: v.string(),
 });
 
 type LandingPlanTheme = {
@@ -567,6 +577,25 @@ const INTERVAL_LABELS: Record<Doc<"subscriptionPlans">["billingInterval"], strin
   year: "Yearly",
 };
 
+function resolveLandingPlanPricing(plan: Doc<"subscriptionPlans">) {
+  const amount = plan.priceAmount / 100;
+  const intervalLabel = INTERVAL_LABELS[plan.billingInterval];
+  const currency = plan.priceCurrency.toUpperCase();
+
+  return {
+    billingInterval: plan.billingInterval,
+    priceAmountCents: plan.priceAmount,
+    priceAmount: amount,
+    priceCurrency: currency,
+    compareAtPriceAmountCents: plan.compareAtPriceAmount ?? null,
+    intervalLabel,
+    priceDisplay: `${currency} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
+    priceSubtitleEn: plan.priceSubtitle ?? null,
+    priceSubtitleAr: plan.priceSubtitle_ar ?? null,
+    stripePriceId: plan.stripePriceId,
+  };
+}
+
 function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
   return (
     plan.deletedAt === undefined &&
@@ -610,9 +639,7 @@ async function mapPlanToLandingPackage(
   nowMs: number,
   includedPlan?: Doc<"subscriptionPlans"> | null,
 ): Promise<LandingPackage> {
-  const amount = plan.priceAmount / 100;
-  const intervalLabel = INTERVAL_LABELS[plan.billingInterval];
-  const currency = plan.priceCurrency.toUpperCase();
+  const pricing = resolveLandingPlanPricing(plan);
   const activeSubscriberCount = await countActiveSubscribersForPlan(ctx, plan, nowMs);
   const maxCapacity = plan.maxCapacity ?? null;
   const isAtCapacity = maxCapacity !== null && activeSubscriberCount >= maxCapacity;
@@ -623,17 +650,8 @@ async function mapPlanToLandingPackage(
     nameEn: plan.name,
     nameAr: plan.name_ar,
     titleIcon: plan.titleIcon ?? null,
-    billingInterval: plan.billingInterval,
+    ...pricing,
     stripeProductId: plan.stripeProductId,
-    stripePriceId: plan.stripePriceId,
-    priceAmountCents: plan.priceAmount,
-    priceAmount: amount,
-    priceCurrency: currency,
-    compareAtPriceAmountCents: plan.compareAtPriceAmount ?? null,
-    priceSubtitleEn: plan.priceSubtitle ?? null,
-    priceSubtitleAr: plan.priceSubtitle_ar ?? null,
-    intervalLabel,
-    priceDisplay: `${currency} ${amount.toFixed(2)} / ${intervalLabel.toLowerCase()}`,
     theme: plan.theme,
     badgeTag: plan.badgeTag,
     ribbonTextEn: plan.ribbonText ?? null,
@@ -716,6 +734,7 @@ export const getLandingPlansForCourse = internalQuery({
         nameAr: plan.name_ar,
         color: plan.theme.primary,
         theme: plan.theme,
+        ...resolveLandingPlanPricing(plan),
       }));
   },
 });
