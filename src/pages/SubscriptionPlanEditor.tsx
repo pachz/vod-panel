@@ -19,6 +19,10 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
+  ToggleGroup,
+  ToggleGroupItem,
+} from "@/components/ui/toggle-group";
+import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -30,7 +34,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { PlanPreviewCard, type PlanPreviewData } from "@/components/SubscriptionPlans/PlanPreviewCard";
 import { PlanFeaturesEditor } from "@/components/SubscriptionPlans/PlanFeaturesEditor";
-import { LimitedInput } from "@/components/SubscriptionPlans/planFormFields";
+import { LimitedInput, PlanIconSelect } from "@/components/SubscriptionPlans/planFormFields";
 import { PlanCourseCategoryPicker } from "@/components/SubscriptionPlans/PlanCourseCategoryPicker";
 import { BADGE_TAG_OPTIONS } from "@/components/SubscriptionPlans/planIcons";
 import {
@@ -40,8 +44,19 @@ import {
   type PlanFeature,
   type PlanThemeInput,
   PLAN_FIELD_LIMITS,
+  planCreateInputSchema,
+  planUpdateInputSchema,
 } from "../../shared/validation/plan";
+import {
+  collectPlanFormFieldErrors,
+  focusPlanFormField,
+  formatPlanValidationMessage,
+  getFirstPlanFormFieldErrorKey,
+  PLAN_FORM_FIELD_IDS,
+  type PlanFormFieldKey,
+} from "../../shared/validation/planFormValidation";
 import { slugify } from "@/lib/slugify";
+import { cn } from "@/lib/utils";
 import { resolvePlanFeaturesForDisplay } from "../../shared/planFeatureTemplate";
 import {
   computePlanCourseStatsForCourseIds,
@@ -51,15 +66,18 @@ import {
 export type PlanFormState = {
   name: string;
   nameAr: string;
+  titleIcon: string;
   slug: string;
   billingInterval: "month" | "year";
   priceAmountDollars: string;
   priceCurrency: string;
   compareAtPriceDollars: string;
   priceSubtitle: string;
+  priceSubtitleAr: string;
   theme: PlanThemeInput;
   badgeTag: (typeof BADGE_TAG_OPTIONS)[number]["value"];
   ribbonText: string;
+  ribbonTextAr: string;
   inheritsDescription: string;
   inheritsDescriptionAr: string;
   includeAllCourses: boolean;
@@ -74,15 +92,18 @@ export type PlanFormState = {
 const defaultFormState = (): PlanFormState => ({
   name: "",
   nameAr: "",
+  titleIcon: "",
   slug: "",
   billingInterval: "month",
   priceAmountDollars: "",
   priceCurrency: "usd",
   compareAtPriceDollars: "",
   priceSubtitle: "",
+  priceSubtitleAr: "",
   theme: { ...DEFAULT_PLAN_THEME_INPUT },
   badgeTag: "none",
   ribbonText: "",
+  ribbonTextAr: "",
   inheritsDescription: "",
   inheritsDescriptionAr: "",
   includeAllCourses: false,
@@ -118,6 +139,19 @@ function syncPriceFields(dollars: string) {
   return { priceAmountDollars: dollars };
 }
 
+const FORM_KEY_TO_FIELD_ERROR: Partial<Record<keyof PlanFormState, PlanFormFieldKey>> = {
+  name: "name",
+  nameAr: "nameAr",
+  slug: "slug",
+  priceSubtitle: "priceSubtitle",
+  priceSubtitleAr: "priceSubtitleAr",
+  ribbonText: "ribbonText",
+  ribbonTextAr: "ribbonTextAr",
+  inheritsDescription: "inheritsDescription",
+  inheritsDescriptionAr: "inheritsDescriptionAr",
+  features: "features",
+};
+
 function parseMaxCapacity(value: string): number | undefined {
   const trimmed = value.trim();
   if (!trimmed) return undefined;
@@ -126,6 +160,51 @@ function parseMaxCapacity(value: string): number | undefined {
     return undefined;
   }
   return parsed;
+}
+
+function PlanLivePreviewPanel({
+  plan,
+  className,
+}: {
+  plan: PlanPreviewData;
+  className?: string;
+}) {
+  const [previewLanguage, setPreviewLanguage] = useState<"en" | "ar">("en");
+  const useArabic = previewLanguage === "ar";
+
+  return (
+    <Card className={cn("card-elevated shadow-md", className)}>
+      <CardHeader className="flex flex-row items-center justify-between gap-3 border-b bg-muted/20 pb-3">
+        <CardTitle className="text-base">Live preview</CardTitle>
+        <ToggleGroup
+          type="single"
+          value={previewLanguage}
+          onValueChange={(value) => {
+            if (value === "en" || value === "ar") {
+              setPreviewLanguage(value);
+            }
+          }}
+          size="sm"
+          variant="outline"
+        >
+          <ToggleGroupItem value="en" className="px-3 text-xs">
+            EN
+          </ToggleGroupItem>
+          <ToggleGroupItem value="ar" className="px-3 text-xs">
+            AR
+          </ToggleGroupItem>
+        </ToggleGroup>
+      </CardHeader>
+      <CardContent className="pt-4">
+        <PlanPreviewCard
+          plan={plan}
+          useArabic={useArabic}
+          isRTL={useArabic}
+          className="mx-auto max-w-none"
+        />
+      </CardContent>
+    </Card>
+  );
 }
 
 export function useSubscriptionPlanEditor() {
@@ -150,7 +229,17 @@ export function useSubscriptionPlanEditor() {
   const [isUpdatingPrice, setIsUpdatingPrice] = useState(false);
   const [showArchiveDialog, setShowArchiveDialog] = useState(false);
   const [isArchiving, setIsArchiving] = useState(false);
-  const [initialized, setInitialized] = useState(isNew);
+  const [initialized, setInitialized] = useState(id === "new");
+
+  useEffect(() => {
+    if (id === "new") {
+      setForm(defaultFormState());
+      setNewPriceDollars("");
+      setInitialized(true);
+      return;
+    }
+    setInitialized(false);
+  }, [id]);
 
   const courseStats = useMemo(() => {
     if (!pickerCourses) {
@@ -175,11 +264,14 @@ export function useSubscriptionPlanEditor() {
   ]);
 
   useEffect(() => {
-    if (isNew || !planDetail?.plan || initialized) return;
+    if (isNew || !planId || !planDetail?.plan || initialized) return;
+    if (planDetail.plan._id !== planId) return;
+
     const p = planDetail.plan;
     setForm({
       name: p.name,
       nameAr: p.name_ar,
+      titleIcon: p.titleIcon ?? "",
       slug: p.slug,
       billingInterval: p.billingInterval,
       priceAmountDollars: centsToDollars(p.priceAmount),
@@ -188,9 +280,11 @@ export function useSubscriptionPlanEditor() {
         ? centsToDollars(p.compareAtPriceAmount)
         : "",
       priceSubtitle: p.priceSubtitle ?? "",
+      priceSubtitleAr: p.priceSubtitle_ar ?? "",
       theme: collapsePlanTheme(p.theme),
       badgeTag: p.badgeTag,
       ribbonText: p.ribbonText ?? "",
+      ribbonTextAr: p.ribbonText_ar ?? "",
       inheritsDescription: p.inheritsDescription ?? "",
       inheritsDescriptionAr: p.inheritsDescription_ar ?? "",
       includeAllCourses: p.includeAllCourses,
@@ -214,7 +308,7 @@ export function useSubscriptionPlanEditor() {
     });
     setNewPriceDollars(centsToDollars(p.priceAmount));
     setInitialized(true);
-  }, [planDetail, isNew, initialized]);
+  }, [planDetail, isNew, initialized, planId]);
 
   const setField = useCallback(<K extends keyof PlanFormState>(key: K, value: PlanFormState[K]) => {
     setForm((prev) => {
@@ -233,6 +327,7 @@ export function useSubscriptionPlanEditor() {
       return {
       name: form.name || "Plan name",
       name_ar: form.nameAr || "اسم الخطة",
+      titleIcon: form.titleIcon || undefined,
       billingInterval: form.billingInterval,
       priceAmount: isNew
         ? dollarsToCents(form.priceAmountDollars) || 0
@@ -241,10 +336,12 @@ export function useSubscriptionPlanEditor() {
       compareAtPriceAmount: form.compareAtPriceDollars
         ? dollarsToCents(form.compareAtPriceDollars)
         : undefined,
-      priceSubtitle: form.priceSubtitle || undefined,
+      priceSubtitle: form.priceSubtitle.trim() || undefined,
+      priceSubtitle_ar: form.priceSubtitleAr.trim() || undefined,
       theme: expandPlanTheme(form.theme),
       badgeTag: form.badgeTag,
-      ribbonText: form.ribbonText || undefined,
+      ribbonText: form.ribbonText.trim() || undefined,
+      ribbonText_ar: form.ribbonTextAr.trim() || undefined,
       features: resolvedFeatures.map((f) => ({
         icon: f.icon,
         title: f.title,
@@ -276,14 +373,17 @@ export function useSubscriptionPlanEditor() {
   const buildMutationArgs = () => ({
     name: form.name.trim(),
     nameAr: form.nameAr.trim(),
+    titleIcon: form.titleIcon.trim() || undefined,
     slug: form.slug.trim(),
     compareAtPriceAmount: form.compareAtPriceDollars
       ? dollarsToCents(form.compareAtPriceDollars)
       : undefined,
     priceSubtitle: form.priceSubtitle.trim() || undefined,
+    priceSubtitleAr: form.priceSubtitleAr.trim() || undefined,
     theme: expandPlanTheme(form.theme),
     badgeTag: form.badgeTag,
     ribbonText: form.ribbonText.trim() || undefined,
+    ribbonTextAr: form.ribbonTextAr.trim() || undefined,
     inheritsDescription: form.inheritsDescription.trim() || undefined,
     inheritsDescriptionAr: form.inheritsDescriptionAr.trim() || undefined,
     includeAllCourses: form.includeAllCourses,
@@ -327,6 +427,7 @@ export function useSubscriptionPlanEditor() {
 
 const SubscriptionPlanEditor = () => {
   const navigate = useNavigate();
+  const [fieldErrors, setFieldErrors] = useState<Partial<Record<PlanFormFieldKey, string>>>({});
   const {
     isNew,
     planId,
@@ -382,10 +483,61 @@ const SubscriptionPlanEditor = () => {
     );
   }
 
+  const clearFieldError = (key: keyof PlanFormState) => {
+    const errorKey = FORM_KEY_TO_FIELD_ERROR[key];
+    if (!errorKey) return;
+    setFieldErrors((prev) => {
+      if (!prev[errorKey]) return prev;
+      const next = { ...prev };
+      delete next[errorKey];
+      return next;
+    });
+  };
+
+  const updateField = <K extends keyof PlanFormState>(key: K, value: PlanFormState[K]) => {
+    clearFieldError(key);
+    setField(key, value);
+  };
+
+  const validateBeforeSave = () => {
+    const args = buildMutationArgs();
+    const sharedPayload = {
+      ...args,
+      includedCourseIds: args.includedCourseIds.map(String),
+      includedCategoryIds: args.includedCategoryIds.map(String),
+    };
+
+    const parsed = isNew
+      ? planCreateInputSchema.safeParse({
+          ...sharedPayload,
+          billingInterval: form.billingInterval,
+          priceAmount: dollarsToCents(form.priceAmountDollars),
+          priceCurrency: form.priceCurrency || "usd",
+        })
+      : planUpdateInputSchema.safeParse(sharedPayload);
+
+    if (parsed.success) {
+      setFieldErrors({});
+      return { ok: true as const, args, parsed: parsed.data };
+    }
+
+    const errors = collectPlanFormFieldErrors(parsed.error);
+    setFieldErrors(errors);
+    const firstKey = getFirstPlanFormFieldErrorKey(parsed.error);
+    if (firstKey) {
+      focusPlanFormField(firstKey);
+    }
+    toast.error(formatPlanValidationMessage(parsed.error));
+    return { ok: false as const };
+  };
+
   const handleSave = async () => {
     setIsSaving(true);
     try {
-      const args = buildMutationArgs();
+      const validation = validateBeforeSave();
+      if (!validation.ok) return;
+
+      const args = validation.args;
       if (form.maxCapacity.trim() && args.maxCapacity === undefined) {
         toast.error("Max capacity must be a whole number of at least 1, or leave blank for unlimited.");
         return;
@@ -400,14 +552,17 @@ const SubscriptionPlanEditor = () => {
           name: args.name,
           name_ar: args.nameAr,
           slug: args.slug,
+          titleIcon: args.titleIcon,
           billingInterval: form.billingInterval,
           priceAmount,
-          priceCurrency: form.priceCurrency,
+          priceCurrency: form.priceCurrency || "usd",
           compareAtPriceAmount: args.compareAtPriceAmount,
           priceSubtitle: args.priceSubtitle,
+          priceSubtitle_ar: args.priceSubtitleAr,
           theme: args.theme,
           badgeTag: args.badgeTag,
           ribbonText: args.ribbonText,
+          ribbonText_ar: args.ribbonTextAr,
           inheritsDescription: args.inheritsDescription,
           inheritsDescription_ar: args.inheritsDescriptionAr,
           includeAllCourses: args.includeAllCourses,
@@ -506,14 +661,7 @@ const SubscriptionPlanEditor = () => {
         </div>
       </div>
 
-      <Card className="card-elevated lg:hidden">
-        <CardHeader className="pb-2">
-          <CardTitle className="text-base">Live preview</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <PlanPreviewCard plan={previewData} className="max-w-none mx-auto" />
-        </CardContent>
-      </Card>
+      <PlanLivePreviewPanel plan={previewData} className="lg:hidden" />
 
       <div className="grid gap-8 lg:grid-cols-[minmax(0,1fr)_min(400px,38%)] lg:items-start">
         <div className="min-w-0 space-y-6">
@@ -523,28 +671,41 @@ const SubscriptionPlanEditor = () => {
             </CardHeader>
             <CardContent className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label>Name (EN)</Label>
+                <Label htmlFor={PLAN_FORM_FIELD_IDS.name}>Name (EN)</Label>
                 <LimitedInput
+                  id={PLAN_FORM_FIELD_IDS.name}
                   maxLength={PLAN_FIELD_LIMITS.name}
                   value={form.name}
-                  onChange={(e) => setField("name", e.target.value)}
+                  onChange={(e) => updateField("name", e.target.value)}
+                  error={fieldErrors.name}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Name (AR)</Label>
+                <Label htmlFor={PLAN_FORM_FIELD_IDS.nameAr}>Name (AR)</Label>
                 <LimitedInput
+                  id={PLAN_FORM_FIELD_IDS.nameAr}
                   maxLength={PLAN_FIELD_LIMITS.nameAr}
                   value={form.nameAr}
-                  onChange={(e) => setField("nameAr", e.target.value)}
+                  onChange={(e) => updateField("nameAr", e.target.value)}
                   dir="rtl"
+                  className="text-right"
+                  error={fieldErrors.nameAr}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <PlanIconSelect
+                  value={form.titleIcon}
+                  onChange={(value) => setField("titleIcon", value)}
                 />
               </div>
               <div className="space-y-2">
-                <Label>Slug</Label>
+                <Label htmlFor={PLAN_FORM_FIELD_IDS.slug}>Slug</Label>
                 <LimitedInput
+                  id={PLAN_FORM_FIELD_IDS.slug}
                   maxLength={PLAN_FIELD_LIMITS.slug}
                   value={form.slug}
-                  onChange={(e) => setField("slug", e.target.value)}
+                  onChange={(e) => updateField("slug", e.target.value)}
+                  error={fieldErrors.slug}
                 />
               </div>
               <div className="space-y-2">
@@ -597,15 +758,6 @@ const SubscriptionPlanEditor = () => {
                   placeholder="Old price for strikethrough"
                 />
               </div>
-              <div className="space-y-2 sm:col-span-2">
-                <Label>Price subtitle</Label>
-                <LimitedInput
-                  maxLength={PLAN_FIELD_LIMITS.priceSubtitle}
-                  value={form.priceSubtitle}
-                  onChange={(e) => setField("priceSubtitle", e.target.value)}
-                  placeholder="e.g. per year · 12 + 2 months free"
-                />
-              </div>
               <div className="space-y-2">
                 <Label>Max capacity (optional)</Label>
                 <Input
@@ -629,6 +781,33 @@ const SubscriptionPlanEditor = () => {
                       : "Max active subscribers at once."}
                 </p>
               </div>
+              <div className="space-y-2">
+                <Label htmlFor={PLAN_FORM_FIELD_IDS.priceSubtitle}>Price subtitle (EN)</Label>
+                <LimitedInput
+                  id={PLAN_FORM_FIELD_IDS.priceSubtitle}
+                  maxLength={PLAN_FIELD_LIMITS.priceSubtitle}
+                  value={form.priceSubtitle}
+                  onChange={(e) => updateField("priceSubtitle", e.target.value)}
+                  placeholder="e.g. per year · 12 + 2 months free"
+                  error={fieldErrors.priceSubtitle}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor={PLAN_FORM_FIELD_IDS.priceSubtitleAr}>Price subtitle (AR)</Label>
+                <LimitedInput
+                  id={PLAN_FORM_FIELD_IDS.priceSubtitleAr}
+                  maxLength={PLAN_FIELD_LIMITS.priceSubtitle}
+                  value={form.priceSubtitleAr}
+                  onChange={(e) => updateField("priceSubtitleAr", e.target.value)}
+                  placeholder="مثال: سنوياً · 12 + 2 أشهر مجاناً"
+                  dir="rtl"
+                  className="text-right"
+                  error={fieldErrors.priceSubtitleAr}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground sm:col-span-2">
+                Price subtitle, ribbon, and feature section title must be filled in both languages or left empty in both.
+              </p>
               {!isNew && (
                 <div className="sm:col-span-2 flex gap-2">
                   <Button
@@ -654,7 +833,7 @@ const SubscriptionPlanEditor = () => {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid gap-4 sm:grid-cols-2">
-                <div className="space-y-2">
+                <div className="space-y-2 sm:col-span-2">
                   <Label>Promotion badge</Label>
                   <Select
                     value={form.badgeTag}
@@ -675,12 +854,27 @@ const SubscriptionPlanEditor = () => {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label>Ribbon text (optional)</Label>
+                  <Label htmlFor={PLAN_FORM_FIELD_IDS.ribbonText}>Ribbon text (EN)</Label>
                   <LimitedInput
+                    id={PLAN_FORM_FIELD_IDS.ribbonText}
                     maxLength={PLAN_FIELD_LIMITS.ribbonText}
                     value={form.ribbonText}
-                    onChange={(e) => setField("ribbonText", e.target.value)}
+                    onChange={(e) => updateField("ribbonText", e.target.value)}
                     placeholder="MOST POPULAR"
+                    error={fieldErrors.ribbonText}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={PLAN_FORM_FIELD_IDS.ribbonTextAr}>Ribbon text (AR)</Label>
+                  <LimitedInput
+                    id={PLAN_FORM_FIELD_IDS.ribbonTextAr}
+                    maxLength={PLAN_FIELD_LIMITS.ribbonText}
+                    value={form.ribbonTextAr}
+                    onChange={(e) => updateField("ribbonTextAr", e.target.value)}
+                    placeholder="الأكثر شعبية"
+                    dir="rtl"
+                    className="text-right"
+                    error={fieldErrors.ribbonTextAr}
                   />
                 </div>
               </div>
@@ -751,44 +945,55 @@ const SubscriptionPlanEditor = () => {
 
           <Card className="card-elevated">
             <CardHeader>
-              <CardTitle>Inherits (optional)</CardTitle>
+              <CardTitle>Feature section title (optional)</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <p className="text-xs text-muted-foreground">
-                Free text shown above the feature list, e.g. &quot;Everything in Monthly, plus&quot;
+                Short line above the feature list, e.g. &quot;Everything in Monthly, plus&quot;
               </p>
-              <div className="space-y-2">
-                <Label>Inherits text (EN)</Label>
-                <LimitedInput
-                  maxLength={PLAN_FIELD_LIMITS.inheritsDescription}
-                  value={form.inheritsDescription}
-                  onChange={(e) => setField("inheritsDescription", e.target.value)}
-                  placeholder="Everything in Monthly, plus"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Inherits text (AR)</Label>
-                <LimitedInput
-                  maxLength={PLAN_FIELD_LIMITS.inheritsDescriptionAr}
-                  value={form.inheritsDescriptionAr}
-                  onChange={(e) => setField("inheritsDescriptionAr", e.target.value)}
-                  placeholder="كل ما في الباقة الشهرية، بالإضافة إلى"
-                  dir="rtl"
-                  className="text-right"
-                />
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div className="space-y-2">
+                  <Label htmlFor={PLAN_FORM_FIELD_IDS.inheritsDescription}>Feature section title (EN)</Label>
+                  <LimitedInput
+                    id={PLAN_FORM_FIELD_IDS.inheritsDescription}
+                    maxLength={PLAN_FIELD_LIMITS.inheritsDescription}
+                    value={form.inheritsDescription}
+                    onChange={(e) => updateField("inheritsDescription", e.target.value)}
+                    placeholder="Everything in Monthly, plus"
+                    error={fieldErrors.inheritsDescription}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor={PLAN_FORM_FIELD_IDS.inheritsDescriptionAr}>Feature section title (AR)</Label>
+                  <LimitedInput
+                    id={PLAN_FORM_FIELD_IDS.inheritsDescriptionAr}
+                    maxLength={PLAN_FIELD_LIMITS.inheritsDescriptionAr}
+                    value={form.inheritsDescriptionAr}
+                    onChange={(e) => updateField("inheritsDescriptionAr", e.target.value)}
+                    placeholder="كل ما في الباقة الشهرية، بالإضافة إلى"
+                    dir="rtl"
+                    className="text-right"
+                    error={fieldErrors.inheritsDescriptionAr}
+                  />
+                </div>
               </div>
             </CardContent>
           </Card>
 
-          <Card className="card-elevated">
+          <Card className="card-elevated" id={PLAN_FORM_FIELD_IDS.features}>
             <CardHeader className="flex flex-row items-center justify-between">
               <CardTitle>Features</CardTitle>
             </CardHeader>
             <CardContent>
+              {fieldErrors.features && (
+                <p className="mb-3 text-sm text-destructive" role="alert">
+                  {fieldErrors.features}
+                </p>
+              )}
               <PlanFeaturesEditor
                 features={form.features}
                 courseStats={courseStats}
-                onChange={(features) => setField("features", features)}
+                onChange={(features) => updateField("features", features)}
               />
             </CardContent>
           </Card>
@@ -834,14 +1039,7 @@ const SubscriptionPlanEditor = () => {
         </div>
 
         <aside className="hidden lg:sticky lg:top-20 lg:self-start lg:block">
-          <Card className="card-elevated shadow-md">
-            <CardHeader className="border-b bg-muted/20 pb-3">
-              <CardTitle className="text-base">Live preview</CardTitle>
-            </CardHeader>
-            <CardContent className="pt-4">
-              <PlanPreviewCard plan={previewData} className="mx-auto max-w-none" />
-            </CardContent>
-          </Card>
+          <PlanLivePreviewPanel plan={previewData} />
         </aside>
       </div>
 

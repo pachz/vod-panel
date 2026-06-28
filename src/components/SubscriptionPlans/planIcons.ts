@@ -19,34 +19,62 @@ import {
   Video,
   Zap,
 } from "lucide-react";
+import { PLAN_ICON_KEYS, isPlanIconKey, type PlanIconKey } from "../../../shared/planIconKeys";
 
-export const PLAN_ICON_OPTIONS: { key: string; label: string; Icon: LucideIcon }[] = [
-  { key: "GraduationCap", label: "Graduation cap", Icon: GraduationCap },
-  { key: "BookOpen", label: "Book", Icon: BookOpen },
-  { key: "Heart", label: "Heart", Icon: Heart },
-  { key: "MessageCircle", label: "Chat bubble", Icon: MessageCircle },
-  { key: "HelpCircle", label: "Question", Icon: HelpCircle },
-  { key: "Crown", label: "Crown", Icon: Crown },
-  { key: "Video", label: "Video", Icon: Video },
-  { key: "Calendar", label: "Calendar", Icon: Calendar },
-  { key: "Percent", label: "Percent", Icon: Percent },
-  { key: "Star", label: "Star", Icon: Star },
-  { key: "Sparkles", label: "Sparkles", Icon: Sparkles },
-  { key: "Gift", label: "Gift", Icon: Gift },
-  { key: "Ribbon", label: "Ribbon", Icon: Ribbon },
-  { key: "Medal", label: "Medal", Icon: Medal },
-  { key: "Users", label: "Users", Icon: Users },
-  { key: "Shield", label: "Shield", Icon: Shield },
-  { key: "Zap", label: "Zap", Icon: Zap },
-  { key: "CheckCircle2", label: "Check", Icon: CheckCircle2 },
-];
+const ICON_LABELS: Record<PlanIconKey, string> = {
+  GraduationCap: "Graduation cap",
+  BookOpen: "Book",
+  Heart: "Heart",
+  MessageCircle: "Chat bubble",
+  HelpCircle: "Question",
+  Crown: "Crown",
+  Video: "Video",
+  Calendar: "Calendar",
+  Percent: "Percent",
+  Star: "Star",
+  Sparkles: "Sparkles",
+  Gift: "Gift",
+  Ribbon: "Ribbon",
+  Medal: "Medal",
+  Users: "Users",
+  Shield: "Shield",
+  Zap: "Zap",
+  CheckCircle2: "Check",
+};
 
-const iconMap = Object.fromEntries(
-  PLAN_ICON_OPTIONS.map(({ key, Icon }) => [key, Icon]),
-) as Record<string, LucideIcon>;
+const ICON_COMPONENTS: Record<PlanIconKey, LucideIcon> = {
+  GraduationCap,
+  BookOpen,
+  Heart,
+  MessageCircle,
+  HelpCircle,
+  Crown,
+  Video,
+  Calendar,
+  Percent,
+  Star,
+  Sparkles,
+  Gift,
+  Ribbon,
+  Medal,
+  Users,
+  Shield,
+  Zap,
+  CheckCircle2,
+};
+
+export const PLAN_ICON_OPTIONS: { key: PlanIconKey; label: string; Icon: LucideIcon }[] =
+  PLAN_ICON_KEYS.map((key) => ({
+    key,
+    label: ICON_LABELS[key],
+    Icon: ICON_COMPONENTS[key],
+  }));
 
 export function getPlanIcon(key: string): LucideIcon {
-  return iconMap[key] ?? CheckCircle2;
+  if (isPlanIconKey(key)) {
+    return ICON_COMPONENTS[key];
+  }
+  return CheckCircle2;
 }
 
 export const BADGE_TAG_OPTIONS = [

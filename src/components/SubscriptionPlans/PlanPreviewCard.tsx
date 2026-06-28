@@ -1,7 +1,12 @@
 import { cn } from "@/lib/utils";
 import { formatPrice } from "@/pages/Payments/utils";
-import { getPlanIcon, BADGE_TAG_LABELS, type BadgeTag } from "./planIcons";
+import { getPlanIcon, type BadgeTag } from "./planIcons";
 import type { PlanTheme } from "../../../shared/validation/plan";
+import {
+  getPlanPreviewLocale,
+  PLAN_BADGE_LABELS,
+  PLAN_PREVIEW_COPY,
+} from "../../../shared/planPreviewCopy";
 
 export type PlanPreviewFeature = {
   icon: string;
@@ -16,14 +21,17 @@ export type PlanPreviewFeature = {
 export type PlanPreviewData = {
   name: string;
   name_ar: string;
+  titleIcon?: string;
   billingInterval: "month" | "year";
   priceAmount: number;
   priceCurrency: string;
   compareAtPriceAmount?: number;
   priceSubtitle?: string;
+  priceSubtitle_ar?: string;
   theme: PlanTheme;
   badgeTag: BadgeTag;
   ribbonText?: string;
+  ribbonText_ar?: string;
   inheritsDescription?: string;
   inheritsDescription_ar?: string;
   features: PlanPreviewFeature[];
@@ -50,9 +58,13 @@ export function PlanPreviewCard({
   className,
   showFooter = true,
 }: PlanPreviewCardProps) {
+  const locale = getPlanPreviewLocale(useArabic);
+  const copy = PLAN_PREVIEW_COPY[locale];
   const displayName = useArabic ? plan.name_ar || plan.name : plan.name;
-  const intervalLabel = plan.billingInterval === "month" ? "per month" : "per year";
-  const badgeLabel = BADGE_TAG_LABELS[plan.badgeTag];
+  const TitleIcon = plan.titleIcon ? getPlanIcon(plan.titleIcon) : null;
+  const intervalLabel =
+    plan.billingInterval === "month" ? copy.perMonth : copy.perYear;
+  const badgeLabel = PLAN_BADGE_LABELS[locale][plan.badgeTag];
   const sortedFeatures = [...plan.features].sort((a, b) => a.displayOrder - b.displayOrder);
   const savePct =
     plan.compareAtPriceAmount != null
@@ -70,7 +82,11 @@ export function PlanPreviewCard({
         className="relative flex flex-col overflow-hidden rounded-2xl border-2 bg-card shadow-lg"
         style={{ borderColor: plan.theme.border }}
       >
-      {plan.ribbonText && (
+      {(() => {
+        const ribbon =
+          (useArabic ? plan.ribbonText_ar?.trim() || plan.ribbonText?.trim() : plan.ribbonText?.trim()) ??
+          "";
+        return ribbon ? (
         <div
           className={cn(
             "pointer-events-none absolute z-10 whitespace-nowrap py-1.5 text-center text-[9px] font-bold uppercase leading-none tracking-[0.14em] text-white shadow-sm",
@@ -83,14 +99,19 @@ export function PlanPreviewCard({
             transform: isRTL ? "rotate(-45deg)" : "rotate(45deg)",
           }}
         >
-          {plan.ribbonText}
+          {ribbon}
         </div>
-      )}
+        ) : null;
+      })()}
 
       <div
         className={cn(
           "px-6 pb-5 text-center",
-          badgeLabel ? (plan.ribbonText ? "pt-4" : "pt-3") : plan.ribbonText ? "pt-5" : "pt-4",
+          badgeLabel
+            ? (plan.ribbonText || plan.ribbonText_ar ? "pt-4" : "pt-3")
+            : plan.ribbonText || plan.ribbonText_ar
+              ? "pt-5"
+              : "pt-4",
         )}
         style={{
           background: isHighlighted
@@ -108,7 +129,12 @@ export function PlanPreviewCard({
             </span>
           </div>
         )}
-        <h3 className="text-xl font-bold tracking-tight">{displayName}</h3>
+        <h3 className="flex items-center justify-center gap-2 text-xl font-bold tracking-tight">
+          {TitleIcon && (
+            <TitleIcon className="h-6 w-6 shrink-0" style={{ color: plan.theme.primary }} aria-hidden />
+          )}
+          <span>{displayName}</span>
+        </h3>
         <div className="mt-3 flex flex-wrap items-baseline justify-center gap-2">
           {plan.compareAtPriceAmount != null && plan.compareAtPriceAmount > plan.priceAmount && (
             <span className="text-lg text-muted-foreground line-through">
@@ -123,12 +149,14 @@ export function PlanPreviewCard({
               className="rounded-full px-2 py-0.5 text-xs font-semibold text-white"
               style={{ background: plan.theme.secondary }}
             >
-              Save {savePct}%
+              {copy.savePercent(savePct)}
             </span>
           )}
         </div>
         <p className="mt-1 text-sm text-muted-foreground">
-          {plan.priceSubtitle ?? intervalLabel}
+          {(useArabic
+            ? plan.priceSubtitle_ar?.trim() || plan.priceSubtitle?.trim()
+            : plan.priceSubtitle?.trim()) || intervalLabel}
         </p>
       </div>
 
@@ -173,7 +201,7 @@ export function PlanPreviewCard({
                     )}
                     {feature.isChecklistItem && (
                       <span className="mt-1 inline-block text-[10px] uppercase tracking-wide text-muted-foreground">
-                        Checklist item
+                        {copy.checklistItem}
                       </span>
                     )}
                   </div>
@@ -182,7 +210,7 @@ export function PlanPreviewCard({
             })}
           </ul>
         ) : (
-          <p className="text-sm text-muted-foreground text-center py-4">No features added yet</p>
+          <p className="text-sm text-muted-foreground text-center py-4">{copy.noFeaturesYet}</p>
         )}
       </div>
 
@@ -194,17 +222,17 @@ export function PlanPreviewCard({
             style={{ background: plan.theme.buttonBg }}
             disabled
           >
-            {plan.badgeTag === "vip" ? "Join VIP" : "Select Plan"}
+            {plan.badgeTag === "vip" ? copy.joinVip : copy.selectPlan}
           </button>
           <p className="mt-3 text-center text-[10px] text-muted-foreground">
-            Secure payment · Powered by Stripe
+            {copy.securePayment}
           </p>
         </div>
       )}
 
       {plan.isActive === false && (
         <div className="absolute inset-0 flex items-center justify-center bg-background/60">
-          <span className="rounded-lg bg-muted px-3 py-1 text-sm font-medium">Draft / Inactive</span>
+          <span className="rounded-lg bg-muted px-3 py-1 text-sm font-medium">{copy.draftInactive}</span>
         </div>
       )}
       </div>
@@ -218,11 +246,13 @@ type PlanPreviewRowProps = {
   isRTL?: boolean;
 };
 
-export function PlanPreviewRow({ plans, highlightIndex, isRTL }: PlanPreviewRowProps) {
+export function PlanPreviewRow({ plans, highlightIndex, isRTL, useArabic = false }: PlanPreviewRowProps & { useArabic?: boolean }) {
+  const copy = PLAN_PREVIEW_COPY[getPlanPreviewLocale(useArabic)];
+
   if (plans.length === 0) {
     return (
       <div className="rounded-xl border border-dashed p-8 text-center text-muted-foreground text-sm">
-        No plans to preview
+        {copy.noPlansToPreview}
       </div>
     );
   }
@@ -234,6 +264,7 @@ export function PlanPreviewRow({ plans, highlightIndex, isRTL }: PlanPreviewRowP
           key={`${plan.name}-${index}`}
           plan={plan}
           isRTL={isRTL}
+          useArabic={useArabic}
           className={cn(
             highlightIndex === index && "ring-2 ring-primary ring-offset-2 scale-[1.02]",
           )}

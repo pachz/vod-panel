@@ -266,6 +266,7 @@ export default defineSchema({
     name: v.string(),
     name_ar: v.string(),
     slug: v.string(),
+    titleIcon: v.optional(v.string()),
     billingInterval: v.union(v.literal("month"), v.literal("year")),
     stripeProductId: v.string(),
     stripePriceId: v.string(),
@@ -273,6 +274,7 @@ export default defineSchema({
     priceCurrency: v.string(),
     compareAtPriceAmount: v.optional(v.number()),
     priceSubtitle: v.optional(v.string()),
+    priceSubtitle_ar: v.optional(v.string()),
     theme: v.object({
       primary: v.string(),
       secondary: v.string(),
@@ -289,6 +291,7 @@ export default defineSchema({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
+    ribbonText_ar: v.optional(v.string()),
     inheritsDescription: v.optional(v.string()),
     inheritsDescription_ar: v.optional(v.string()),
     includesPlanId: v.optional(v.id("subscriptionPlans")),

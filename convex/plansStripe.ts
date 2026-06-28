@@ -5,6 +5,7 @@ import type { Id } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import Stripe from "stripe";
 import { planCreateInputSchema, planPriceUpdateSchema } from "../shared/validation/plan";
+import { formatPlanValidationMessage } from "../shared/validation/planFormValidation";
 import { requireUserAction } from "./utils/auth";
 import { internal } from "./_generated/api";
 
@@ -45,11 +46,13 @@ export const createPlanWithStripe = action({
     name: v.string(),
     name_ar: v.string(),
     slug: v.string(),
+    titleIcon: v.optional(v.string()),
     billingInterval: v.union(v.literal("month"), v.literal("year")),
     priceAmount: v.number(),
     priceCurrency: v.string(),
     compareAtPriceAmount: v.optional(v.number()),
     priceSubtitle: v.optional(v.string()),
+    priceSubtitle_ar: v.optional(v.string()),
     theme: planThemeValidator,
     badgeTag: v.union(
       v.literal("start_here"),
@@ -60,6 +63,7 @@ export const createPlanWithStripe = action({
       v.literal("none"),
     ),
     ribbonText: v.optional(v.string()),
+    ribbonText_ar: v.optional(v.string()),
     inheritsDescription: v.optional(v.string()),
     inheritsDescription_ar: v.optional(v.string()),
     includeAllCourses: v.boolean(),
@@ -79,14 +83,17 @@ export const createPlanWithStripe = action({
       name: args.name,
       nameAr: args.name_ar,
       slug: args.slug,
+      titleIcon: args.titleIcon,
       billingInterval: args.billingInterval,
       priceAmount: args.priceAmount,
       priceCurrency: args.priceCurrency,
       compareAtPriceAmount: args.compareAtPriceAmount,
       priceSubtitle: args.priceSubtitle,
+      priceSubtitleAr: args.priceSubtitle_ar,
       theme: args.theme,
       badgeTag: args.badgeTag,
       ribbonText: args.ribbonText,
+      ribbonTextAr: args.ribbonText_ar,
       inheritsDescription: args.inheritsDescription,
       inheritsDescriptionAr: args.inheritsDescription_ar,
       includeAllCourses: args.includeAllCourses,
@@ -112,7 +119,7 @@ export const createPlanWithStripe = action({
     if (!parsed.success) {
       throw new ConvexError({
         code: "INVALID_INPUT",
-        message: parsed.error.errors[0]?.message ?? "Invalid plan input.",
+        message: formatPlanValidationMessage(parsed.error),
       });
     }
 
@@ -154,18 +161,21 @@ export const createPlanWithStripe = action({
         name: args.name,
         name_ar: args.name_ar,
         slug: args.slug,
+        titleIcon: parsed.data.titleIcon,
         billingInterval: args.billingInterval,
         stripeProductId: product.id,
         stripePriceId: price.id,
         priceAmount: args.priceAmount,
         priceCurrency: args.priceCurrency.toLowerCase(),
-        compareAtPriceAmount: args.compareAtPriceAmount,
-        priceSubtitle: args.priceSubtitle,
-        theme: args.theme,
-        badgeTag: args.badgeTag,
-        ribbonText: args.ribbonText,
-        inheritsDescription: args.inheritsDescription,
-        inheritsDescription_ar: args.inheritsDescription_ar,
+        compareAtPriceAmount: parsed.data.compareAtPriceAmount,
+        priceSubtitle: parsed.data.priceSubtitle,
+        priceSubtitle_ar: parsed.data.priceSubtitleAr,
+        theme: parsed.data.theme,
+        badgeTag: parsed.data.badgeTag,
+        ribbonText: parsed.data.ribbonText,
+        ribbonText_ar: parsed.data.ribbonTextAr,
+        inheritsDescription: parsed.data.inheritsDescription,
+        inheritsDescription_ar: parsed.data.inheritsDescriptionAr,
         includeAllCourses: args.includeAllCourses,
         includedCourseIds: args.includedCourseIds,
         includedCategoryIds: args.includedCategoryIds,

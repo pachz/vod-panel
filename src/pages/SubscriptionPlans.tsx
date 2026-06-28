@@ -15,6 +15,7 @@ type PlanListItem = {
   _id: Id<"subscriptionPlans">;
   name: string;
   name_ar: string;
+  titleIcon?: string;
   slug: string;
   billingInterval: "month" | "year";
   priceAmount: number;
@@ -43,6 +44,7 @@ const SubscriptionPlans = () => {
     return plans.map((p) => ({
       name: p.name,
       name_ar: p.name_ar,
+      titleIcon: p.titleIcon,
       billingInterval: p.billingInterval,
       priceAmount: p.priceAmount,
       priceCurrency: p.priceCurrency,
