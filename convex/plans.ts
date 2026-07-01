@@ -367,6 +367,8 @@ export const listCoursesForPicker = query({
       additional_category_ids: v.optional(v.array(v.id("categories"))),
       duration: v.optional(v.number()),
       lesson_count: v.number(),
+      thumbnail_image_url: v.optional(v.string()),
+      banner_image_url: v.optional(v.string()),
     }),
   ),
   handler: async (ctx) => {
@@ -388,6 +390,8 @@ export const listCoursesForPicker = query({
         additional_category_ids: c.additional_category_ids,
         duration: c.duration,
         lesson_count: c.lesson_count,
+        thumbnail_image_url: c.thumbnail_image_url,
+        banner_image_url: c.banner_image_url,
       }))
       .sort((a, b) => a.name.localeCompare(b.name));
   },

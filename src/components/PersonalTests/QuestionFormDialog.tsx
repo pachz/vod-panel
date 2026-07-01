@@ -108,12 +108,13 @@ export function QuestionFormDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-        <DialogHeader>
+      <DialogContent className="flex max-h-[90vh] max-w-2xl flex-col overflow-hidden p-0">
+        <DialogHeader className="px-6 pt-6">
           <DialogTitle>{mode === "create" ? "Add question" : "Edit question"}</DialogTitle>
         </DialogHeader>
 
-        <form onSubmit={handleSave} className="space-y-4 py-2">
+        <form onSubmit={handleSave} className="flex min-h-0 flex-1 flex-col">
+          <div className="min-h-0 flex-1 space-y-4 overflow-y-auto overscroll-contain px-6 py-2">
           <div className="grid gap-4 sm:grid-cols-2">
             <div className="space-y-2">
               <Label htmlFor="question-title">Question title</Label>
@@ -220,8 +221,9 @@ export function QuestionFormDialog({
           </div>
 
           {error && <p className="text-sm text-destructive">{error}</p>}
+          </div>
 
-          <DialogFooter>
+          <DialogFooter className="border-t px-6 py-4">
             <Button
               type="button"
               variant="outline"

@@ -203,9 +203,16 @@ const PersonalTestDetail = () => {
   }, [data]);
 
   const courseMap = useMemo(() => {
-    const map = new Map<Id<"courses">, { name: string; name_ar: string }>();
+    const map = new Map<
+      Id<"courses">,
+      { name: string; name_ar: string; imageUrl?: string }
+    >();
     for (const course of courses ?? []) {
-      map.set(course._id, { name: course.name, name_ar: course.name_ar });
+      map.set(course._id, {
+        name: course.name,
+        name_ar: course.name_ar,
+        imageUrl: course.thumbnail_image_url ?? course.banner_image_url,
+      });
     }
     return map;
   }, [courses]);
@@ -217,7 +224,12 @@ const PersonalTestDetail = () => {
         const course = courseMap.get(courseId);
         return course ? { _id: courseId, ...course } : null;
       })
-      .filter(Boolean) as Array<{ _id: Id<"courses">; name: string; name_ar: string }>;
+      .filter(Boolean) as Array<{
+      _id: Id<"courses">;
+      name: string;
+      name_ar: string;
+      imageUrl?: string;
+    }>;
   }, [data, courseMap]);
 
   const questionFormInitial = useMemo<QuestionFormValues | undefined>(() => {
@@ -549,12 +561,76 @@ const PersonalTestDetail = () => {
         </TabsContent>
 
         <TabsContent value="questions" className="mt-6">
-          <div className="grid gap-6 lg:grid-cols-[240px_1fr]">
-            <aside className="rounded-xl border bg-card p-4 space-y-3 h-fit">
-              <h3 className="text-sm font-medium">Recommended courses</h3>
-              <p className="text-xs text-muted-foreground">
+          <div className="grid gap-x-6 gap-y-4 lg:grid-cols-[1fr_min(100%,320px)]">
+            <div className="flex items-center justify-between lg:col-start-1 lg:row-start-1">
+              <h2 className="font-medium">Questions</h2>
+              <Button
+                variant="cta"
+                onClick={() => {
+                  setEditingQuestion(null);
+                  setQuestionDialogOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add question
+              </Button>
+            </div>
+
+            <div className="lg:col-start-2 lg:row-start-1">
+              <h2 className="font-medium">Recommended courses</h2>
+              <p className="mt-1 text-xs text-muted-foreground">
                 Courses linked through answer recommendations in this test.
               </p>
+            </div>
+
+            <div className="rounded-xl border bg-card overflow-hidden lg:col-start-1 lg:row-start-2">
+              <DndContext
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleDragEnd}
+              >
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead className="w-10" />
+                      <TableHead className="w-12 text-center">#</TableHead>
+                      <TableHead>Question title</TableHead>
+                      <TableHead>Type</TableHead>
+                      <TableHead className="w-24">Actions</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {orderedQuestions.length === 0 ? (
+                      <TableRow>
+                        <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
+                          No questions yet. Add your first question.
+                        </TableCell>
+                      </TableRow>
+                    ) : (
+                      <SortableContext
+                        items={orderedQuestions.map((q) => q.question._id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {orderedQuestions.map((item, index) => (
+                          <SortableQuestionRow
+                            key={item.question._id}
+                            item={item}
+                            index={index}
+                            onEdit={(row) => {
+                              setEditingQuestion(row);
+                              setQuestionDialogOpen(true);
+                            }}
+                            onDelete={setQuestionToDelete}
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </TableBody>
+                </Table>
+              </DndContext>
+            </div>
+
+            <aside className="rounded-xl border bg-card p-4 h-fit lg:col-start-2 lg:row-start-2">
               {recommendedCourses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No courses yet.</p>
               ) : (
@@ -562,80 +638,38 @@ const PersonalTestDetail = () => {
                   {recommendedCourses.map((course) => (
                     <li
                       key={course._id}
-                      className="rounded-md border px-3 py-2 text-sm"
+                      className="flex gap-3 rounded-md border p-2"
                     >
-                      <span className="font-medium">{course.name}</span>
-                      <span className="block text-xs text-muted-foreground">
-                        {course.name_ar}
-                      </span>
+                      <div className="h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md bg-muted">
+                        {course.imageUrl ? (
+                          <img
+                            src={course.imageUrl}
+                            alt=""
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                            No image
+                          </div>
+                        )}
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <span className="block text-sm font-medium leading-snug line-clamp-2">
+                          {course.name}
+                        </span>
+                        <span
+                          className="mt-0.5 block text-xs text-muted-foreground line-clamp-2"
+                          dir="rtl"
+                        >
+                          {course.name_ar}
+                        </span>
+                      </div>
                     </li>
                   ))}
                 </ul>
               )}
             </aside>
-
-            <div className="space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="font-medium">Questions</h2>
-                <Button
-                  variant="cta"
-                  onClick={() => {
-                    setEditingQuestion(null);
-                    setQuestionDialogOpen(true);
-                  }}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Add question
-                </Button>
-              </div>
-
-              <div className="rounded-xl border bg-card overflow-hidden">
-                <DndContext
-                  sensors={sensors}
-                  collisionDetection={closestCenter}
-                  onDragEnd={handleDragEnd}
-                >
-                  <Table>
-                    <TableHeader>
-                      <TableRow>
-                        <TableHead className="w-10" />
-                        <TableHead className="w-12 text-center">#</TableHead>
-                        <TableHead>Question title</TableHead>
-                        <TableHead>Type</TableHead>
-                        <TableHead className="w-24">Actions</TableHead>
-                      </TableRow>
-                    </TableHeader>
-                    <TableBody>
-                      {orderedQuestions.length === 0 ? (
-                        <TableRow>
-                          <TableCell colSpan={5} className="text-center text-muted-foreground py-8">
-                            No questions yet. Add your first question.
-                          </TableCell>
-                        </TableRow>
-                      ) : (
-                        <SortableContext
-                          items={orderedQuestions.map((q) => q.question._id)}
-                          strategy={verticalListSortingStrategy}
-                        >
-                          {orderedQuestions.map((item, index) => (
-                            <SortableQuestionRow
-                              key={item.question._id}
-                              item={item}
-                              index={index}
-                              onEdit={(row) => {
-                                setEditingQuestion(row);
-                                setQuestionDialogOpen(true);
-                              }}
-                              onDelete={setQuestionToDelete}
-                            />
-                          ))}
-                        </SortableContext>
-                      )}
-                    </TableBody>
-                  </Table>
-                </DndContext>
-              </div>
-            </div>
           </div>
         </TabsContent>
       </Tabs>
