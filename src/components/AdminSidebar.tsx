@@ -5,6 +5,7 @@ import {
   ArrowRightLeft,
   BookOpen,
   GraduationCap,
+  ClipboardList,
   Users,
   CreditCard,
   UserRound,
@@ -50,6 +51,7 @@ const adminMenuItems: MenuItem[] = [
 ];
 
 const techMenuItems: MenuItem[] = [
+  { title: "Personal Tests", url: "/personal-tests", icon: ClipboardList },
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
 ];
 

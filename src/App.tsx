@@ -18,6 +18,9 @@ import VideoPanel from "@/pages/VideoPanel";
 import Users from "@/pages/Users";
 import UserInfo from "@/pages/UserInfo";
 import LegacySubscriptionMigration from "@/pages/LegacySubscriptionMigration";
+import PersonalTests from "@/pages/PersonalTests";
+import PersonalTestDetail from "@/pages/PersonalTestDetail";
+import PersonalTestPreview from "@/pages/PersonalTestPreview";
 import Payments from "@/pages/Payments";
 import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
@@ -261,6 +264,9 @@ const App = () => (
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
             <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
             <Route element={<TechRoute />}>
+              <Route path="/personal-tests" element={<PersonalTests />} />
+              <Route path="/personal-tests/:id" element={<PersonalTestDetail />} />
+              <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
             </Route>
           </Route>

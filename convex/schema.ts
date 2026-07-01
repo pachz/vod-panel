@@ -353,4 +353,59 @@ export default defineSchema({
     archivedAt: v.number(),
     updatedBy: v.id("users"),
   }).index("by_planId", ["planId"]),
+
+  personalTests: defineTable({
+    name: v.string(),
+    name_ar: v.string(),
+    /** Combined name + name_ar for full-text search. */
+    name_search: v.optional(v.string()),
+    description: v.optional(v.string()),
+    description_ar: v.optional(v.string()),
+    status: v.union(
+      v.literal("draft"),
+      v.literal("published"),
+      v.literal("disabled"),
+    ),
+    questionCount: v.number(),
+    resultSettings: v.object({
+      showAll: v.boolean(),
+      maxCourses: v.optional(v.number()),
+    }),
+    /** JSON snapshot of the test when last published. */
+    publishedSnapshot: v.optional(v.string()),
+    /** True when draft edits exist that differ from the published snapshot. */
+    hasUnpublishedChanges: v.optional(v.boolean()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_deletedAt", ["deletedAt"])
+    .index("by_deletedAt_status", ["deletedAt", "status"])
+    .searchIndex("search_name", {
+      searchField: "name_search",
+      filterFields: ["deletedAt", "status"],
+    }),
+
+  personalTestQuestions: defineTable({
+    testId: v.id("personalTests"),
+    title: v.string(),
+    title_ar: v.string(),
+    answerType: v.union(v.literal("single"), v.literal("multi")),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_testId", ["testId"])
+    .index("by_testId_displayOrder", ["testId", "displayOrder"]),
+
+  personalTestAnswers: defineTable({
+    testId: v.id("personalTests"),
+    questionId: v.id("personalTestQuestions"),
+    text: v.string(),
+    text_ar: v.string(),
+    recommendedCourseIds: v.array(v.id("courses")),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_questionId", ["questionId"])
+    .index("by_testId", ["testId"]),
 });

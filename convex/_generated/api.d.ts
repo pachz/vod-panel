@@ -30,6 +30,7 @@ import type * as mailchimpInternal from "../mailchimpInternal.js";
 import type * as migrations from "../migrations.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
+import type * as personalTest from "../personalTest.js";
 import type * as plans from "../plans.js";
 import type * as plansInternal from "../plansInternal.js";
 import type * as plansStripe from "../plansStripe.js";
@@ -71,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   migrations: typeof migrations;
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;
+  personalTest: typeof personalTest;
   plans: typeof plans;
   plansInternal: typeof plansInternal;
   plansStripe: typeof plansStripe;
