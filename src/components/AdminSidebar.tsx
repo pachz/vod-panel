@@ -6,6 +6,7 @@ import {
   BookOpen,
   GraduationCap,
   ClipboardList,
+  ListChecks,
   Users,
   CreditCard,
   UserRound,
@@ -55,6 +56,12 @@ const techMenuItems: MenuItem[] = [
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
 ];
 
+const takeTestsMenuItem: MenuItem = {
+  title: "Take Tests",
+  url: "/my-tests",
+  icon: ListChecks,
+};
+
 const memberMenuItems: MenuItem[] = [
   { title: "Courses", url: "/courses/card", icon: PanelsTopLeft },
   { title: "Subscription", url: "/payments", icon: CreditCard },
@@ -82,6 +89,7 @@ export function AdminSidebar() {
     }
     if (isTech) {
       items.push(...techMenuItems);
+      items.push(takeTestsMenuItem);
     }
     return items.length > 0 ? items : memberMenuItems;
   }, [isAdmin, isTech, isLoadingUser]);

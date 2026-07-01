@@ -11,6 +11,7 @@ import {
   type PersonalTestUpdateInput,
 } from "../shared/validation/personalTest";
 import { requireUser } from "./utils/auth";
+import { computeRecommendedCourses } from "./lib/personalTestScoring";
 
 const defaultResultSettings = {
   showAll: true,
@@ -768,6 +769,186 @@ export const reorderPersonalTestQuestions = mutation({
   },
 });
 
+type PublishedSnapshot = {
+  name: string;
+  name_ar: string;
+  description?: string;
+  description_ar?: string;
+  resultSettings: { showAll: boolean; maxCourses?: number };
+  questions: Array<{
+    id: Id<"personalTestQuestions">;
+    title: string;
+    title_ar: string;
+    answerType: "single" | "multi";
+    displayOrder: number;
+    answers: Array<{
+      id: Id<"personalTestAnswers">;
+      text: string;
+      text_ar: string;
+      recommendedCourseIds: Array<Id<"courses">>;
+      displayOrder: number;
+    }>;
+  }>;
+};
+
+function parsePublishedSnapshot(snapshotJson: string): PublishedSnapshot {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(snapshotJson);
+  } catch {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: "Published test data is invalid.",
+    });
+  }
+
+  if (typeof parsed !== "object" || parsed === null) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: "Published test data is invalid.",
+    });
+  }
+
+  return parsed as PublishedSnapshot;
+}
+
+const publishedTestListItemValidator = v.object({
+  _id: v.id("personalTests"),
+  name: v.string(),
+  name_ar: v.string(),
+  description: v.optional(v.string()),
+  description_ar: v.optional(v.string()),
+  questionCount: v.number(),
+});
+
+const publishedTestQuestionValidator = v.object({
+  question: v.object({
+    _id: v.id("personalTestQuestions"),
+    title: v.string(),
+    title_ar: v.string(),
+    answerType: v.union(v.literal("single"), v.literal("multi")),
+    displayOrder: v.number(),
+  }),
+  answers: v.array(
+    v.object({
+      _id: v.id("personalTestAnswers"),
+      text: v.string(),
+      text_ar: v.string(),
+    }),
+  ),
+});
+
+export const listPublishedPersonalTests = query({
+  args: {
+    search: v.optional(v.string()),
+  },
+  returns: v.array(publishedTestListItemValidator),
+  handler: async (ctx, { search }) => {
+    await requireUser(ctx, { requireTech: true });
+
+    if (search && search.trim().length > 0) {
+      const results = await ctx.db
+        .query("personalTests")
+        .withSearchIndex("search_name", (q) =>
+          q
+            .search("name_search", search.trim())
+            .eq("deletedAt", undefined)
+            .eq("status", "published"),
+        )
+        .take(50);
+
+      return results.map((test) => ({
+        _id: test._id,
+        name: test.name,
+        name_ar: test.name_ar,
+        description: test.description,
+        description_ar: test.description_ar,
+        questionCount: test.questionCount,
+      }));
+    }
+
+    const tests = await ctx.db
+      .query("personalTests")
+      .withIndex("by_deletedAt_status", (q) =>
+        q.eq("deletedAt", undefined).eq("status", "published"),
+      )
+      .order("desc")
+      .take(50);
+
+    return tests.map((test) => ({
+      _id: test._id,
+      name: test.name,
+      name_ar: test.name_ar,
+      description: test.description,
+      description_ar: test.description_ar,
+      questionCount: test.questionCount,
+    }));
+  },
+});
+
+export const getPublishedPersonalTest = query({
+  args: { testId: v.id("personalTests") },
+  returns: v.union(
+    v.object({
+      test: v.object({
+        _id: v.id("personalTests"),
+        name: v.string(),
+        name_ar: v.string(),
+        description: v.optional(v.string()),
+        description_ar: v.optional(v.string()),
+        questionCount: v.number(),
+      }),
+      questions: v.array(publishedTestQuestionValidator),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, { testId }) => {
+    await requireUser(ctx, { requireTech: true });
+
+    const test = await ctx.db.get("personalTests", testId);
+    if (
+      !test ||
+      test.deletedAt !== undefined ||
+      test.status !== "published" ||
+      !test.publishedSnapshot
+    ) {
+      return null;
+    }
+
+    const snapshot = parsePublishedSnapshot(test.publishedSnapshot);
+    const questions = [...snapshot.questions]
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((question) => ({
+        question: {
+          _id: question.id,
+          title: question.title,
+          title_ar: question.title_ar,
+          answerType: question.answerType,
+          displayOrder: question.displayOrder,
+        },
+        answers: [...question.answers]
+          .sort((a, b) => a.displayOrder - b.displayOrder)
+          .map((answer) => ({
+            _id: answer.id,
+            text: answer.text,
+            text_ar: answer.text_ar,
+          })),
+      }));
+
+    return {
+      test: {
+        _id: test._id,
+        name: snapshot.name,
+        name_ar: snapshot.name_ar,
+        description: snapshot.description,
+        description_ar: snapshot.description_ar,
+        questionCount: questions.length,
+      },
+      questions,
+    };
+  },
+});
+
 export const computePersonalTestResults = query({
   args: {
     testId: v.id("personalTests"),
@@ -787,39 +968,11 @@ export const computePersonalTestResults = query({
   handler: async (ctx, { testId, selectedAnswerIds }) => {
     await requireUser(ctx, { requireTech: true });
     const test = await getTestOrThrow(ctx, testId);
-
-    const scoreMap = new Map<Id<"courses">, number>();
-    for (const answerId of selectedAnswerIds) {
-      const answer = await ctx.db.get("personalTestAnswers", answerId);
-      if (!answer || answer.testId !== testId) {
-        continue;
-      }
-      for (const courseId of answer.recommendedCourseIds) {
-        scoreMap.set(courseId, (scoreMap.get(courseId) ?? 0) + 1);
-      }
-    }
-
-    let ranked = Array.from(scoreMap.entries()).sort((a, b) => b[1] - a[1]);
-    if (!test.resultSettings.showAll && test.resultSettings.maxCourses) {
-      ranked = ranked.slice(0, test.resultSettings.maxCourses);
-    }
-
-    const courses = [];
-    for (const [courseId] of ranked) {
-      const course = await ctx.db.get("courses", courseId);
-      if (course && course.deletedAt === undefined) {
-        courses.push({
-          _id: course._id,
-          name: course.name,
-          name_ar: course.name_ar,
-          thumbnail_image_url: course.thumbnail_image_url,
-        });
-      }
-    }
-
-    return {
-      courseIds: courses.map((c) => c._id),
-      courses,
-    };
+    return await computeRecommendedCourses(
+      ctx,
+      testId,
+      selectedAnswerIds,
+      test.resultSettings,
+    );
   },
 });

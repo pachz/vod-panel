@@ -408,4 +408,28 @@ export default defineSchema({
   })
     .index("by_questionId", ["questionId"])
     .index("by_testId", ["testId"]),
+
+  personalTestAttempts: defineTable({
+    testId: v.id("personalTests"),
+    userId: v.id("users"),
+    status: v.union(
+      v.literal("in_progress"),
+      v.literal("completed"),
+      v.literal("abandoned"),
+      v.literal("expired"),
+    ),
+    startedAt: v.number(),
+    completedAt: v.optional(v.number()),
+    /** Whole seconds spent on the test; validated between 1 and 21600 (6 hours). */
+    durationSeconds: v.optional(v.number()),
+    selectedAnswerIds: v.optional(v.array(v.id("personalTestAnswers"))),
+    recommendedCourseIds: v.optional(v.array(v.id("courses"))),
+    /** Admin preview runs; excluded from user analytics by default. */
+    isPreview: v.optional(v.boolean()),
+  })
+    .index("by_testId", ["testId"])
+    .index("by_userId", ["userId"])
+    .index("by_testId_userId", ["testId", "userId"])
+    .index("by_testId_status", ["testId", "status"])
+    .index("by_status_startedAt", ["status", "startedAt"]),
 });

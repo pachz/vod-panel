@@ -66,3 +66,26 @@ export const personalTestQuestionSchema = z.object({
 export type PersonalTestCreateInput = z.infer<typeof personalTestCreateSchema>;
 export type PersonalTestUpdateInput = z.infer<typeof personalTestUpdateSchema>;
 export type PersonalTestQuestionInput = z.infer<typeof personalTestQuestionSchema>;
+
+export const MIN_TEST_DURATION_SECONDS = 1;
+/** Maximum time allowed on a single test attempt (6 hours). */
+export const MAX_TEST_DURATION_SECONDS = 6 * 60 * 60;
+export const MAX_TEST_ATTEMPT_LIFETIME_MS = MAX_TEST_DURATION_SECONDS * 1000;
+
+export const personalTestDurationSchema = z
+  .number()
+  .int("Duration must be a whole number of seconds.")
+  .min(MIN_TEST_DURATION_SECONDS, "Duration must be greater than 0 seconds.")
+  .max(
+    MAX_TEST_DURATION_SECONDS,
+    "Duration must be at most 6 hours.",
+  );
+
+export const personalTestCompleteAttemptSchema = z.object({
+  durationSeconds: personalTestDurationSchema,
+  selectedAnswerIds: z.array(z.string()).min(1, "Select at least one answer."),
+});
+
+export type PersonalTestCompleteAttemptInput = z.infer<
+  typeof personalTestCompleteAttemptSchema
+>;

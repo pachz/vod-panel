@@ -34,6 +34,13 @@ crons.interval(
   {},
 );
 
+crons.interval(
+  "expire-stale-personal-test-attempts-hourly",
+  { hours: 1 },
+  internal.personalTestAttemptsCron.expireStalePersonalTestAttempts,
+  {},
+);
+
 // Full Mailchimp audience resync weekly (safety net alongside real-time sync)
 crons.cron(
   "mailchimp-audience-resync",

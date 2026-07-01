@@ -21,6 +21,8 @@ import LegacySubscriptionMigration from "@/pages/LegacySubscriptionMigration";
 import PersonalTests from "@/pages/PersonalTests";
 import PersonalTestDetail from "@/pages/PersonalTestDetail";
 import PersonalTestPreview from "@/pages/PersonalTestPreview";
+import UserPersonalTests from "@/pages/UserPersonalTests";
+import UserPersonalTestTake from "@/pages/UserPersonalTestTake";
 import Payments from "@/pages/Payments";
 import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
@@ -277,6 +279,10 @@ const App = () => (
           <Route path="/courses/card" element={<CourseCards />} />
           <Route path="/courses/preview/:id" element={<CoursePreview />} />
           <Route path="/payments" element={<Payments />} />
+          <Route element={<TechRoute />}>
+            <Route path="/my-tests" element={<UserPersonalTests />} />
+            <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
+          </Route>
         </Route>
         {/* Root redirect */}
         <Route path="/" element={<RootRedirect />} />

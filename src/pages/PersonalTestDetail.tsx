@@ -62,6 +62,40 @@ import {
 } from "@/components/PersonalTests/QuestionFormDialog";
 import { personalTestUpdateSchema } from "../../shared/validation/personalTest";
 
+function formatAttemptDuration(seconds: number | undefined) {
+  if (seconds === undefined) {
+    return "—";
+  }
+  if (seconds < 60) {
+    return `${seconds}s`;
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  if (minutes < 60) {
+    return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
+  }
+  const hours = Math.floor(minutes / 60);
+  const mins = minutes % 60;
+  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
+}
+
+function formatAttemptDate(timestamp: number) {
+  return new Intl.DateTimeFormat(undefined, {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(new Date(timestamp));
+}
+
+const attemptStatusLabel: Record<
+  "in_progress" | "completed" | "abandoned" | "expired",
+  string
+> = {
+  in_progress: "In progress",
+  completed: "Completed",
+  abandoned: "Abandoned",
+  expired: "Expired",
+};
+
 type QuestionRow = {
   question: {
     _id: Id<"personalTestQuestions">;
@@ -164,6 +198,10 @@ const PersonalTestDetail = () => {
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
 
   const [activeTab, setActiveTab] = useState("info");
+  const attempts = useQuery(
+    api.personalTestAttempts.listPersonalTestAttempts,
+    activeTab === "attempts" ? { testId } : "skip",
+  );
   const [name, setName] = useState("");
   const [nameAr, setNameAr] = useState("");
   const [description, setDescription] = useState("");
@@ -482,6 +520,7 @@ const PersonalTestDetail = () => {
               {test.questionCount}
             </Badge>
           </TabsTrigger>
+          <TabsTrigger value="attempts">Attempts</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-6">
@@ -699,6 +738,93 @@ const PersonalTestDetail = () => {
                 </ul>
               )}
             </aside>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="attempts" className="mt-6">
+          <div className="rounded-xl border bg-card">
+            {attempts === undefined ? (
+              <p className="p-6 text-muted-foreground">Loading attempts…</p>
+            ) : attempts.length === 0 ? (
+              <p className="p-6 text-muted-foreground">
+                No attempts recorded yet. Preview the test or wait for users to take it.
+              </p>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>User</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Duration</TableHead>
+                    <TableHead>Started</TableHead>
+                    <TableHead>Ended</TableHead>
+                    <TableHead>Answers</TableHead>
+                    <TableHead>Courses</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {attempts.map((attempt) => (
+                    <TableRow key={attempt._id}>
+                      <TableCell>
+                        <div>
+                          <span className="font-medium">
+                            {attempt.userName ?? "Unknown user"}
+                          </span>
+                          {attempt.userEmail && (
+                            <span className="block text-xs text-muted-foreground">
+                              {attempt.userEmail}
+                            </span>
+                          )}
+                          {attempt.isPreview && (
+                            <Badge variant="outline" className="mt-1">
+                              Preview
+                            </Badge>
+                          )}
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        <Badge
+                          variant={
+                            attempt.status === "completed"
+                              ? "default"
+                              : attempt.status === "in_progress"
+                                ? "secondary"
+                                : attempt.status === "expired"
+                                  ? "outline"
+                                  : "outline"
+                          }
+                          className={
+                            attempt.status === "expired"
+                              ? "text-amber-700 border-amber-300"
+                              : undefined
+                          }
+                        >
+                          {attemptStatusLabel[attempt.status]}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <span>{formatAttemptDuration(attempt.durationSeconds)}</span>
+                        {attempt.durationSeconds !== undefined && (
+                          <span className="block text-xs text-muted-foreground">
+                            {attempt.durationSeconds}s
+                          </span>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {formatAttemptDate(attempt.startedAt)}
+                      </TableCell>
+                      <TableCell className="text-sm text-muted-foreground">
+                        {attempt.completedAt
+                          ? formatAttemptDate(attempt.completedAt)
+                          : "—"}
+                      </TableCell>
+                      <TableCell>{attempt.selectedAnswerCount}</TableCell>
+                      <TableCell>{attempt.recommendedCourseCount}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
           </div>
         </TabsContent>
       </Tabs>
