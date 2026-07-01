@@ -170,9 +170,9 @@ const PersonalTestDetail = () => {
   const [descriptionAr, setDescriptionAr] = useState("");
   const [showAllResults, setShowAllResults] = useState(true);
   const [maxCourses, setMaxCourses] = useState("");
+  const [isEnabled, setIsEnabled] = useState(true);
   const [isSavingInfo, setIsSavingInfo] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
-  const [isTogglingEnabled, setIsTogglingEnabled] = useState(false);
 
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionRow | null>(null);
@@ -199,6 +199,7 @@ const PersonalTestDetail = () => {
         ? String(data.test.resultSettings.maxCourses)
         : "",
     );
+    setIsEnabled(data.test.status === "published");
     setOrderedQuestions(data.questions);
   }, [data]);
 
@@ -248,6 +249,8 @@ const PersonalTestDetail = () => {
 
   const handleSaveInfo = async (event?: FormEvent) => {
     event?.preventDefault();
+    if (!data) return;
+
     const parsedMax = maxCourses.trim() ? Number.parseInt(maxCourses, 10) : undefined;
     const result = personalTestUpdateSchema.safeParse({
       name,
@@ -265,33 +268,56 @@ const PersonalTestDetail = () => {
       return;
     }
 
+    const { test } = data;
+    const savedEnabled = test.status === "published";
+    const effectiveStatus =
+      test.status === "draft" && test.publishedSnapshot !== undefined
+        ? "published"
+        : test.status;
+    const canToggleAvailability =
+      test.publishedSnapshot !== undefined && effectiveStatus !== "draft";
+
+    const infoChanged =
+      name !== test.name ||
+      nameAr !== test.name_ar ||
+      (description || "") !== (test.description ?? "") ||
+      (descriptionAr || "") !== (test.description_ar ?? "");
+
+    const resultChanged =
+      result.data.resultSettings.showAll !== test.resultSettings.showAll ||
+      (result.data.resultSettings.showAll
+        ? false
+        : result.data.resultSettings.maxCourses !== test.resultSettings.maxCourses);
+
+    const statusChanged = canToggleAvailability && isEnabled !== savedEnabled;
+
+    if (!infoChanged && !resultChanged && !statusChanged) {
+      toast.message("No changes to save.");
+      return;
+    }
+
     setIsSavingInfo(true);
     try {
-      await updateTest({
-        testId,
-        name: result.data.name,
-        nameAr: result.data.nameAr,
-        description: result.data.description,
-        descriptionAr: result.data.descriptionAr,
-        resultSettings: result.data.resultSettings,
-      });
-      toast.success("Test info saved.");
+      if (infoChanged || resultChanged) {
+        await updateTest({
+          testId,
+          name: result.data.name,
+          nameAr: result.data.nameAr,
+          description: result.data.description,
+          descriptionAr: result.data.descriptionAr,
+          resultSettings: result.data.resultSettings,
+        });
+      }
+
+      if (statusChanged) {
+        await setEnabled({ testId, enabled: isEnabled });
+      }
+
+      toast.success("Test settings saved.");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to save.");
     } finally {
       setIsSavingInfo(false);
-    }
-  };
-
-  const handleToggleEnabled = async (enabled: boolean) => {
-    setIsTogglingEnabled(true);
-    try {
-      await setEnabled({ testId, enabled });
-      toast.success(enabled ? "Test enabled." : "Test disabled.");
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to update status.");
-    } finally {
-      setIsTogglingEnabled(false);
     }
   };
 
@@ -504,14 +530,15 @@ const PersonalTestDetail = () => {
                 <div>
                   <Label htmlFor="enabled">Status</Label>
                   <p className="text-sm text-muted-foreground">
-                    {isPublished ? "Test is enabled and live." : "Test is disabled."}
+                    {isEnabled
+                      ? "Test will be enabled for users."
+                      : "Test will be disabled for users."}
                   </p>
                 </div>
                 <Switch
                   id="enabled"
-                  checked={isPublished}
-                  disabled={isTogglingEnabled}
-                  onCheckedChange={handleToggleEnabled}
+                  checked={isEnabled}
+                  onCheckedChange={setIsEnabled}
                 />
               </div>
             )}
@@ -521,10 +548,6 @@ const PersonalTestDetail = () => {
                 Publish the test to enable or disable it for users.
               </p>
             )}
-
-            <Button type="submit" variant="cta" disabled={isSavingInfo}>
-              {isSavingInfo ? "Saving…" : "Save changes"}
-            </Button>
           </div>
 
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
@@ -556,6 +579,12 @@ const PersonalTestDetail = () => {
                 />
               </div>
             )}
+          </div>
+
+          <div className="flex max-w-2xl justify-end">
+            <Button type="submit" variant="cta" disabled={isSavingInfo}>
+              {isSavingInfo ? "Saving…" : "Save changes"}
+            </Button>
           </div>
           </form>
         </TabsContent>
