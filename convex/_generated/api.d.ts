@@ -25,6 +25,7 @@ import type * as legacySubscriptionMigration from "../legacySubscriptionMigratio
 import type * as legacySubscriptionMigrationStripe from "../legacySubscriptionMigrationStripe.js";
 import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
+import type * as lib_personalTestAttemptAggregates from "../lib/personalTestAttemptAggregates.js";
 import type * as lib_personalTestScoring from "../lib/personalTestScoring.js";
 import type * as mailchimp from "../mailchimp.js";
 import type * as mailchimpInternal from "../mailchimpInternal.js";
@@ -32,6 +33,7 @@ import type * as migrations from "../migrations.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
 import type * as personalTest from "../personalTest.js";
+import type * as personalTestAttemptAnalytics from "../personalTestAttemptAnalytics.js";
 import type * as personalTestAttempts from "../personalTestAttempts.js";
 import type * as personalTestAttemptsCron from "../personalTestAttemptsCron.js";
 import type * as plans from "../plans.js";
@@ -70,6 +72,7 @@ declare const fullApi: ApiFromModules<{
   legacySubscriptionMigrationStripe: typeof legacySubscriptionMigrationStripe;
   lesson: typeof lesson;
   lessonProgress: typeof lessonProgress;
+  "lib/personalTestAttemptAggregates": typeof lib_personalTestAttemptAggregates;
   "lib/personalTestScoring": typeof lib_personalTestScoring;
   mailchimp: typeof mailchimp;
   mailchimpInternal: typeof mailchimpInternal;
@@ -77,6 +80,7 @@ declare const fullApi: ApiFromModules<{
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;
   personalTest: typeof personalTest;
+  personalTestAttemptAnalytics: typeof personalTestAttemptAnalytics;
   personalTestAttempts: typeof personalTestAttempts;
   personalTestAttemptsCron: typeof personalTestAttemptsCron;
   plans: typeof plans;
@@ -123,5 +127,8 @@ export declare const components: {
   aggregateCategories: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregateCategories">;
   aggregateLessonWatched: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregateLessonWatched">;
   aggregateCourseWatched: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregateCourseWatched">;
+  aggregatePersonalTestAttemptStarts: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestAttemptStarts">;
+  aggregatePersonalTestAttemptCompletions: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestAttemptCompletions">;
+  aggregatePersonalTestCourseRecommendations: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestCourseRecommendations">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
 };

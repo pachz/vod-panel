@@ -14,6 +14,10 @@ import {
   isAttemptExpired,
   validateDurationAgainstStartedAt,
 } from "./lib/personalTestScoring";
+import {
+  syncAttemptCompletionAggregates,
+  syncAttemptStartAggregate,
+} from "./lib/personalTestAttemptAggregates";
 
 const attemptStatusValidator = v.union(
   v.literal("in_progress"),
@@ -206,6 +210,10 @@ export const startPersonalTestAttempt = mutation({
     });
 
     const attempt = await ctx.db.get("personalTestAttempts", attemptId);
+    if (attempt) {
+      await syncAttemptStartAggregate(ctx, attempt);
+    }
+
     return {
       attemptId,
       startedAt: attempt!.startedAt,
@@ -262,6 +270,16 @@ export const completePersonalTestAttempt = mutation({
       selectedAnswerIds: args.selectedAnswerIds,
       recommendedCourseIds: courseIds,
     });
+
+    const completedAttempt = await ctx.db.get("personalTestAttempts", args.attemptId);
+    if (completedAttempt) {
+      await syncAttemptCompletionAggregates(
+        ctx,
+        completedAttempt,
+        courseIds,
+        now,
+      );
+    }
 
     return {
       durationSeconds: args.durationSeconds,

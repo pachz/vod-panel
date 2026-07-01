@@ -61,6 +61,11 @@ import {
   type QuestionFormValues,
 } from "@/components/PersonalTests/QuestionFormDialog";
 import { personalTestUpdateSchema } from "../../shared/validation/personalTest";
+import {
+  defaultAnalyticsEndDate,
+  defaultAnalyticsStartDate,
+} from "../../shared/validation/personalTestAnalytics";
+import { PersonalTestAnalyticsPanel } from "@/components/PersonalTests/PersonalTestAnalyticsPanel";
 
 function formatAttemptDuration(seconds: number | undefined) {
   if (seconds === undefined) {
@@ -198,6 +203,12 @@ const PersonalTestDetail = () => {
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
 
   const [activeTab, setActiveTab] = useState("info");
+  const [analyticsStartDate, setAnalyticsStartDate] = useState(() =>
+    defaultAnalyticsStartDate(30),
+  );
+  const [analyticsEndDate, setAnalyticsEndDate] = useState(() =>
+    defaultAnalyticsEndDate(),
+  );
   const attempts = useQuery(
     api.personalTestAttempts.listPersonalTestAttempts,
     activeTab === "attempts" ? { testId } : "skip",
@@ -521,6 +532,7 @@ const PersonalTestDetail = () => {
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="attempts">Attempts</TabsTrigger>
+          <TabsTrigger value="analytics">Analytics</TabsTrigger>
         </TabsList>
 
         <TabsContent value="info" className="mt-6">
@@ -826,6 +838,16 @@ const PersonalTestDetail = () => {
               </Table>
             )}
           </div>
+        </TabsContent>
+
+        <TabsContent value="analytics" className="mt-6">
+          <PersonalTestAnalyticsPanel
+            testId={testId}
+            startDate={analyticsStartDate}
+            endDate={analyticsEndDate}
+            onStartDateChange={setAnalyticsStartDate}
+            onEndDateChange={setAnalyticsEndDate}
+          />
         </TabsContent>
       </Tabs>
 
