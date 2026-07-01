@@ -27,6 +27,7 @@ import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
 import type * as lib_personalTestAttemptAggregates from "../lib/personalTestAttemptAggregates.js";
 import type * as lib_personalTestScoring from "../lib/personalTestScoring.js";
+import type * as lib_personalTestSubmissions from "../lib/personalTestSubmissions.js";
 import type * as mailchimp from "../mailchimp.js";
 import type * as mailchimpInternal from "../mailchimpInternal.js";
 import type * as migrations from "../migrations.js";
@@ -74,6 +75,7 @@ declare const fullApi: ApiFromModules<{
   lessonProgress: typeof lessonProgress;
   "lib/personalTestAttemptAggregates": typeof lib_personalTestAttemptAggregates;
   "lib/personalTestScoring": typeof lib_personalTestScoring;
+  "lib/personalTestSubmissions": typeof lib_personalTestSubmissions;
   mailchimp: typeof mailchimp;
   mailchimpInternal: typeof mailchimpInternal;
   migrations: typeof migrations;

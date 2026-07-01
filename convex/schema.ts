@@ -431,5 +431,6 @@ export default defineSchema({
     .index("by_userId", ["userId"])
     .index("by_testId_userId", ["testId", "userId"])
     .index("by_testId_status", ["testId", "status"])
+    .index("by_testId_status_completedAt", ["testId", "status", "completedAt"])
     .index("by_status_startedAt", ["status", "startedAt"]),
 });

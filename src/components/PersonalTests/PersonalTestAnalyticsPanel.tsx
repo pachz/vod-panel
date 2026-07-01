@@ -27,6 +27,7 @@ import {
   MAX_ANALYTICS_RANGE_DAYS,
   ANALYTICS_TIMEZONE,
 } from "../../../shared/validation/personalTestAnalytics";
+import { PersonalTestSubmissionsTable } from "./PersonalTestSubmissionsTable";
 
 const COURSE_CHART_COLORS = [
   "hsl(221 83% 53%)",
@@ -350,6 +351,12 @@ export const PersonalTestAnalyticsPanel = ({
               )}
             </div>
           </div>
+
+          <PersonalTestSubmissionsTable
+            testId={testId}
+            startDate={startDate}
+            endDate={endDate}
+          />
         </>
       )}
     </div>

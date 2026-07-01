@@ -19,6 +19,7 @@ import {
   getRecommendedCourseIdsForTest,
   backfillAttemptAggregates,
 } from "./lib/personalTestAttemptAggregates";
+import { loadPersonalTestSubmissions } from "./lib/personalTestSubmissions";
 
 const courseBreakdownItemValidator = v.object({
   courseId: v.union(v.id("courses"), v.null()),
@@ -249,6 +250,120 @@ export const getPersonalTestAttemptAnalytics = query({
       topCourse,
       courseBreakdown,
     };
+  },
+});
+
+const submissionCourseValidator = v.object({
+  courseId: v.id("courses"),
+  name: v.string(),
+  name_ar: v.string(),
+  thumbnail_image_url: v.optional(v.string()),
+});
+
+const submissionRowValidator = v.object({
+  attemptId: v.id("personalTestAttempts"),
+  userName: v.optional(v.string()),
+  userEmail: v.optional(v.string()),
+  userImage: v.optional(v.string()),
+  completedAt: v.number(),
+  durationSeconds: v.optional(v.number()),
+  selectedAnswerCount: v.number(),
+  questionCount: v.number(),
+  recommendedCourses: v.array(submissionCourseValidator),
+});
+
+const DEFAULT_PAGE_SIZE = 10;
+const MAX_PAGE_SIZE = 50;
+
+async function assertTestExists(ctx: QueryCtx, testId: Id<"personalTests">) {
+  const test = await ctx.db.get("personalTests", testId);
+  if (!test || test.deletedAt !== undefined) {
+    throw new ConvexError({
+      code: "NOT_FOUND",
+      message: "Test not found.",
+    });
+  }
+}
+
+function assertValidSubmissionDateRange(startDate: string, endDate: string) {
+  const rangeResult = personalTestAnalyticsRangeSchema.safeParse({
+    startDate,
+    endDate,
+  });
+  if (!rangeResult.success) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: rangeResult.error.errors[0]?.message ?? "Invalid date range.",
+    });
+  }
+}
+
+export const listPersonalTestSubmissions = query({
+  args: {
+    testId: v.id("personalTests"),
+    startDate: v.string(),
+    endDate: v.string(),
+    search: v.optional(v.string()),
+    page: v.number(),
+    pageSize: v.optional(v.number()),
+  },
+  returns: v.object({
+    rows: v.array(submissionRowValidator),
+    totalCount: v.number(),
+    page: v.number(),
+    pageSize: v.number(),
+    totalPages: v.number(),
+    questionCount: v.number(),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    await assertTestExists(ctx, args.testId);
+    assertValidSubmissionDateRange(args.startDate, args.endDate);
+
+    const pageSize = Math.min(
+      Math.max(args.pageSize ?? DEFAULT_PAGE_SIZE, 1),
+      MAX_PAGE_SIZE,
+    );
+    const page = Math.max(args.page, 1);
+
+    const { rows, questionCount } = await loadPersonalTestSubmissions(ctx, {
+      testId: args.testId,
+      startDate: args.startDate,
+      endDate: args.endDate,
+      search: args.search,
+    });
+
+    const totalCount = rows.length;
+    const totalPages = Math.max(1, Math.ceil(totalCount / pageSize));
+    const safePage = Math.min(page, totalPages);
+    const startIndex = (safePage - 1) * pageSize;
+
+    return {
+      rows: rows.slice(startIndex, startIndex + pageSize),
+      totalCount,
+      page: safePage,
+      pageSize,
+      totalPages,
+      questionCount,
+    };
+  },
+});
+
+export const exportPersonalTestSubmissions = query({
+  args: {
+    testId: v.id("personalTests"),
+    startDate: v.string(),
+    endDate: v.string(),
+    search: v.optional(v.string()),
+  },
+  returns: v.array(submissionRowValidator),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    await assertTestExists(ctx, args.testId);
+    assertValidSubmissionDateRange(args.startDate, args.endDate);
+
+    const { rows } = await loadPersonalTestSubmissions(ctx, args);
+    return rows;
   },
 });
 

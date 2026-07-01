@@ -178,3 +178,33 @@ export function formatAnalyticsShortDate(date: string): string {
     timeZone: ANALYTICS_TIMEZONE,
   }).format(kuwaitDateFromString(date));
 }
+
+/** Start of a Kuwait calendar day as UTC epoch ms. */
+export function kuwaitDayStartMs(dayKey: number): number {
+  return new Date(`${formatDayKey(dayKey)}T00:00:00+03:00`).getTime();
+}
+
+/** End of a Kuwait calendar day as UTC epoch ms. */
+export function kuwaitDayEndMs(dayKey: number): number {
+  return new Date(`${formatDayKey(dayKey)}T23:59:59.999+03:00`).getTime();
+}
+
+export function formatAnalyticsDateTime(timestamp: number): string {
+  return new Intl.DateTimeFormat(undefined, {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    timeZone: ANALYTICS_TIMEZONE,
+  }).format(new Date(timestamp));
+}
+
+export function formatSubmissionDuration(seconds: number | undefined): string {
+  if (seconds === undefined) {
+    return "—";
+  }
+  const minutes = Math.floor(seconds / 60);
+  const remainder = seconds % 60;
+  return `${String(minutes).padStart(2, "0")}:${String(remainder).padStart(2, "0")}`;
+}
