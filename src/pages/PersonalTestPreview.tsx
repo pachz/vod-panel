@@ -146,8 +146,9 @@ const PersonalTestPreview = () => {
                     )
                   }
                   className={cn(
-                    "w-full rounded-xl border p-4 text-left transition-colors hover:bg-accent/50",
-                    isSelected && "border-primary bg-primary/5 ring-1 ring-primary/20",
+                    "w-full rounded-xl border p-4 text-left transition-colors hover:border-cta/40 hover:bg-cta/5",
+                    isSelected &&
+                      "border-cta bg-cta/10 ring-1 ring-cta/25 shadow-[0_0_0_1px_hsl(var(--cta)/0.15)]",
                   )}
                 >
                   <span className="font-medium">{answer.text}</span>
@@ -175,7 +176,7 @@ const PersonalTestPreview = () => {
       ) : (
         <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm">
           <div className="text-center space-y-2">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-primary" />
+            <CheckCircle2 className="mx-auto h-12 w-12 text-cta" />
             <h2 className="text-2xl font-semibold">Your recommended courses</h2>
             <p className="text-muted-foreground">
               Based on your answers to &ldquo;{data.test.name}&rdquo;
