@@ -19,7 +19,10 @@ import {
   getRecommendedCourseIdsForTest,
   backfillAttemptAggregates,
 } from "./lib/personalTestAttemptAggregates";
-import { loadPersonalTestSubmissions } from "./lib/personalTestSubmissions";
+import {
+  loadPersonalTestSubmissionById,
+  loadPersonalTestSubmissions,
+} from "./lib/personalTestSubmissions";
 
 const courseBreakdownItemValidator = v.object({
   courseId: v.union(v.id("courses"), v.null()),
@@ -260,6 +263,20 @@ const submissionCourseValidator = v.object({
   thumbnail_image_url: v.optional(v.string()),
 });
 
+const submissionAnswerValidator = v.object({
+  answerId: v.id("personalTestAnswers"),
+  text: v.string(),
+  text_ar: v.string(),
+});
+
+const submissionResponseValidator = v.object({
+  questionId: v.id("personalTestQuestions"),
+  questionTitle: v.string(),
+  questionTitleAr: v.string(),
+  answerType: v.union(v.literal("single"), v.literal("multi")),
+  selectedAnswers: v.array(submissionAnswerValidator),
+});
+
 const submissionRowValidator = v.object({
   attemptId: v.id("personalTestAttempts"),
   userName: v.optional(v.string()),
@@ -270,6 +287,13 @@ const submissionRowValidator = v.object({
   selectedAnswerCount: v.number(),
   questionCount: v.number(),
   recommendedCourses: v.array(submissionCourseValidator),
+  responses: v.array(submissionResponseValidator),
+});
+
+const submissionDetailValidator = v.object({
+  ...submissionRowValidator.fields,
+  testName: v.string(),
+  testNameAr: v.string(),
 });
 
 const DEFAULT_PAGE_SIZE = 10;
@@ -364,6 +388,19 @@ export const exportPersonalTestSubmissions = query({
 
     const { rows } = await loadPersonalTestSubmissions(ctx, args);
     return rows;
+  },
+});
+
+export const getPersonalTestSubmission = query({
+  args: {
+    testId: v.id("personalTests"),
+    attemptId: v.id("personalTestAttempts"),
+  },
+  returns: v.union(submissionDetailValidator, v.null()),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    await assertTestExists(ctx, args.testId);
+    return await loadPersonalTestSubmissionById(ctx, args.testId, args.attemptId);
   },
 });
 

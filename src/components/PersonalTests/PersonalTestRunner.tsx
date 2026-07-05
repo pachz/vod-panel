@@ -6,6 +6,7 @@ import { toast } from "sonner";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import type { Language } from "@/hooks/use-language";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -69,6 +70,10 @@ type PersonalTestRunnerProps = {
   completedInLabel: (duration: string, seconds: number) => string;
   restartLabel: string;
   secondaryAction?: { href: string; label: string };
+  /** When set, show a single language instead of bilingual content. */
+  language?: Language;
+  questionProgressLabel?: (current: number, total: number) => string;
+  basedOnAnswersLabel?: (testName: string) => string;
   showQuestionArabic?: boolean;
   showAnswerArabic?: boolean;
   onRestart?: () => void;
@@ -95,6 +100,9 @@ export function PersonalTestRunner({
   completedInLabel,
   restartLabel,
   secondaryAction,
+  language,
+  questionProgressLabel,
+  basedOnAnswersLabel,
   showQuestionArabic = true,
   showAnswerArabic = true,
   onRestart,
@@ -114,6 +122,38 @@ export function PersonalTestRunner({
   const attemptIdRef = useRef<Id<"personalTestAttempts"> | null>(null);
   const startedAtRef = useRef<number | null>(null);
   const attemptFinishedRef = useRef(false);
+  const isSingleLanguage = language !== undefined;
+  const isArabic = language === "ar";
+
+  const displayTestName = isSingleLanguage
+    ? isArabic
+      ? testNameAr
+      : testName
+    : testName;
+  const displayTestNameSecondary =
+    !isSingleLanguage && showQuestionArabic ? testNameAr : undefined;
+
+  const getQuestionTitle = (question: PersonalTestQuestion["question"]) =>
+    isSingleLanguage
+      ? isArabic
+        ? question.title_ar
+        : question.title
+      : question.title;
+
+  const getQuestionSubtitle = (question: PersonalTestQuestion["question"]) =>
+    !isSingleLanguage && showQuestionArabic ? question.title_ar : undefined;
+
+  const getAnswerText = (answer: PersonalTestQuestion["answers"][number]) =>
+    isSingleLanguage ? (isArabic ? answer.text_ar : answer.text) : answer.text;
+
+  const getAnswerSubtitle = (answer: PersonalTestQuestion["answers"][number]) =>
+    !isSingleLanguage && showAnswerArabic ? answer.text_ar : undefined;
+
+  const getCourseName = (course: CompletedResults["courses"][number]) =>
+    isSingleLanguage ? (isArabic ? course.name_ar : course.name) : course.name;
+
+  const getCourseSubtitle = (course: CompletedResults["courses"][number]) =>
+    !isSingleLanguage && showAnswerArabic ? course.name_ar : undefined;
 
   const allSelectedAnswerIds = useMemo(
     () => Object.values(selectedAnswers).flat(),
@@ -265,7 +305,10 @@ export function PersonalTestRunner({
   }
 
   return (
-    <div className="mx-auto max-w-3xl space-y-6">
+    <div
+      className="mx-auto max-w-3xl space-y-6"
+      dir={isSingleLanguage ? (isArabic ? "rtl" : "ltr") : undefined}
+    >
       <div className="flex items-center justify-between gap-4">
         <Button variant="ghost" size="sm" asChild>
           <Link to={backHref}>
@@ -280,12 +323,16 @@ export function PersonalTestRunner({
         <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm">
           <div className="space-y-1">
             <p className="text-sm text-muted-foreground">
-              Question {currentIndex + 1} of {questions.length}
+              {questionProgressLabel
+                ? questionProgressLabel(currentIndex + 1, questions.length)
+                : `Question ${currentIndex + 1} of ${questions.length}`}
             </p>
-            <h2 className="text-xl font-semibold">{currentQuestion!.question.title}</h2>
-            {showQuestionArabic && (
+            <h2 className="text-xl font-semibold">
+              {getQuestionTitle(currentQuestion!.question)}
+            </h2>
+            {getQuestionSubtitle(currentQuestion!.question) && (
               <p className="text-muted-foreground" dir="rtl">
-                {currentQuestion!.question.title_ar}
+                {getQuestionSubtitle(currentQuestion!.question)}
               </p>
             )}
             <span className="inline-flex mt-2 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
@@ -313,15 +360,20 @@ export function PersonalTestRunner({
                     )
                   }
                   className={cn(
-                    "w-full rounded-xl border p-4 text-left transition-colors hover:border-cta/40 hover:bg-cta/5",
+                    "w-full rounded-xl border p-4 transition-colors hover:border-cta/40 hover:bg-cta/5",
+                    isSingleLanguage
+                      ? isArabic
+                        ? "text-right"
+                        : "text-left"
+                      : "text-left",
                     isSelected &&
                       "border-cta bg-cta/10 ring-1 ring-cta/25 shadow-[0_0_0_1px_hsl(var(--cta)/0.15)]",
                   )}
                 >
-                  <span className="font-medium">{answer.text}</span>
-                  {showAnswerArabic && (
+                  <span className="font-medium">{getAnswerText(answer)}</span>
+                  {getAnswerSubtitle(answer) && (
                     <span className="block text-sm text-muted-foreground" dir="rtl">
-                      {answer.text_ar}
+                      {getAnswerSubtitle(answer)}
                     </span>
                   )}
                 </button>
@@ -348,11 +400,13 @@ export function PersonalTestRunner({
             <CheckCircle2 className="mx-auto h-12 w-12 text-cta" />
             <h2 className="text-2xl font-semibold">{resultsSubtitle}</h2>
             <p className="text-muted-foreground">
-              Based on your answers to &ldquo;{testName}&rdquo;
+              {basedOnAnswersLabel
+                ? basedOnAnswersLabel(displayTestName)
+                : `Based on your answers to "${displayTestName}"`}
             </p>
-            {showQuestionArabic && (
+            {displayTestNameSecondary && (
               <p className="text-sm text-muted-foreground" dir="rtl">
-                {testNameAr}
+                {displayTestNameSecondary}
               </p>
             )}
             {completedResults && (
@@ -386,10 +440,10 @@ export function PersonalTestRunner({
                     <div className="h-16 w-24 rounded-md bg-muted shrink-0" />
                   )}
                   <div>
-                    <p className="font-medium">{course.name}</p>
-                    {showAnswerArabic && (
+                    <p className="font-medium">{getCourseName(course)}</p>
+                    {getCourseSubtitle(course) && (
                       <p className="text-sm text-muted-foreground" dir="rtl">
-                        {course.name_ar}
+                        {getCourseSubtitle(course)}
                       </p>
                     )}
                   </div>

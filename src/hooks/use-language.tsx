@@ -137,6 +137,7 @@ const translations = {
     "searchPersonalTests": "Search tests…",
     "noPersonalTestsAvailable": "No tests are available right now. Check back soon.",
     "startPersonalTest": "Start test",
+    "testDescription": "Description",
     "question": "question",
     "questions": "questions",
     "personalTestNotAvailable": "This test is not available.",
@@ -151,6 +152,17 @@ const translations = {
     "noCourseRecommendations": "No course recommendations matched your answers.",
     "retakeTest": "Retake test",
     "takeTests": "Take Tests",
+    "availableTestsTab": "Available tests",
+    "myResultsTab": "My results",
+    "noCompletedTests": "You haven't completed any tests yet.",
+    "viewResults": "View results",
+    "completedOn": "Completed",
+    "yourAnswers": "Your answers",
+    "selectedAnswer": "Selected answer",
+    "selectedAnswers": "Selected answers",
+    "noAnswerSelected": "No answer selected.",
+    "questionProgress": "Question {current} of {total}",
+    "basedOnAnswersTo": "Based on your answers to \"{testName}\"",
     "loading": "Loading…",
 
     // UserProfile dropdown
@@ -433,6 +445,7 @@ const translations = {
     "searchPersonalTests": "البحث في الاختبارات…",
     "noPersonalTestsAvailable": "لا توجد اختبارات متاحة حالياً. عد لاحقاً.",
     "startPersonalTest": "ابدأ الاختبار",
+    "testDescription": "الوصف",
     "question": "سؤال",
     "questions": "أسئلة",
     "personalTestNotAvailable": "هذا الاختبار غير متاح.",
@@ -447,6 +460,17 @@ const translations = {
     "noCourseRecommendations": "لم تطابق إجاباتك أي توصيات دورات.",
     "retakeTest": "إعادة الاختبار",
     "takeTests": "خوض الاختبارات",
+    "availableTestsTab": "الاختبارات المتاحة",
+    "myResultsTab": "نتائجي",
+    "noCompletedTests": "لم تكمل أي اختبارات بعد.",
+    "viewResults": "عرض النتائج",
+    "completedOn": "اكتمل",
+    "yourAnswers": "إجاباتك",
+    "selectedAnswer": "الإجابة المختارة",
+    "selectedAnswers": "الإجابات المختارة",
+    "noAnswerSelected": "لم يتم اختيار إجابة.",
+    "questionProgress": "السؤال {current} من {total}",
+    "basedOnAnswersTo": "بناءً على إجاباتك في \"{testName}\"",
     "loading": "جاري التحميل…",
 
     // UserProfile dropdown
@@ -628,6 +652,21 @@ export function useLanguage() {
     [language]
   );
 
+  const localizedPath = useCallback(
+    (path: string) => {
+      if (language === DEFAULT_LANGUAGE) {
+        return path;
+      }
+
+      const [pathname, search = ""] = path.split("?");
+      const params = new URLSearchParams(search);
+      params.set("lang", language);
+      const query = params.toString();
+      return query ? `${pathname}?${query}` : pathname;
+    },
+    [language],
+  );
+
   const translateInterval = useCallback(
     (interval: string): string => {
       const normalizedInterval = interval.toLowerCase();
@@ -644,6 +683,7 @@ export function useLanguage() {
     language,
     setLanguage,
     t,
+    localizedPath,
     translateInterval,
     isRTL: language === "ar",
   };

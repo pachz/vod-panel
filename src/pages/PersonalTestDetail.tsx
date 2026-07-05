@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
-import { Link, useNavigate, useParams } from "react-router-dom";
+import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
   DndContext,
@@ -90,6 +90,8 @@ function formatAttemptDate(timestamp: number) {
     timeStyle: "short",
   }).format(new Date(timestamp));
 }
+
+const RECOMMENDED_COURSES_PREVIEW_COUNT = 5;
 
 const attemptStatusLabel: Record<
   "in_progress" | "completed" | "abandoned" | "expired",
@@ -190,6 +192,7 @@ const SortableQuestionRow = ({
 const PersonalTestDetail = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const testId = id as Id<"personalTests">;
 
   const data = useQuery(api.personalTest.getPersonalTest, { testId });
@@ -202,7 +205,15 @@ const PersonalTestDetail = () => {
   const deleteQuestion = useMutation(api.personalTest.deletePersonalTestQuestion);
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
 
-  const [activeTab, setActiveTab] = useState("info");
+  const [activeTab, setActiveTab] = useState(() => {
+    const tab = searchParams.get("tab");
+    return tab === "analytics" ||
+      tab === "questions" ||
+      tab === "attempts" ||
+      tab === "info"
+      ? tab
+      : "info";
+  });
   const [analyticsStartDate, setAnalyticsStartDate] = useState(() =>
     defaultAnalyticsStartDate(30),
   );
@@ -230,6 +241,7 @@ const PersonalTestDetail = () => {
   const [isDeletingQuestion, setIsDeletingQuestion] = useState(false);
 
   const [orderedQuestions, setOrderedQuestions] = useState<QuestionRow[]>([]);
+  const [showAllRecommendedCourses, setShowAllRecommendedCourses] = useState(false);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -281,6 +293,16 @@ const PersonalTestDetail = () => {
       imageUrl?: string;
     }>;
   }, [data, courseMap]);
+
+  useEffect(() => {
+    setShowAllRecommendedCourses(false);
+  }, [testId, recommendedCourses.length]);
+
+  const visibleRecommendedCourses = showAllRecommendedCourses
+    ? recommendedCourses
+    : recommendedCourses.slice(0, RECOMMENDED_COURSES_PREVIEW_COUNT);
+  const hiddenRecommendedCount =
+    recommendedCourses.length - RECOMMENDED_COURSES_PREVIEW_COUNT;
 
   const questionFormInitial = useMemo<QuestionFormValues | undefined>(() => {
     if (!editingQuestion) return undefined;
@@ -714,40 +736,55 @@ const PersonalTestDetail = () => {
               {recommendedCourses.length === 0 ? (
                 <p className="text-sm text-muted-foreground">No courses yet.</p>
               ) : (
-                <ul className="space-y-2">
-                  {recommendedCourses.map((course) => (
-                    <li
-                      key={course._id}
-                      className="flex gap-3 rounded-md border p-2"
+                <div className="space-y-2">
+                  <ul className="space-y-2">
+                    {visibleRecommendedCourses.map((course) => (
+                      <li
+                        key={course._id}
+                        className="flex gap-3 rounded-md border p-2"
+                      >
+                        <div className="h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md bg-muted">
+                          {course.imageUrl ? (
+                            <img
+                              src={course.imageUrl}
+                              alt=""
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                              No image
+                            </div>
+                          )}
+                        </div>
+                        <div className="min-w-0 flex-1">
+                          <span className="block text-sm font-medium leading-snug line-clamp-2">
+                            {course.name}
+                          </span>
+                          <span
+                            className="mt-0.5 block text-xs text-muted-foreground line-clamp-2"
+                            dir="rtl"
+                          >
+                            {course.name_ar}
+                          </span>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                  {hiddenRecommendedCount > 0 && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      className="w-full"
+                      onClick={() => setShowAllRecommendedCourses((current) => !current)}
                     >
-                      <div className="h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md bg-muted">
-                        {course.imageUrl ? (
-                          <img
-                            src={course.imageUrl}
-                            alt=""
-                            className="h-full w-full object-cover"
-                            loading="lazy"
-                          />
-                        ) : (
-                          <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                            No image
-                          </div>
-                        )}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="block text-sm font-medium leading-snug line-clamp-2">
-                          {course.name}
-                        </span>
-                        <span
-                          className="mt-0.5 block text-xs text-muted-foreground line-clamp-2"
-                          dir="rtl"
-                        >
-                          {course.name_ar}
-                        </span>
-                      </div>
-                    </li>
-                  ))}
-                </ul>
+                      {showAllRecommendedCourses
+                        ? "Show less"
+                        : `Show ${hiddenRecommendedCount} more`}
+                    </Button>
+                  )}
+                </div>
               )}
             </aside>
           </div>

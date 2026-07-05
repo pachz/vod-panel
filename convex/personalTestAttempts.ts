@@ -18,6 +18,10 @@ import {
   syncAttemptCompletionAggregates,
   syncAttemptStartAggregate,
 } from "./lib/personalTestAttemptAggregates";
+import {
+  loadMyCompletedPersonalTestAttempts,
+  loadMyPersonalTestAttemptResults,
+} from "./lib/personalTestSubmissions";
 
 const attemptStatusValidator = v.union(
   v.literal("in_progress"),
@@ -47,6 +51,42 @@ const courseResultValidator = v.object({
   name: v.string(),
   name_ar: v.string(),
   thumbnail_image_url: v.optional(v.string()),
+});
+
+const myAttemptCourseValidator = v.object({
+  courseId: v.id("courses"),
+  name: v.string(),
+  name_ar: v.string(),
+  thumbnail_image_url: v.optional(v.string()),
+});
+
+const myAttemptAnswerValidator = v.object({
+  answerId: v.id("personalTestAnswers"),
+  text: v.string(),
+  text_ar: v.string(),
+});
+
+const myAttemptResponseValidator = v.object({
+  questionId: v.id("personalTestQuestions"),
+  questionTitle: v.string(),
+  questionTitleAr: v.string(),
+  answerType: v.union(v.literal("single"), v.literal("multi")),
+  selectedAnswers: v.array(myAttemptAnswerValidator),
+});
+
+const myAttemptResultsValidator = v.object({
+  attemptId: v.id("personalTestAttempts"),
+  userName: v.optional(v.string()),
+  userEmail: v.optional(v.string()),
+  userImage: v.optional(v.string()),
+  completedAt: v.number(),
+  durationSeconds: v.optional(v.number()),
+  selectedAnswerCount: v.number(),
+  questionCount: v.number(),
+  recommendedCourses: v.array(myAttemptCourseValidator),
+  responses: v.array(myAttemptResponseValidator),
+  testName: v.string(),
+  testNameAr: v.string(),
 });
 
 async function getUserIdOrThrow(ctx: QueryCtx | MutationCtx) {
@@ -418,43 +458,38 @@ export const listPersonalTestAttempts = query({
   },
 });
 
-export const listMyPersonalTestAttempts = query({
+export const listMyCompletedPersonalTestAttempts = query({
   args: {
-    testId: v.id("personalTests"),
     limit: v.optional(v.number()),
   },
   returns: v.array(
     v.object({
-      _id: v.id("personalTestAttempts"),
-      status: attemptStatusValidator,
-      startedAt: v.number(),
-      completedAt: v.optional(v.number()),
+      attemptId: v.id("personalTestAttempts"),
+      testId: v.id("personalTests"),
+      testName: v.string(),
+      testNameAr: v.string(),
+      completedAt: v.number(),
       durationSeconds: v.optional(v.number()),
       recommendedCourseCount: v.number(),
+      recommendedCourses: v.array(myAttemptCourseValidator),
     }),
   ),
-  handler: async (ctx, { testId, limit = 20 }) => {
+  handler: async (ctx, { limit = 20 }) => {
     await requireUser(ctx, { requireTech: true });
     const userId = await getUserIdOrThrow(ctx);
-    const numItems = Math.min(Math.max(limit, 1), 50);
+    const numItems = Math.min(Math.max(limit ?? 20, 1), 50);
+    return await loadMyCompletedPersonalTestAttempts(ctx, userId, numItems);
+  },
+});
 
-    const attempts = await ctx.db
-      .query("personalTestAttempts")
-      .withIndex("by_testId_userId", (q) =>
-        q.eq("testId", testId).eq("userId", userId),
-      )
-      .order("desc")
-      .take(numItems);
-
-    return attempts
-      .filter((attempt) => !(attempt.isPreview ?? false))
-      .map((attempt) => ({
-        _id: attempt._id,
-        status: attempt.status,
-        startedAt: attempt.startedAt,
-        completedAt: attempt.completedAt,
-        durationSeconds: attempt.durationSeconds,
-        recommendedCourseCount: attempt.recommendedCourseIds?.length ?? 0,
-      }));
+export const getMyPersonalTestAttemptResults = query({
+  args: {
+    attemptId: v.id("personalTestAttempts"),
+  },
+  returns: v.union(myAttemptResultsValidator, v.null()),
+  handler: async (ctx, { attemptId }) => {
+    await requireUser(ctx, { requireTech: true });
+    const userId = await getUserIdOrThrow(ctx);
+    return await loadMyPersonalTestAttemptResults(ctx, userId, attemptId);
   },
 });

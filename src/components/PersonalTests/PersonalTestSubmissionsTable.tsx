@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { useConvex, useQuery } from "convex/react";
 import { Search, Upload } from "lucide-react";
 import { toast } from "sonner";
@@ -50,6 +51,19 @@ function getInitials(name?: string) {
     .join("");
 }
 
+function formatSelectedAnswers(
+  answers: Array<{ text: string; text_ar: string }>,
+): string {
+  if (answers.length === 0) {
+    return "";
+  }
+  return answers
+    .map((answer) =>
+      answer.text_ar ? `${answer.text} / ${answer.text_ar}` : answer.text,
+    )
+    .join("; ");
+}
+
 function buildSubmissionsCsv(
   rows: Array<{
     userName?: string;
@@ -59,21 +73,52 @@ function buildSubmissionsCsv(
     selectedAnswerCount: number;
     questionCount: number;
     recommendedCourses: Array<{ name: string }>;
+    responses: Array<{
+      questionTitle: string;
+      questionTitleAr: string;
+      selectedAnswers: Array<{ text: string; text_ar: string }>;
+    }>;
   }>,
 ) {
-  const header =
-    "Name,Email,Completed At,Time Taken,Questions Answered,Courses Recommended\n";
-  const lines = rows.map((row) =>
-    [
+  const questionCount = rows[0]?.responses.length ?? 0;
+  const questionHeaders = Array.from({ length: questionCount }, (_, index) => {
+    const questionNumber = index + 1;
+    return `Question ${questionNumber},Answer(s) ${questionNumber}`;
+  });
+
+  const header = [
+    "Name",
+    "Email",
+    "Completed At",
+    "Time Taken",
+    "Questions Answered",
+    "Courses Recommended",
+    ...questionHeaders,
+  ].join(",");
+
+  const lines = rows.map((row) => {
+    const questionCells = row.responses.flatMap((response) => {
+      const questionText = response.questionTitleAr
+        ? `${response.questionTitle} / ${response.questionTitleAr}`
+        : response.questionTitle;
+      return [
+        escapeCsv(questionText),
+        escapeCsv(formatSelectedAnswers(response.selectedAnswers)),
+      ];
+    });
+
+    return [
       escapeCsv(row.userName ?? ""),
       escapeCsv(row.userEmail ?? ""),
       escapeCsv(formatAnalyticsDateTime(row.completedAt)),
       escapeCsv(formatSubmissionDuration(row.durationSeconds)),
       escapeCsv(`${row.selectedAnswerCount} / ${row.questionCount}`),
       escapeCsv(row.recommendedCourses.map((course) => course.name).join("; ")),
-    ].join(","),
-  );
-  return header + lines.join("\n");
+      ...questionCells,
+    ].join(",");
+  });
+
+  return `${header}\n${lines.join("\n")}`;
 }
 
 function getVisiblePages(current: number, total: number): Array<number | "ellipsis"> {
@@ -232,6 +277,7 @@ export const PersonalTestSubmissionsTable = ({
                   <TableHead>Time taken</TableHead>
                   <TableHead>Questions answered</TableHead>
                   <TableHead>Courses recommended</TableHead>
+                  <TableHead className="w-32">Results</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -291,6 +337,15 @@ export const PersonalTestSubmissionsTable = ({
                           ))
                         )}
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <Button variant="outline" size="sm" asChild>
+                        <Link
+                          to={`/personal-tests/${testId}/submissions/${row.attemptId}`}
+                        >
+                          Show results
+                        </Link>
+                      </Button>
                     </TableCell>
                   </TableRow>
                 ))}

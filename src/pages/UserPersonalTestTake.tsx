@@ -13,8 +13,9 @@ import { cn } from "@/lib/utils";
 const UserPersonalTestTake = () => {
   const { id } = useParams<{ id: string }>();
   const testId = id as Id<"personalTests">;
-  const { language, t, isRTL } = useLanguage();
+  const { language, t, isRTL, localizedPath } = useLanguage();
   const [hasStarted, setHasStarted] = useState(false);
+  const testsPath = localizedPath("/my-tests");
 
   const data = useQuery(api.personalTest.getPublishedPersonalTest, { testId });
 
@@ -31,7 +32,7 @@ const UserPersonalTestTake = () => {
       <div className="mx-auto max-w-2xl space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <p>{t("personalTestNotAvailable")}</p>
         <Button variant="outline" asChild>
-          <Link to="/my-tests">{t("backToPersonalTests")}</Link>
+          <Link to={testsPath}>{t("backToPersonalTests")}</Link>
         </Button>
       </div>
     );
@@ -39,35 +40,28 @@ const UserPersonalTestTake = () => {
 
   const { test, questions } = data;
   const title = language === "ar" ? test.name_ar : test.name;
-  const subtitle = language === "ar" ? test.name : test.name_ar;
-  const description =
-    language === "ar"
-      ? test.description_ar ?? test.description
-      : test.description ?? test.description_ar;
+  const description = language === "ar" ? test.description_ar : test.description;
 
   if (!hasStarted) {
     return (
       <div className="mx-auto max-w-2xl space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <Button variant="ghost" size="sm" asChild>
-          <Link to="/my-tests">
-            <ArrowLeft className="mr-2 h-4 w-4" />
+          <Link to={testsPath}>
+            <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
             {t("backToPersonalTests")}
           </Link>
         </Button>
 
-        <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm text-center sm:text-left">
-          <div className="space-y-2">
+        <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm text-center sm:text-start">
+          <div className="space-y-4">
             <h1 className="text-2xl font-semibold">{title}</h1>
-            <p
-              className={cn("text-muted-foreground", language !== "ar" && "text-right")}
-              dir={language === "ar" ? "ltr" : "rtl"}
-            >
-              {subtitle}
-            </p>
-            {description && (
-              <p className="text-muted-foreground pt-2">{description}</p>
-            )}
-            <p className="text-sm text-muted-foreground pt-2">
+            {description ? (
+              <div className="space-y-2 text-start">
+                <p className="text-sm font-medium">{t("testDescription")}</p>
+                <p className="text-muted-foreground whitespace-pre-wrap">{description}</p>
+              </div>
+            ) : null}
+            <p className="text-sm text-muted-foreground">
               {test.questionCount}{" "}
               {test.questionCount === 1 ? t("question") : t("questions")}
             </p>
@@ -78,7 +72,7 @@ const UserPersonalTestTake = () => {
               {t("startPersonalTest")}
             </Button>
             <Button variant="outline" asChild>
-              <Link to="/my-tests">{t("backToPersonalTests")}</Link>
+              <Link to={testsPath}>{t("backToPersonalTests")}</Link>
             </Button>
           </div>
         </div>
@@ -94,7 +88,8 @@ const UserPersonalTestTake = () => {
       questions={questions}
       isPreview={false}
       active={hasStarted}
-      backHref="/my-tests"
+      language={language}
+      backHref={testsPath}
       backLabel={t("backToPersonalTests")}
       resultsSubtitle={t("recommendedCourses")}
       chooseOneLabel={t("chooseOneAnswer")}
@@ -104,13 +99,24 @@ const UserPersonalTestTake = () => {
       seeResultsLabel={t("seeResults")}
       savingResultsLabel={t("savingResults")}
       noRecommendationsLabel={t("noCourseRecommendations")}
+      questionProgressLabel={(current, total) =>
+        t("questionProgress")
+          .replace("{current}", String(current))
+          .replace("{total}", String(total))
+      }
+      basedOnAnswersLabel={(testName) =>
+        t("basedOnAnswersTo").replace("{testName}", testName)
+      }
       completedInLabel={(duration, seconds) =>
         language === "ar"
           ? `اكتمل خلال ${duration} (${seconds} ثانية)`
           : `Completed in ${duration} (${seconds} seconds)`
       }
       restartLabel={t("retakeTest")}
-      secondaryAction={{ href: "/courses/card", label: t("browseCourses") }}
+      secondaryAction={{
+        href: localizedPath("/courses/card"),
+        label: t("browseCourses"),
+      }}
     />
   );
 };

@@ -21,8 +21,10 @@ import LegacySubscriptionMigration from "@/pages/LegacySubscriptionMigration";
 import PersonalTests from "@/pages/PersonalTests";
 import PersonalTestDetail from "@/pages/PersonalTestDetail";
 import PersonalTestPreview from "@/pages/PersonalTestPreview";
+import PersonalTestSubmissionResults from "@/pages/PersonalTestSubmissionResults";
 import UserPersonalTests from "@/pages/UserPersonalTests";
 import UserPersonalTestTake from "@/pages/UserPersonalTestTake";
+import UserPersonalTestResults from "@/pages/UserPersonalTestResults";
 import Payments from "@/pages/Payments";
 import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
@@ -268,6 +270,10 @@ const App = () => (
             <Route element={<TechRoute />}>
               <Route path="/personal-tests" element={<PersonalTests />} />
               <Route path="/personal-tests/:id" element={<PersonalTestDetail />} />
+              <Route
+                path="/personal-tests/:id/submissions/:attemptId"
+                element={<PersonalTestSubmissionResults />}
+              />
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
             </Route>
@@ -281,6 +287,7 @@ const App = () => (
           <Route path="/payments" element={<Payments />} />
           <Route element={<TechRoute />}>
             <Route path="/my-tests" element={<UserPersonalTests />} />
+            <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
             <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
           </Route>
         </Route>
