@@ -297,39 +297,62 @@ const UserPersonalTests = () => {
                     language === "ar" ? attempt.testNameAr : attempt.testName;
 
                   return (
-                    <Card key={attempt.attemptId}>
-                      <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="space-y-1">
-                          <CardTitle className="text-lg">{title}</CardTitle>
-                          <p className="text-sm text-muted-foreground">
-                            {t("completedOn")}{" "}
-                            {formatCompletedAt(attempt.completedAt, language)}
-                            {" · "}
-                            {formatSubmissionDuration(attempt.durationSeconds)}
-                          </p>
-                        </div>
-                        <Button variant="outline" size="sm" asChild>
-                          <Link
-                            to={localizedPath(`/my-tests/results/${attempt.attemptId}`)}
-                          >
-                            {t("viewResults")}
-                          </Link>
-                        </Button>
-                      </CardHeader>
-                      <CardContent>
-                        {attempt.recommendedCourses.length === 0 ? (
-                          <p className="text-sm text-muted-foreground">
-                            {t("noCourseRecommendations")}
-                          </p>
-                        ) : (
-                          <p className="text-sm text-muted-foreground">
-                            {attempt.recommendedCourseCount}{" "}
-                            {attempt.recommendedCourseCount === 1
-                              ? t("recommendedCourseSingular")
-                              : t("recommendedCoursesCount")}
-                          </p>
+                    <Card key={attempt.attemptId} className="overflow-hidden">
+                      <div
+                        className={cn(
+                          "flex flex-col sm:flex-row",
+                          isRTL && "sm:flex-row-reverse",
                         )}
-                      </CardContent>
+                      >
+                        <div className="relative h-36 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-44">
+                          {attempt.testThumbnailImageUrl ? (
+                            <img
+                              src={attempt.testThumbnailImageUrl}
+                              alt={title}
+                              className="h-full w-full object-cover"
+                              loading="lazy"
+                            />
+                          ) : (
+                            <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-muted text-muted-foreground">
+                              <ClipboardList className="h-10 w-10 opacity-40" />
+                            </div>
+                          )}
+                        </div>
+                        <div className="flex min-w-0 flex-1 flex-col">
+                          <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+                            <div className="space-y-1">
+                              <CardTitle className="text-lg">{title}</CardTitle>
+                              <p className="text-sm text-muted-foreground">
+                                {t("completedOn")}{" "}
+                                {formatCompletedAt(attempt.completedAt, language)}
+                                {" · "}
+                                {formatSubmissionDuration(attempt.durationSeconds)}
+                              </p>
+                            </div>
+                            <Button variant="outline" size="sm" asChild className="shrink-0">
+                              <Link
+                                to={localizedPath(`/my-tests/results/${attempt.attemptId}`)}
+                              >
+                                {t("viewResults")}
+                              </Link>
+                            </Button>
+                          </CardHeader>
+                          <CardContent className="pt-0">
+                            {attempt.recommendedCourses.length === 0 ? (
+                              <p className="text-sm text-muted-foreground">
+                                {t("noCourseRecommendations")}
+                              </p>
+                            ) : (
+                              <p className="text-sm text-muted-foreground">
+                                {attempt.recommendedCourseCount}{" "}
+                                {attempt.recommendedCourseCount === 1
+                                  ? t("recommendedCourseSingular")
+                                  : t("recommendedCoursesCount")}
+                              </p>
+                            )}
+                          </CardContent>
+                        </div>
+                      </div>
                     </Card>
                   );
                 })}

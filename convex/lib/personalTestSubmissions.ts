@@ -310,6 +310,7 @@ export type MyCompletedAttemptSummary = {
   testId: Id<"personalTests">;
   testName: string;
   testNameAr: string;
+  testThumbnailImageUrl?: string;
   completedAt: number;
   durationSeconds?: number;
   recommendedCourseCount: number;
@@ -325,14 +326,21 @@ export type MyCompletedAttemptsPage = {
 async function getCachedTest(
   ctx: QueryCtx,
   testId: Id<"personalTests">,
-  testCache: Map<Id<"personalTests">, { name: string; name_ar: string } | null>,
+  testCache: Map<
+    Id<"personalTests">,
+    { name: string; name_ar: string; thumbnail_image_url?: string } | null
+  >,
 ) {
   if (!testCache.has(testId)) {
     const test = await ctx.db.get("personalTests", testId);
     testCache.set(
       testId,
       test && test.deletedAt === undefined
-        ? { name: test.name, name_ar: test.name_ar }
+        ? {
+            name: test.name,
+            name_ar: test.name_ar,
+            thumbnail_image_url: test.thumbnail_image_url,
+          }
         : null,
     );
   }
@@ -353,7 +361,7 @@ export async function loadMyCompletedPersonalTestAttempts(
   const courseCache = new Map<Id<"courses">, CourseSummary | null>();
   const testCache = new Map<
     Id<"personalTests">,
-    { name: string; name_ar: string } | null
+    { name: string; name_ar: string; thumbnail_image_url?: string } | null
   >();
 
   let skipping = Boolean(options.cursor);
@@ -399,6 +407,7 @@ export async function loadMyCompletedPersonalTestAttempts(
         testId: attempt.testId,
         testName: test.name,
         testNameAr: test.name_ar,
+        testThumbnailImageUrl: test.thumbnail_image_url,
         completedAt: attempt.completedAt,
         durationSeconds: attempt.durationSeconds,
         recommendedCourseCount: recommendedCourses.length,

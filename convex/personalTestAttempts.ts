@@ -475,6 +475,7 @@ export const listMyCompletedPersonalTestAttempts = query({
         testId: v.id("personalTests"),
         testName: v.string(),
         testNameAr: v.string(),
+        testThumbnailImageUrl: v.optional(v.string()),
         completedAt: v.number(),
         durationSeconds: v.optional(v.number()),
         recommendedCourseCount: v.number(),
