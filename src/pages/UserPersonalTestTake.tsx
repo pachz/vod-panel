@@ -91,7 +91,11 @@ const UserPersonalTestTake = () => {
       language={language}
       backHref={testsPath}
       backLabel={t("backToPersonalTests")}
-      resultsSubtitle={t("recommendedCourses")}
+      testCompletedTitle={t("testCompletedTitle")}
+      testCompletedSubtitle={t("testCompletedSubtitle")}
+      topRecommendedLabel={t("topRecommendedCourses")}
+      viewCourseLabel={t("viewCourse")}
+      getCourseHref={(courseId) => localizedPath(`/courses/preview/${courseId}`)}
       chooseOneLabel={t("chooseOneAnswer")}
       chooseAllLabel={t("chooseAllAnswers")}
       previousLabel={t("previous")}
@@ -104,18 +108,16 @@ const UserPersonalTestTake = () => {
           .replace("{current}", String(current))
           .replace("{total}", String(total))
       }
-      basedOnAnswersLabel={(testName) =>
-        t("basedOnAnswersTo").replace("{testName}", testName)
+      percentCompleteLabel={(percent) =>
+        t("testProgressComplete").replace("{percent}", String(percent))
       }
-      completedInLabel={(duration, seconds) =>
-        language === "ar"
-          ? `اكتمل خلال ${duration} (${seconds} ثانية)`
-          : `Completed in ${duration} (${seconds} seconds)`
+      completedInLabel={(duration) =>
+        t("completedIn").replace("{duration}", duration)
       }
       restartLabel={t("retakeTest")}
       secondaryAction={{
         href: localizedPath("/courses/card"),
-        label: t("browseCourses"),
+        label: t("exploreAllCourses"),
       }}
     />
   );

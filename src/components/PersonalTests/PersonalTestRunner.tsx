@@ -1,14 +1,57 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation } from "convex/react";
-import { ArrowLeft, CheckCircle2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
 import type { Language } from "@/hooks/use-language";
 import { Button } from "@/components/ui/button";
-import { cn } from "@/lib/utils";
+import { Checkbox } from "@/components/ui/checkbox";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import { cn, markdownToPlainText } from "@/lib/utils";
+
+function CelebrationIcon() {
+  return (
+    <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
+      <span className="absolute left-0 top-1 text-xl select-none" aria-hidden>
+        🎉
+      </span>
+      <span className="absolute right-0 top-2 text-base select-none" aria-hidden>
+        ✨
+      </span>
+      <span
+        className="absolute bottom-3 left-1 h-2 w-2 rounded-full bg-amber-400/90"
+        aria-hidden
+      />
+      <span
+        className="absolute bottom-5 right-2 h-2.5 w-2.5 rounded-full bg-cta/70"
+        aria-hidden
+      />
+      <span
+        className="absolute right-5 top-0 h-1.5 w-1.5 rounded-full bg-orange-400/80"
+        aria-hidden
+      />
+      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-cta shadow-[0_8px_24px_-4px_hsl(var(--cta)/0.45)]">
+        <Check className="h-8 w-8 text-white" strokeWidth={2.5} />
+      </div>
+    </div>
+  );
+}
+
+const answerControlClassName =
+  "mt-0.5 h-5 w-5 shrink-0 border-muted-foreground/40 text-cta data-[state=checked]:border-cta";
+
+const answerOptionCardClassName = (
+  isSelected: boolean,
+  isArabic: boolean,
+) =>
+  cn(
+    "flex w-full cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors hover:border-cta/40 hover:bg-cta/5",
+    isArabic ? "flex-row-reverse text-right" : "text-left",
+    isSelected && "border-cta bg-cta/5 ring-1 ring-cta/25",
+  );
 
 export type PersonalTestQuestion = {
   question: {
@@ -31,6 +74,8 @@ type CompletedResults = {
     name: string;
     name_ar: string;
     thumbnail_image_url?: string;
+    short_description?: string;
+    short_description_ar?: string;
   }>;
 };
 
@@ -59,7 +104,13 @@ type PersonalTestRunnerProps = {
   backHref: string;
   backLabel: string;
   headerExtra?: React.ReactNode;
-  resultsSubtitle: string;
+  /** @deprecated Use testCompletedTitle instead */
+  resultsSubtitle?: string;
+  testCompletedTitle?: string;
+  testCompletedSubtitle?: string;
+  topRecommendedLabel?: string;
+  viewCourseLabel?: string;
+  getCourseHref?: (courseId: Id<"courses">) => string;
   chooseOneLabel: string;
   chooseAllLabel: string;
   previousLabel: string;
@@ -67,13 +118,13 @@ type PersonalTestRunnerProps = {
   seeResultsLabel: string;
   savingResultsLabel: string;
   noRecommendationsLabel: string;
-  completedInLabel: (duration: string, seconds: number) => string;
+  completedInLabel: (duration: string) => string;
   restartLabel: string;
   secondaryAction?: { href: string; label: string };
   /** When set, show a single language instead of bilingual content. */
   language?: Language;
   questionProgressLabel?: (current: number, total: number) => string;
-  basedOnAnswersLabel?: (testName: string) => string;
+  percentCompleteLabel?: (percent: number) => string;
   showQuestionArabic?: boolean;
   showAnswerArabic?: boolean;
   onRestart?: () => void;
@@ -90,6 +141,11 @@ export function PersonalTestRunner({
   backLabel,
   headerExtra,
   resultsSubtitle,
+  testCompletedTitle,
+  testCompletedSubtitle,
+  topRecommendedLabel,
+  viewCourseLabel = "View Course",
+  getCourseHref = (courseId) => `/courses/preview/${courseId}`,
   chooseOneLabel,
   chooseAllLabel,
   previousLabel,
@@ -102,7 +158,7 @@ export function PersonalTestRunner({
   secondaryAction,
   language,
   questionProgressLabel,
-  basedOnAnswersLabel,
+  percentCompleteLabel,
   showQuestionArabic = true,
   showAnswerArabic = true,
   onRestart,
@@ -125,14 +181,6 @@ export function PersonalTestRunner({
   const isSingleLanguage = language !== undefined;
   const isArabic = language === "ar";
 
-  const displayTestName = isSingleLanguage
-    ? isArabic
-      ? testNameAr
-      : testName
-    : testName;
-  const displayTestNameSecondary =
-    !isSingleLanguage && showQuestionArabic ? testNameAr : undefined;
-
   const getQuestionTitle = (question: PersonalTestQuestion["question"]) =>
     isSingleLanguage
       ? isArabic
@@ -154,6 +202,22 @@ export function PersonalTestRunner({
 
   const getCourseSubtitle = (course: CompletedResults["courses"][number]) =>
     !isSingleLanguage && showAnswerArabic ? course.name_ar : undefined;
+
+  const getCourseDescription = (course: CompletedResults["courses"][number]) => {
+    const raw = isSingleLanguage
+      ? isArabic
+        ? course.short_description_ar ?? course.short_description
+        : course.short_description ?? course.short_description_ar
+      : course.short_description;
+    if (!raw) return undefined;
+    return markdownToPlainText(raw);
+  };
+
+  const completionTitle = testCompletedTitle ?? resultsSubtitle ?? "You've completed the test!";
+  const completionSubtitle =
+    testCompletedSubtitle ??
+    "Based on your answers, here are the courses that can help you the most.";
+  const recommendedSectionTitle = topRecommendedLabel ?? resultsSubtitle ?? "Recommended courses";
 
   const allSelectedAnswerIds = useMemo(
     () => Object.values(selectedAnswers).flat(),
@@ -246,6 +310,10 @@ export function PersonalTestRunner({
   }, [showResults, allSelectedAnswerIds, completeAttempt, getElapsedSeconds]);
 
   const currentQuestion = questions[currentIndex];
+  const progressPercent =
+    questions.length > 0
+      ? Math.round(((currentIndex + 1) / questions.length) * 100)
+      : 0;
 
   const toggleAnswer = (
     questionId: Id<"personalTestQuestions">,
@@ -321,12 +389,42 @@ export function PersonalTestRunner({
 
       {!showResults ? (
         <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm">
+          <div className="space-y-2">
+            <div className="flex items-center justify-between gap-4 text-sm text-muted-foreground">
+              <span>
+                {questionProgressLabel
+                  ? questionProgressLabel(currentIndex + 1, questions.length)
+                  : `Question ${currentIndex + 1} of ${questions.length}`}
+              </span>
+              <span>
+                {percentCompleteLabel
+                  ? percentCompleteLabel(progressPercent)
+                  : `${progressPercent}% Complete`}
+              </span>
+            </div>
+            <div
+              className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              role="progressbar"
+              aria-valuenow={progressPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+              aria-label={
+                questionProgressLabel
+                  ? questionProgressLabel(currentIndex + 1, questions.length)
+                  : `Question ${currentIndex + 1} of ${questions.length}`
+              }
+            >
+              <div
+                className={cn(
+                  "h-full rounded-full bg-cta transition-all duration-300 ease-out",
+                  isArabic && "ms-auto",
+                )}
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+
           <div className="space-y-1">
-            <p className="text-sm text-muted-foreground">
-              {questionProgressLabel
-                ? questionProgressLabel(currentIndex + 1, questions.length)
-                : `Question ${currentIndex + 1} of ${questions.length}`}
-            </p>
             <h2 className="text-xl font-semibold">
               {getQuestionTitle(currentQuestion!.question)}
             </h2>
@@ -343,42 +441,87 @@ export function PersonalTestRunner({
           </div>
 
           <div className="space-y-3">
-            {currentQuestion!.answers.map((answer) => {
-              const isSelected = (
-                selectedAnswers[currentQuestion!.question._id] ?? []
-              ).includes(answer._id);
+            {currentQuestion!.question.answerType === "single" ? (
+              <RadioGroup
+                value={selectedAnswers[currentQuestion!.question._id]?.[0] ?? ""}
+                onValueChange={(value) => {
+                  if (!value) return;
+                  setSelectedAnswers((prev) => ({
+                    ...prev,
+                    [currentQuestion!.question._id]: [
+                      value as Id<"personalTestAnswers">,
+                    ],
+                  }));
+                }}
+                className="gap-3"
+              >
+                {currentQuestion!.answers.map((answer) => {
+                  const isSelected = (
+                    selectedAnswers[currentQuestion!.question._id] ?? []
+                  ).includes(answer._id);
 
-              return (
-                <button
-                  key={answer._id}
-                  type="button"
-                  onClick={() =>
-                    toggleAnswer(
-                      currentQuestion!.question._id,
-                      answer._id,
-                      currentQuestion!.question.answerType,
-                    )
-                  }
-                  className={cn(
-                    "w-full rounded-xl border p-4 transition-colors hover:border-cta/40 hover:bg-cta/5",
-                    isSingleLanguage
-                      ? isArabic
-                        ? "text-right"
-                        : "text-left"
-                      : "text-left",
-                    isSelected &&
-                      "border-cta bg-cta/10 ring-1 ring-cta/25 shadow-[0_0_0_1px_hsl(var(--cta)/0.15)]",
-                  )}
-                >
-                  <span className="font-medium">{getAnswerText(answer)}</span>
-                  {getAnswerSubtitle(answer) && (
-                    <span className="block text-sm text-muted-foreground" dir="rtl">
-                      {getAnswerSubtitle(answer)}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
+                  return (
+                    <label
+                      key={answer._id}
+                      htmlFor={`answer-${answer._id}`}
+                      className={answerOptionCardClassName(isSelected, isArabic)}
+                    >
+                      <RadioGroupItem
+                        id={`answer-${answer._id}`}
+                        value={answer._id}
+                        className={answerControlClassName}
+                      />
+                      <div className="min-w-0 flex-1 space-y-1">
+                        <span className="font-medium">{getAnswerText(answer)}</span>
+                        {getAnswerSubtitle(answer) && (
+                          <span className="block text-sm text-muted-foreground" dir="rtl">
+                            {getAnswerSubtitle(answer)}
+                          </span>
+                        )}
+                      </div>
+                    </label>
+                  );
+                })}
+              </RadioGroup>
+            ) : (
+              currentQuestion!.answers.map((answer) => {
+                const isSelected = (
+                  selectedAnswers[currentQuestion!.question._id] ?? []
+                ).includes(answer._id);
+
+                return (
+                  <label
+                    key={answer._id}
+                    htmlFor={`answer-${answer._id}`}
+                    className={answerOptionCardClassName(isSelected, isArabic)}
+                  >
+                    <Checkbox
+                      id={`answer-${answer._id}`}
+                      checked={isSelected}
+                      onCheckedChange={() =>
+                        toggleAnswer(
+                          currentQuestion!.question._id,
+                          answer._id,
+                          currentQuestion!.question.answerType,
+                        )
+                      }
+                      className={cn(
+                        answerControlClassName,
+                        "rounded-[5px] data-[state=checked]:bg-cta data-[state=checked]:text-white",
+                      )}
+                    />
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <span className="font-medium">{getAnswerText(answer)}</span>
+                      {getAnswerSubtitle(answer) && (
+                        <span className="block text-sm text-muted-foreground" dir="rtl">
+                          {getAnswerSubtitle(answer)}
+                        </span>
+                      )}
+                    </div>
+                  </label>
+                );
+              })
+            )}
           </div>
 
           <div className="flex justify-between pt-2">
@@ -395,26 +538,16 @@ export function PersonalTestRunner({
           </div>
         </div>
       ) : (
-        <div className="rounded-2xl border bg-card p-8 space-y-6 shadow-sm">
-          <div className="text-center space-y-2">
-            <CheckCircle2 className="mx-auto h-12 w-12 text-cta" />
-            <h2 className="text-2xl font-semibold">{resultsSubtitle}</h2>
-            <p className="text-muted-foreground">
-              {basedOnAnswersLabel
-                ? basedOnAnswersLabel(displayTestName)
-                : `Based on your answers to "${displayTestName}"`}
-            </p>
-            {displayTestNameSecondary && (
-              <p className="text-sm text-muted-foreground" dir="rtl">
-                {displayTestNameSecondary}
-              </p>
-            )}
+        <div className="space-y-8">
+          <div className="space-y-3 text-center">
+            <CelebrationIcon />
+            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
+              {completionTitle}
+            </h2>
+            <p className="mx-auto max-w-lg text-muted-foreground">{completionSubtitle}</p>
             {completedResults && (
               <p className="text-sm text-muted-foreground">
-                {completedInLabel(
-                  formatTestDuration(completedResults.durationSeconds),
-                  completedResults.durationSeconds,
-                )}
+                {completedInLabel(formatTestDuration(completedResults.durationSeconds))}
               </p>
             )}
           </div>
@@ -422,45 +555,86 @@ export function PersonalTestRunner({
           {isFinalizing || completedResults === null ? (
             <p className="text-center text-muted-foreground">{savingResultsLabel}</p>
           ) : completedResults.courses.length === 0 ? (
-            <p className="text-center text-muted-foreground">{noRecommendationsLabel}</p>
+            <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
+              <p className="text-muted-foreground">{noRecommendationsLabel}</p>
+            </div>
           ) : (
-            <ul className="grid gap-4 sm:grid-cols-2">
-              {completedResults.courses.map((course) => (
-                <li
-                  key={course._id}
-                  className="rounded-xl border p-4 flex gap-3 items-start"
-                >
-                  {course.thumbnail_image_url ? (
-                    <img
-                      src={course.thumbnail_image_url}
-                      alt=""
-                      className="h-16 w-24 rounded-md object-cover shrink-0"
-                    />
-                  ) : (
-                    <div className="h-16 w-24 rounded-md bg-muted shrink-0" />
-                  )}
-                  <div>
-                    <p className="font-medium">{getCourseName(course)}</p>
-                    {getCourseSubtitle(course) && (
-                      <p className="text-sm text-muted-foreground" dir="rtl">
-                        {getCourseSubtitle(course)}
-                      </p>
+            <div className="space-y-4">
+              <h3 className="text-lg font-semibold">{recommendedSectionTitle}</h3>
+              <ul className="space-y-4">
+                {completedResults.courses.map((course) => (
+                  <li
+                    key={course._id}
+                    className={cn(
+                      "flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center",
+                      isArabic && "sm:flex-row-reverse",
                     )}
-                  </div>
-                </li>
-              ))}
-            </ul>
+                  >
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
+                      {course.thumbnail_image_url ? (
+                        <img
+                          src={course.thumbnail_image_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                          —
+                        </div>
+                      )}
+                    </div>
+                    <div
+                      className={cn(
+                        "min-w-0 flex-1 space-y-1",
+                        isArabic ? "text-right" : "text-left",
+                      )}
+                    >
+                      <p className="font-semibold leading-snug">{getCourseName(course)}</p>
+                      {getCourseDescription(course) && (
+                        <p className="text-sm text-muted-foreground line-clamp-2">
+                          {getCourseDescription(course)}
+                        </p>
+                      )}
+                      {getCourseSubtitle(course) && (
+                        <p className="text-sm text-muted-foreground" dir="rtl">
+                          {getCourseSubtitle(course)}
+                        </p>
+                      )}
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0 border-cta text-cta hover:bg-cta/5 hover:text-cta"
+                      asChild
+                    >
+                      <a
+                        href={getCourseHref(course._id)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {viewCourseLabel}
+                      </a>
+                    </Button>
+                  </li>
+                ))}
+              </ul>
+            </div>
           )}
 
-          <div className="flex justify-center gap-2 pt-2 flex-wrap">
-            <Button variant="outline" onClick={() => void handleRestart()}>
-              {restartLabel}
-            </Button>
+          <div className="flex flex-col items-center gap-3 pt-2">
             {secondaryAction && (
-              <Button variant="cta" asChild>
-                <Link to={secondaryAction.href}>{secondaryAction.label}</Link>
+              <Button variant="cta" className="w-full max-w-md" asChild>
+                <Link to={secondaryAction.href}>
+                  {secondaryAction.label}
+                  <ArrowRight
+                    className={cn("h-4 w-4", isArabic ? "mr-2 rotate-180" : "ml-2")}
+                  />
+                </Link>
               </Button>
             )}
+            <Button variant="ghost" onClick={() => void handleRestart()}>
+              {restartLabel}
+            </Button>
           </div>
         </div>
       )}

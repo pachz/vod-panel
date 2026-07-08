@@ -337,6 +337,7 @@ export const getPersonalTest = query({
         name_ar: v.string(),
         description: v.optional(v.string()),
         description_ar: v.optional(v.string()),
+        thumbnail_image_url: v.optional(v.string()),
         status: v.union(
           v.literal("draft"),
           v.literal("published"),
@@ -397,6 +398,7 @@ export const getPersonalTest = query({
         name_ar: test.name_ar,
         description: test.description,
         description_ar: test.description_ar,
+        thumbnail_image_url: test.thumbnail_image_url,
         status: test.status,
         questionCount: test.questionCount,
         resultSettings: test.resultSettings,
@@ -818,6 +820,7 @@ const publishedTestListItemValidator = v.object({
   name_ar: v.string(),
   description: v.optional(v.string()),
   description_ar: v.optional(v.string()),
+  thumbnail_image_url: v.optional(v.string()),
   questionCount: v.number(),
 });
 
@@ -863,6 +866,7 @@ export const listPublishedPersonalTests = query({
         name_ar: test.name_ar,
         description: test.description,
         description_ar: test.description_ar,
+        thumbnail_image_url: test.thumbnail_image_url,
         questionCount: test.questionCount,
       }));
     }
@@ -881,8 +885,49 @@ export const listPublishedPersonalTests = query({
       name_ar: test.name_ar,
       description: test.description,
       description_ar: test.description_ar,
+      thumbnail_image_url: test.thumbnail_image_url,
       questionCount: test.questionCount,
     }));
+  },
+});
+
+export const generatePersonalTestImageUploadUrl = mutation({
+  args: {},
+  returns: v.string(),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireTech: true });
+    return await ctx.storage.generateUploadUrl();
+  },
+});
+
+export const updatePersonalTestThumbnail = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    thumbnailStorageId: v.id("_storage"),
+  },
+  returns: v.object({
+    thumbnailImageUrl: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    const test = await getTestOrThrow(ctx, args.testId);
+
+    const url = await ctx.storage.getUrl(args.thumbnailStorageId);
+    if (!url) {
+      throw new ConvexError({
+        code: "STORAGE_ERROR",
+        message: "Could not generate thumbnail image URL.",
+      });
+    }
+
+    await markUnpublishedChanges(ctx, test);
+
+    await ctx.db.patch(args.testId, {
+      thumbnail_image_url: url,
+      updatedAt: Date.now(),
+    });
+
+    return { thumbnailImageUrl: url };
   },
 });
 
@@ -962,6 +1007,8 @@ export const computePersonalTestResults = query({
         name: v.string(),
         name_ar: v.string(),
         thumbnail_image_url: v.optional(v.string()),
+        short_description: v.optional(v.string()),
+        short_description_ar: v.optional(v.string()),
       }),
     ),
   }),

@@ -51,6 +51,8 @@ const courseResultValidator = v.object({
   name: v.string(),
   name_ar: v.string(),
   thumbnail_image_url: v.optional(v.string()),
+  short_description: v.optional(v.string()),
+  short_description_ar: v.optional(v.string()),
 });
 
 const myAttemptCourseValidator = v.object({
@@ -58,6 +60,8 @@ const myAttemptCourseValidator = v.object({
   name: v.string(),
   name_ar: v.string(),
   thumbnail_image_url: v.optional(v.string()),
+  short_description: v.optional(v.string()),
+  short_description_ar: v.optional(v.string()),
 });
 
 const myAttemptAnswerValidator = v.object({
@@ -460,25 +464,35 @@ export const listPersonalTestAttempts = query({
 
 export const listMyCompletedPersonalTestAttempts = query({
   args: {
+    search: v.optional(v.string()),
     limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
   },
-  returns: v.array(
-    v.object({
-      attemptId: v.id("personalTestAttempts"),
-      testId: v.id("personalTests"),
-      testName: v.string(),
-      testNameAr: v.string(),
-      completedAt: v.number(),
-      durationSeconds: v.optional(v.number()),
-      recommendedCourseCount: v.number(),
-      recommendedCourses: v.array(myAttemptCourseValidator),
-    }),
-  ),
-  handler: async (ctx, { limit = 20 }) => {
+  returns: v.object({
+    page: v.array(
+      v.object({
+        attemptId: v.id("personalTestAttempts"),
+        testId: v.id("personalTests"),
+        testName: v.string(),
+        testNameAr: v.string(),
+        completedAt: v.number(),
+        durationSeconds: v.optional(v.number()),
+        recommendedCourseCount: v.number(),
+        recommendedCourses: v.array(myAttemptCourseValidator),
+      }),
+    ),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, { search, limit = 10, cursor }) => {
     await requireUser(ctx, { requireTech: true });
     const userId = await getUserIdOrThrow(ctx);
-    const numItems = Math.min(Math.max(limit ?? 20, 1), 50);
-    return await loadMyCompletedPersonalTestAttempts(ctx, userId, numItems);
+    const numItems = Math.min(Math.max(limit ?? 10, 1), 50);
+    return await loadMyCompletedPersonalTestAttempts(ctx, userId, {
+      limit: numItems,
+      search,
+      cursor,
+    });
   },
 });
 

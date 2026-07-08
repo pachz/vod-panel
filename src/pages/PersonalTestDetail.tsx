@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -66,6 +66,14 @@ import {
   defaultAnalyticsStartDate,
 } from "../../shared/validation/personalTestAnalytics";
 import { PersonalTestAnalyticsPanel } from "@/components/PersonalTests/PersonalTestAnalyticsPanel";
+import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
+
+const getErrorMessage = (error: unknown) => {
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return "Something went wrong.";
+};
 
 function formatAttemptDuration(seconds: number | undefined) {
   if (seconds === undefined) {
@@ -204,6 +212,8 @@ const PersonalTestDetail = () => {
   const saveQuestion = useMutation(api.personalTest.savePersonalTestQuestion);
   const deleteQuestion = useMutation(api.personalTest.deletePersonalTestQuestion);
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
+  const generateImageUploadUrl = useMutation(api.personalTest.generatePersonalTestImageUploadUrl);
+  const updatePersonalTestThumbnail = useMutation(api.personalTest.updatePersonalTestThumbnail);
 
   const [activeTab, setActiveTab] = useState(() => {
     const tab = searchParams.get("tab");
@@ -233,6 +243,12 @@ const PersonalTestDetail = () => {
   const [isEnabled, setIsEnabled] = useState(true);
   const [isSavingInfo, setIsSavingInfo] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
+  const [thumbnailUploadState, setThumbnailUploadState] = useState<ImageUploadState>({
+    status: "idle",
+    progress: 0,
+  });
+  const tempThumbnailUrlRef = useRef<string | null>(null);
 
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionRow | null>(null);
@@ -262,6 +278,7 @@ const PersonalTestDetail = () => {
     );
     setIsEnabled(data.test.status === "published");
     setOrderedQuestions(data.questions);
+    setThumbnailPreviewUrl(data.test.thumbnail_image_url ?? null);
   }, [data]);
 
   const courseMap = useMemo(() => {
@@ -317,6 +334,114 @@ const PersonalTestDetail = () => {
       })),
     };
   }, [editingQuestion]);
+
+  const resetTempThumbnailPreview = () => {
+    if (tempThumbnailUrlRef.current) {
+      URL.revokeObjectURL(tempThumbnailUrlRef.current);
+      tempThumbnailUrlRef.current = null;
+    }
+  };
+
+  const uploadFileWithProgress = (
+    uploadUrl: string,
+    file: File,
+    onProgress: (progress: number) => void,
+  ) =>
+    new Promise<{ storageId: string }>((resolve, reject) => {
+      try {
+        const xhr = new XMLHttpRequest();
+        xhr.open("POST", uploadUrl);
+        xhr.responseType = "json";
+        xhr.setRequestHeader("Content-Type", file.type || "application/octet-stream");
+        onProgress(0);
+
+        xhr.upload.onprogress = (event) => {
+          if (event.lengthComputable && event.total > 0) {
+            onProgress(Math.min(1, event.loaded / event.total));
+          }
+        };
+
+        xhr.onerror = () => {
+          reject(new Error("Network error while uploading the image."));
+        };
+
+        xhr.onload = () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response =
+                xhr.response && typeof xhr.response === "object"
+                  ? xhr.response
+                  : JSON.parse(xhr.responseText);
+
+              if (response && typeof response.storageId === "string") {
+                onProgress(1);
+                resolve({ storageId: response.storageId });
+                return;
+              }
+
+              reject(new Error("Upload completed but no storage ID was returned."));
+            } catch (parseError) {
+              reject(
+                parseError instanceof Error
+                  ? parseError
+                  : new Error("Failed to parse upload response."),
+              );
+            }
+          } else {
+            reject(new Error(`Upload failed with status ${xhr.status}.`));
+          }
+        };
+
+        xhr.send(file);
+      } catch (error) {
+        reject(
+          error instanceof Error ? error : new Error("Unexpected error while preparing the upload."),
+        );
+      }
+    });
+
+  const handleThumbnailSelect = async (file: File) => {
+    if (!data) return;
+
+    resetTempThumbnailPreview();
+    const previewUrl = URL.createObjectURL(file);
+    tempThumbnailUrlRef.current = previewUrl;
+    setThumbnailPreviewUrl(previewUrl);
+    setThumbnailUploadState({ status: "uploading", progress: 0 });
+
+    try {
+      const uploadUrl = await generateImageUploadUrl();
+      const { storageId } = await uploadFileWithProgress(uploadUrl, file, (progress) => {
+        setThumbnailUploadState({ status: "uploading", progress: progress * 0.8 });
+      });
+
+      setThumbnailUploadState({ status: "uploading", progress: 0.9 });
+
+      const result = await updatePersonalTestThumbnail({
+        testId,
+        thumbnailStorageId: storageId as Id<"_storage">,
+      });
+
+      resetTempThumbnailPreview();
+      setThumbnailPreviewUrl(result.thumbnailImageUrl);
+      setThumbnailUploadState({ status: "success", progress: 1 });
+      toast.success("Test thumbnail updated.");
+
+      setTimeout(() => {
+        setThumbnailUploadState({ status: "idle", progress: 0 });
+      }, 1200);
+    } catch (error) {
+      console.error(error);
+      resetTempThumbnailPreview();
+      setThumbnailPreviewUrl(data.test.thumbnail_image_url ?? null);
+      setThumbnailUploadState({
+        status: "error",
+        progress: 0,
+        errorMessage: getErrorMessage(error),
+      });
+      toast.error(getErrorMessage(error));
+    }
+  };
 
   const handleSaveInfo = async (event?: FormEvent) => {
     event?.preventDefault();
@@ -621,6 +746,23 @@ const PersonalTestDetail = () => {
                 Publish the test to enable or disable it for users.
               </p>
             )}
+          </div>
+
+          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
+            <h2 className="font-medium">Card thumbnail</h2>
+            <p className="text-sm text-muted-foreground">
+              Shown on the take-test page. Landscape image recommended (16:9).
+            </p>
+            <ImageDropzone
+              id="personal-test-thumbnail"
+              label="Test thumbnail"
+              helperText="Click to browse or drop an image file."
+              aspectRatioClass="aspect-video"
+              value={thumbnailPreviewUrl}
+              onSelectFile={handleThumbnailSelect}
+              uploadState={thumbnailUploadState}
+              disabled={isSavingInfo}
+            />
           </div>
 
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">

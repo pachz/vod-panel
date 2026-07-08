@@ -27,6 +27,8 @@ export type SubmissionRecommendedCourse = {
   name: string;
   name_ar: string;
   thumbnail_image_url?: string;
+  short_description?: string;
+  short_description_ar?: string;
 };
 
 export type SubmissionRow = {
@@ -56,7 +58,23 @@ type CourseSummary = {
   name: string;
   name_ar: string;
   thumbnail_image_url?: string;
+  short_description?: string;
+  short_description_ar?: string;
 };
+
+function matchesTestNameSearch(
+  test: { name: string; name_ar: string },
+  search: string | undefined,
+) {
+  if (!search?.trim()) {
+    return true;
+  }
+  const query = search.trim().toLowerCase();
+  return (
+    test.name.toLowerCase().includes(query) ||
+    test.name_ar.toLowerCase().includes(query)
+  );
+}
 
 function matchesSearch(
   user: Doc<"users"> | null | undefined,
@@ -136,6 +154,8 @@ async function loadRecommendedCourses(
               name: course.name,
               name_ar: course.name_ar,
               thumbnail_image_url: course.thumbnail_image_url,
+              short_description: course.short_description,
+              short_description_ar: course.short_description_ar,
             }
           : null,
       );
@@ -296,68 +316,119 @@ export type MyCompletedAttemptSummary = {
   recommendedCourses: SubmissionRecommendedCourse[];
 };
 
+export type MyCompletedAttemptsPage = {
+  page: MyCompletedAttemptSummary[];
+  isDone: boolean;
+  continueCursor: string | null;
+};
+
+async function getCachedTest(
+  ctx: QueryCtx,
+  testId: Id<"personalTests">,
+  testCache: Map<Id<"personalTests">, { name: string; name_ar: string } | null>,
+) {
+  if (!testCache.has(testId)) {
+    const test = await ctx.db.get("personalTests", testId);
+    testCache.set(
+      testId,
+      test && test.deletedAt === undefined
+        ? { name: test.name, name_ar: test.name_ar }
+        : null,
+    );
+  }
+  return testCache.get(testId) ?? null;
+}
+
 export async function loadMyCompletedPersonalTestAttempts(
   ctx: QueryCtx,
   userId: Id<"users">,
-  limit: number,
-): Promise<MyCompletedAttemptSummary[]> {
-  const attempts = await ctx.db
-    .query("personalTestAttempts")
-    .withIndex("by_userId", (q) => q.eq("userId", userId))
-    .order("desc")
-    .take(Math.min(Math.max(limit, 1), 50) * 4);
-
+  options: {
+    limit: number;
+    search?: string;
+    cursor?: string;
+  },
+): Promise<MyCompletedAttemptsPage> {
+  const limit = Math.min(Math.max(options.limit, 1), 50);
+  const page: MyCompletedAttemptSummary[] = [];
   const courseCache = new Map<Id<"courses">, CourseSummary | null>();
   const testCache = new Map<
     Id<"personalTests">,
     { name: string; name_ar: string } | null
   >();
-  const results: MyCompletedAttemptSummary[] = [];
 
-  for (const attempt of attempts) {
-    if (results.length >= limit) {
+  let skipping = Boolean(options.cursor);
+  let dbCursor: string | null = null;
+  let exhausted = false;
+
+  while (page.length < limit && !exhausted) {
+    const batch = await ctx.db
+      .query("personalTestAttempts")
+      .withIndex("by_userId", (q) => q.eq("userId", userId))
+      .order("desc")
+      .paginate({ numItems: 50, cursor: dbCursor });
+
+    for (const attempt of batch.page) {
+      if (skipping) {
+        if (attempt._id === options.cursor) {
+          skipping = false;
+        }
+        continue;
+      }
+
+      if (
+        attempt.status !== "completed" ||
+        attempt.completedAt === undefined ||
+        (attempt.isPreview ?? false)
+      ) {
+        continue;
+      }
+
+      const test = await getCachedTest(ctx, attempt.testId, testCache);
+      if (!test || !matchesTestNameSearch(test, options.search)) {
+        continue;
+      }
+
+      const recommendedCourses = await loadRecommendedCourses(
+        ctx,
+        attempt.recommendedCourseIds,
+        courseCache,
+      );
+
+      page.push({
+        attemptId: attempt._id,
+        testId: attempt.testId,
+        testName: test.name,
+        testNameAr: test.name_ar,
+        completedAt: attempt.completedAt,
+        durationSeconds: attempt.durationSeconds,
+        recommendedCourseCount: recommendedCourses.length,
+        recommendedCourses,
+      });
+
+      if (page.length >= limit) {
+        break;
+      }
+    }
+
+    if (page.length >= limit) {
       break;
     }
-    if (attempt.status !== "completed" || attempt.completedAt === undefined) {
-      continue;
-    }
-    if (attempt.isPreview ?? false) {
-      continue;
-    }
 
-    if (!testCache.has(attempt.testId)) {
-      const test = await ctx.db.get("personalTests", attempt.testId);
-      testCache.set(
-        attempt.testId,
-        test && test.deletedAt === undefined
-          ? { name: test.name, name_ar: test.name_ar }
-          : null,
-      );
+    if (batch.isDone) {
+      exhausted = true;
+    } else {
+      dbCursor = batch.continueCursor;
     }
-    const test = testCache.get(attempt.testId);
-    if (!test) {
-      continue;
-    }
-
-    const recommendedCourses = await loadRecommendedCourses(
-      ctx,
-      attempt.recommendedCourseIds,
-      courseCache,
-    );
-
-    results.push({
-      attemptId: attempt._id,
-      testId: attempt.testId,
-      testName: test.name,
-      testNameAr: test.name_ar,
-      completedAt: attempt.completedAt,
-      durationSeconds: attempt.durationSeconds,
-      recommendedCourseCount: recommendedCourses.length,
-      recommendedCourses,
-    });
   }
 
-  return results;
+  return {
+    page,
+    isDone: exhausted,
+    continueCursor:
+      !exhausted && page.length > 0
+        ? page[page.length - 1]!.attemptId
+        : null,
+  };
 }
 
 export async function loadMyPersonalTestAttemptResults(

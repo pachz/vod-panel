@@ -102,6 +102,8 @@ export async function computeRecommendedCourses(
         name: course.name,
         name_ar: course.name_ar,
         thumbnail_image_url: course.thumbnail_image_url,
+        short_description: course.short_description,
+        short_description_ar: course.short_description_ar,
       });
     }
   }

@@ -361,6 +361,7 @@ export default defineSchema({
     name_search: v.optional(v.string()),
     description: v.optional(v.string()),
     description_ar: v.optional(v.string()),
+    thumbnail_image_url: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("published"),
