@@ -51,7 +51,7 @@ export function PackagePlansGrid({
   }
 
   return (
-    <div className={cn(planPackageGridClassForCount(plans.length), "w-full", className)}>
+    <div className={cn(planPackageGridClassForCount(plans.length), className)}>
       {plans.map((plan) => {
         const actionLabel = plan.isCurrentPlan
           ? currentPlanLabel

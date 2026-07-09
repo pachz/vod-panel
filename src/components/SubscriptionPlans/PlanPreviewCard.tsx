@@ -25,8 +25,10 @@ export function planCompareGridClassForCount(planCount: number, gapClass = "gap-
     return cn("mx-auto flex justify-center", gapClass);
   }
   if (planCount === 2) {
-    // w-fit + fixed 2-col grid keeps normal gap; flex + mx-auto on cards spreads them apart
-    return cn("mx-auto grid w-fit grid-cols-1 items-stretch sm:grid-cols-2", gapClass);
+    return cn(
+      "mx-auto flex w-full max-w-[752px] flex-wrap items-stretch justify-center",
+      gapClass,
+    );
   }
   return cn(
     "mx-auto grid w-full max-w-[1128px] grid-cols-1 items-stretch justify-items-center sm:grid-cols-2 lg:grid-cols-3",
