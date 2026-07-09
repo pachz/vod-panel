@@ -261,6 +261,8 @@ const submissionCourseValidator = v.object({
   name: v.string(),
   name_ar: v.string(),
   thumbnail_image_url: v.optional(v.string()),
+  short_description: v.optional(v.string()),
+  short_description_ar: v.optional(v.string()),
 });
 
 const submissionAnswerValidator = v.object({
