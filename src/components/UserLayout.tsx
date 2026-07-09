@@ -20,7 +20,7 @@ import {
 const UserLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t, isRTL, localizedSiteUrl } = useLanguage();
+  const { t, isRTL, localizedSiteUrl, localizedPath } = useLanguage();
   const [navOpen, setNavOpen] = useState(false);
   const currentUser = useQuery(api.user.getCurrentUser);
   const isTech = currentUser?.isTech ?? false;
@@ -55,14 +55,7 @@ const UserLayout = () => {
 
   const handleNavigate = (path: string) => {
     setNavOpen(false);
-    const searchParams = new URLSearchParams(location.search);
-    if (language === "ar") {
-      searchParams.set("lang", "ar");
-    } else {
-      searchParams.delete("lang");
-    }
-    const queryString = searchParams.toString();
-    navigate(`${path}${queryString ? `?${queryString}` : ""}`);
+    navigate(localizedPath(path));
   };
 
   const navContent = (
