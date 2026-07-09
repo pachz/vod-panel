@@ -27,6 +27,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/hooks/use-language";
 import type { LucideIcon } from "lucide-react";
 
 type MenuItem = {
@@ -71,6 +72,7 @@ export function AdminSidebar() {
   const { state, setOpenMobile, isMobile } = useSidebar();
   const collapsed = state === "collapsed";
   const location = useLocation();
+  const { localizedSiteUrl } = useLanguage();
   const currentUser = useQuery(api.user.getCurrentUser);
   const isAdmin = currentUser?.isGod ?? false;
   const isTech = currentUser?.isTech ?? false;
@@ -115,7 +117,7 @@ export function AdminSidebar() {
       <SidebarContent className="sidebar-panel">
         <div className="px-5 py-6 transition-all duration-300">
           <a
-            href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`}
+            href={localizedSiteUrl()}
             className="flex items-center gap-3 cursor-pointer hover:opacity-80 transition-opacity"
           >
             <img

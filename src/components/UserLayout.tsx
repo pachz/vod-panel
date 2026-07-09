@@ -20,7 +20,7 @@ import {
 const UserLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
-  const { t, isRTL, language } = useLanguage();
+  const { t, isRTL, localizedSiteUrl } = useLanguage();
   const [navOpen, setNavOpen] = useState(false);
   const currentUser = useQuery(api.user.getCurrentUser);
   const isTech = currentUser?.isTech ?? false;
@@ -107,7 +107,7 @@ const UserLayout = () => {
 
           {/* Logo */}
           <a
-            href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`}
+            href={localizedSiteUrl()}
             className="shrink-0 cursor-pointer transition-opacity hover:opacity-80 flex flex-1 justify-start"
           >
             <img

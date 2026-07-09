@@ -1,5 +1,6 @@
 import { useSearchParams } from "react-router-dom";
 import { useCallback, useMemo } from "react";
+import { getLocalizedSiteUrl } from "@/lib/siteUrl";
 
 export type Language = "en" | "ar";
 
@@ -807,6 +808,11 @@ export function useLanguage() {
     [language],
   );
 
+  const localizedSiteUrl = useCallback(
+    (path = "") => getLocalizedSiteUrl(language, path),
+    [language],
+  );
+
   const translateInterval = useCallback(
     (interval: string): string => {
       const normalizedInterval = interval.toLowerCase();
@@ -824,6 +830,7 @@ export function useLanguage() {
     setLanguage,
     t,
     localizedPath,
+    localizedSiteUrl,
     translateInterval,
     isRTL: language === "ar",
   };

@@ -164,7 +164,7 @@ const LoginPage = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading: authStateLoading } = useConvexAuth();
   const location = useLocation();
-  const { language, t, isRTL, localizedPath } = useLanguage();
+  const { language, t, isRTL, localizedPath, localizedSiteUrl } = useLanguage();
   const registerUser = useAction(api.user.registerUser);
   const currentUser = useQuery(api.user.getCurrentUser, isAuthenticated ? {} : "skip");
 
@@ -180,9 +180,8 @@ const LoginPage = () => {
   const [error, setError] = useState<string | false>(false);
   const [status, setStatus] = useState<LoginStatus>("idle");
 
-  const siteBaseUrl = `https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`;
-  const termsUrl = `${siteBaseUrl}/${language === "ar" ? "ar" : "en"}/terms`;
-  const privacyUrl = `${siteBaseUrl}/${language === "ar" ? "ar" : "en"}/privacy`;
+  const termsUrl = localizedSiteUrl("terms");
+  const privacyUrl = localizedSiteUrl("privacy");
 
   const redirectPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
