@@ -80,6 +80,11 @@ const PrivateRoute = () => {
     const searchParams = new URLSearchParams();
     searchParams.set("redirect", redirectTarget || "/");
 
+    const lang = new URLSearchParams(location.search).get("lang");
+    if (lang === "ar") {
+      searchParams.set("lang", "ar");
+    }
+
     return (
       <Navigate
         to={`/login?${searchParams.toString()}`}

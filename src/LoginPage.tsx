@@ -8,6 +8,7 @@ import {
   pushGtmCompleteRegistration,
 } from "@/lib/gtm";
 import { useLanguage } from "@/hooks/use-language";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -34,16 +35,25 @@ type PasswordValidation = {
   hasNumber: boolean;
 };
 
+type TranslationKey = Parameters<ReturnType<typeof useLanguage>["t"]>[0];
+
 /**
  * Parses Convex errors and converts them to user-friendly messages
  */
-const parseAuthError = (error: any): string => {
+const parseAuthError = (
+  error: unknown,
+  t: (key: TranslationKey) => string,
+): string => {
   // Extract the raw error message
   let rawMessage = "";
-  if (error?.data?.message) {
-    rawMessage = error.data.message;
-  } else if (error?.message) {
-    rawMessage = error.message;
+  const err = error as {
+    data?: { message?: string; code?: string };
+    message?: string;
+  };
+  if (err?.data?.message) {
+    rawMessage = err.data.message;
+  } else if (err?.message) {
+    rawMessage = err.message;
   } else if (typeof error === "string") {
     rawMessage = error;
   }
@@ -53,62 +63,98 @@ const parseAuthError = (error: any): string => {
 
   // Map technical errors to user-friendly messages
   if (messageLower.includes("invalidaccountid")) {
-    return "Invalid email or password. Please check your credentials and try again.";
+    return t("loginErrorInvalidCredentials");
   }
-  
-  if (messageLower.includes("invalid email") || messageLower.includes("email not found") || messageLower.includes("user not found")) {
-    return "No account found with this email address. Please check your email and try again.";
+
+  if (
+    messageLower.includes("invalid email") ||
+    messageLower.includes("email not found") ||
+    messageLower.includes("user not found")
+  ) {
+    return t("loginErrorEmailNotFound");
   }
-  
-  if (messageLower.includes("invalid password") || messageLower.includes("incorrect password") || messageLower.includes("wrong password")) {
-    return "Incorrect password. Please check your password and try again.";
+
+  if (
+    messageLower.includes("invalid password") ||
+    messageLower.includes("incorrect password") ||
+    messageLower.includes("wrong password")
+  ) {
+    return t("loginErrorWrongPassword");
   }
-  
-  if ((messageLower.includes("account") && messageLower.includes("deactivated")) || messageLower.includes("deleted")) {
-    return "This account has been deactivated. Please contact support for assistance.";
+
+  if (
+    (messageLower.includes("account") && messageLower.includes("deactivated")) ||
+    messageLower.includes("deleted")
+  ) {
+    return t("loginErrorDeactivated");
   }
-  
+
   if (messageLower.includes("unauthorized")) {
-    return "You are not authorized to access this account. Please contact support.";
+    return t("loginErrorUnauthorized");
   }
-  
-  if (messageLower.includes("email already exists") || messageLower.includes("email already registered") || messageLower.includes("user already exists")) {
-    return "An account with this email already exists. Please sign in instead.";
+
+  if (
+    messageLower.includes("email already exists") ||
+    messageLower.includes("email already registered") ||
+    messageLower.includes("user already exists")
+  ) {
+    return t("loginErrorEmailExists");
   }
-  
+
   // Password reset specific errors
-  if (messageLower.includes("could not verify") || messageLower.includes("could not verify code")) {
-    return "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+  if (
+    messageLower.includes("could not verify") ||
+    messageLower.includes("could not verify code")
+  ) {
+    return t("loginErrorInvalidResetCode");
   }
-  
-  if (messageLower.includes("invalid code") || messageLower.includes("invalid token") || 
-      error?.data?.code === "INVALID_TOKEN" || error?.data?.code === "INVALID_CODE") {
-    return "Invalid or expired reset code. Please check the code and try again, or request a new one.";
+
+  if (
+    messageLower.includes("invalid code") ||
+    messageLower.includes("invalid token") ||
+    err?.data?.code === "INVALID_TOKEN" ||
+    err?.data?.code === "INVALID_CODE"
+  ) {
+    return t("loginErrorInvalidResetCode");
   }
-  
+
   if (messageLower.includes("expired") || messageLower.includes("expire")) {
-    return "The reset code has expired. Please request a new one.";
+    return t("loginErrorResetCodeExpired");
   }
-  
+
   // Check if the message contains stack traces or technical details
-  if (rawMessage.includes("at ") || rawMessage.includes("Error:") || rawMessage.includes("Stack:") || rawMessage.includes("Request ID:") || rawMessage.includes("[CONVEX")) {
+  if (
+    rawMessage.includes("at ") ||
+    rawMessage.includes("Error:") ||
+    rawMessage.includes("Stack:") ||
+    rawMessage.includes("Request ID:") ||
+    rawMessage.includes("[CONVEX")
+  ) {
     // It's a technical error, return a generic user-friendly message
-    if (messageLower.includes("signin") || messageLower.includes("login") || messageLower.includes("authenticate")) {
-      return "Failed to sign in. Please check your email and password and try again.";
+    if (
+      messageLower.includes("signin") ||
+      messageLower.includes("login") ||
+      messageLower.includes("authenticate")
+    ) {
+      return t("loginErrorSignInFailed");
     }
-    if (messageLower.includes("register") || messageLower.includes("signup") || messageLower.includes("create")) {
-      return "Failed to create account. Please try again or contact support if the problem persists.";
+    if (
+      messageLower.includes("register") ||
+      messageLower.includes("signup") ||
+      messageLower.includes("create")
+    ) {
+      return t("loginErrorRegisterFailed");
     }
-    return "An error occurred. Please try again or contact support if the problem persists.";
+    return t("loginErrorGeneric");
   }
-  
+
   // If we have a clean message without technical details, use it
   if (rawMessage && rawMessage.trim().length > 0) {
     return rawMessage;
   }
-  
+
   // Default fallback
-  return "An unexpected error occurred. Please try again.";
+  return t("loginErrorUnexpected");
 };
 
 /** Heuristic: OAuth just created this user (not a returning login). */
@@ -118,7 +164,7 @@ const LoginPage = () => {
   const { signIn } = useAuthActions();
   const { isAuthenticated, isLoading: authStateLoading } = useConvexAuth();
   const location = useLocation();
-  const { language } = useLanguage();
+  const { language, t, isRTL, localizedPath } = useLanguage();
   const registerUser = useAction(api.user.registerUser);
   const currentUser = useQuery(api.user.getCurrentUser, isAuthenticated ? {} : "skip");
 
@@ -134,23 +180,29 @@ const LoginPage = () => {
   const [error, setError] = useState<string | false>(false);
   const [status, setStatus] = useState<LoginStatus>("idle");
 
+  const siteBaseUrl = `https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}`;
+  const termsUrl = `${siteBaseUrl}/${language === "ar" ? "ar" : "en"}/terms`;
+  const privacyUrl = `${siteBaseUrl}/${language === "ar" ? "ar" : "en"}/privacy`;
+
   const redirectPath = useMemo(() => {
     const params = new URLSearchParams(location.search);
     const redirect = params.get("redirect");
-    if (redirect?.startsWith("/")) {
-      return redirect;
-    }
+    let path = "/";
 
-    const state = location.state as LocationState | null;
-    if (state?.from) {
-      const target = `${state.from.pathname ?? ""}${state.from.search ?? ""}${state.from.hash ?? ""}`;
-      if (target.startsWith("/")) {
-        return target;
+    if (redirect?.startsWith("/")) {
+      path = redirect;
+    } else {
+      const state = location.state as LocationState | null;
+      if (state?.from) {
+        const target = `${state.from.pathname ?? ""}${state.from.search ?? ""}${state.from.hash ?? ""}`;
+        if (target.startsWith("/")) {
+          path = target;
+        }
       }
     }
 
-    return "/";
-  }, [location]);
+    return localizedPath(path);
+  }, [location, localizedPath]);
 
   useEffect(() => {
     if (typeof document !== "undefined") {
@@ -242,13 +294,13 @@ const LoginPage = () => {
         sessionStorage.setItem(GTM_GOOGLE_OAUTH_PENDING_KEY, "1");
       }
       await signIn("google");
-    } catch (cause: any) {
+    } catch (cause: unknown) {
       console.error(cause);
-      const errorMessage = parseAuthError(cause);
+      const errorMessage = parseAuthError(cause, t);
       if (typeof sessionStorage !== "undefined") {
         sessionStorage.removeItem(GTM_GOOGLE_OAUTH_PENDING_KEY);
       }
-      setError(errorMessage || "Failed to sign in with Google. Please try again.");
+      setError(errorMessage || t("loginErrorGoogleSignIn"));
       setStatus("idle");
     }
   };
@@ -283,9 +335,9 @@ const LoginPage = () => {
           email: normalizedEmail,
           password,
         });
-      } catch (cause: any) {
+      } catch (cause: unknown) {
         console.error(cause);
-        const errorMessage = parseAuthError(cause);
+        const errorMessage = parseAuthError(cause, t);
         setError(errorMessage);
         setStatus("idle");
         return;
@@ -297,9 +349,9 @@ const LoginPage = () => {
           email: email.trim().toLowerCase(),
           password,
         });
-      } catch (cause: any) {
+      } catch (cause: unknown) {
         console.error(cause);
-        const errorMessage = parseAuthError(cause);
+        const errorMessage = parseAuthError(cause, t);
         setError(errorMessage);
         setStatus("idle");
         return;
@@ -309,12 +361,12 @@ const LoginPage = () => {
 
   const buttonLabel = (() => {
     if (status === "success") {
-      return "Redirecting…";
+      return t("loginRedirecting");
     }
     if (status === "submitting" || authStateLoading) {
-      return mode === "register" ? "Creating account…" : "Signing in…";
+      return mode === "register" ? t("loginCreatingAccount") : t("loginSigningIn");
     }
-    return mode === "register" ? "Create Account" : "Log In";
+    return mode === "register" ? t("loginCreateAccount") : t("loginLogIn");
   })();
 
   const isValidEmailFormat = (value: string) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value.trim());
@@ -401,27 +453,31 @@ const LoginPage = () => {
       });
       // Password reset successful, user will be signed in automatically
       setStatus("success");
-    } catch (cause: any) {
+    } catch (cause: unknown) {
       console.error(cause);
-      // Check for password validation errors first (these should be shown as-is)
+      const err = cause as { data?: { message?: string }; message?: string };
       let rawMessage = "";
-      if (cause?.data?.message) {
-        rawMessage = cause.data.message;
-      } else if (cause?.message) {
-        rawMessage = cause.message;
+      if (err?.data?.message) {
+        rawMessage = err.data.message;
+      } else if (err?.message) {
+        rawMessage = err.message;
       }
       const messageLower = rawMessage.toLowerCase();
-      
+
       // Password validation errors should be shown with context
-      if (messageLower.includes("password") && (messageLower.includes("requirement") || messageLower.includes("must") || messageLower.includes("need"))) {
-        const errorMessage = "Password does not meet requirements. " + (rawMessage || "Please check the password requirements above.");
-        setError(errorMessage);
+      if (
+        messageLower.includes("password") &&
+        (messageLower.includes("requirement") ||
+          messageLower.includes("must") ||
+          messageLower.includes("need"))
+      ) {
+        setError(t("loginErrorPasswordRequirements"));
         setStatus("idle");
         return;
       }
-      
+
       // On reset-verification, show a clear message for wrong/expired code
-      setError("Your reset code is incorrect.");
+      setError(t("loginErrorWrongResetCode"));
       setStatus("idle");
     }
   };
@@ -435,62 +491,88 @@ const LoginPage = () => {
     setShowNewPassword(false);
   };
 
+  const pageTitle = passwordResetStep
+    ? passwordResetStep === "forgot"
+      ? t("loginResetPasswordTitle")
+      : t("loginEnterResetCodeTitle")
+    : mode === "register"
+      ? t("loginCreateAccountTitle")
+      : t("loginTitle");
+
+  const renderPasswordRequirements = (pwd: string) => {
+    if (pwd.length === 0) {
+      return null;
+    }
+
+    return (
+      <div className="login-password-requirements">
+        <div className={`login-requirement ${passwordValidation.minLength ? "valid" : ""}`}>
+          {t("loginPasswordMinLength")}
+        </div>
+        <div className={`login-requirement ${passwordValidation.hasUpperCase ? "valid" : ""}`}>
+          {t("loginPasswordUppercase")}
+        </div>
+        <div className={`login-requirement ${passwordValidation.hasLowerCase ? "valid" : ""}`}>
+          {t("loginPasswordLowercase")}
+        </div>
+        <div className={`login-requirement ${passwordValidation.hasNumber ? "valid" : ""}`}>
+          {t("loginPasswordNumber")}
+        </div>
+      </div>
+    );
+  };
+
   return (
-    <div className="login-container">
+    <div className="login-container" dir={isRTL ? "rtl" : "ltr"}>
+      <div className="login-language-toggle">
+        <LanguageToggle />
+      </div>
       <div className="login-content">
         <div className="login-header-section">
-          <img 
-            src="/RehamDivaLogo.png" 
-            alt="Logo" 
+          <img
+            src="/RehamDivaLogo.png"
+            alt="Logo"
             className="login-logo"
           />
-          <h1 className="login-title">
-            {passwordResetStep
-              ? passwordResetStep === "forgot"
-                ? "Reset your password"
-                : "Enter reset code"
-              : mode === "register"
-              ? "Create an account"
-              : "Log in to Reham Diva"}
-          </h1>
+          <h1 className="login-title">{pageTitle}</h1>
         </div>
 
         {!passwordResetStep && (
           <div className="login-social-buttons">
-          <Button
-            type="button"
-            variant="outline"
-            onClick={handleGoogleSignIn}
-            disabled={isProcessing}
-            className="login-social-button"
-          >
-            <svg className="login-social-icon" viewBox="0 0 24 24" width="18" height="18">
-              <path
-                fill="#4285F4"
-                d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-              />
-              <path
-                fill="#34A853"
-                d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-              />
-              <path
-                fill="#FBBC05"
-                d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
-              />
-              <path
-                fill="#EA4335"
-                d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
-              />
-            </svg>
-            Login with Google
-          </Button>
+            <Button
+              type="button"
+              variant="outline"
+              onClick={handleGoogleSignIn}
+              disabled={isProcessing}
+              className="login-social-button"
+            >
+              <svg className="login-social-icon" viewBox="0 0 24 24" width="18" height="18">
+                <path
+                  fill="#4285F4"
+                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
+                />
+                <path
+                  fill="#34A853"
+                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
+                />
+                <path
+                  fill="#FBBC05"
+                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"
+                />
+                <path
+                  fill="#EA4335"
+                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"
+                />
+              </svg>
+              {t("loginWithGoogle")}
+            </Button>
           </div>
         )}
 
         {!passwordResetStep && (
           <div className="login-separator">
             <Separator />
-            <span className="login-separator-text">or</span>
+            <span className="login-separator-text">{t("loginOr")}</span>
             <Separator />
           </div>
         )}
@@ -499,14 +581,14 @@ const LoginPage = () => {
           passwordResetStep === "forgot" ? (
             <form className="login-form" onSubmit={handlePasswordResetRequest} noValidate>
               <div className="login-field-group">
-                <Label htmlFor="reset-email" className="login-label">Email</Label>
+                <Label htmlFor="reset-email" className="login-label">{t("loginEmail")}</Label>
                 <Input
                   id="reset-email"
                   name="email"
                   type="email"
                   autoComplete="email"
                   value={email}
-                  placeholder="alan.turing@example.com"
+                  placeholder={t("loginEmailPlaceholder")}
                   onChange={(e) => setEmail(e.target.value)}
                   disabled={isProcessing}
                   className="login-input"
@@ -525,7 +607,7 @@ const LoginPage = () => {
                 disabled={isProcessing || !isFormValid}
                 className="login-submit-button"
               >
-                {status === "submitting" ? "Sending code…" : "Send reset code"}
+                {status === "submitting" ? t("loginSendingCode") : t("loginSendResetCode")}
               </Button>
 
               <Button
@@ -535,35 +617,35 @@ const LoginPage = () => {
                 className="login-cancel-button"
                 disabled={isProcessing}
               >
-                Cancel
+                {t("cancel")}
               </Button>
             </form>
           ) : (
             <form className="login-form" onSubmit={handlePasswordResetVerification} noValidate>
               <p role="alert" className="login-info-message">
-                If your email is registered with us, you'll receive a password reset email soon.
+                {t("loginResetEmailInfo")}
               </p>
               <div className="login-field-group">
-                <Label htmlFor="reset-code" className="login-label">Reset code</Label>
+                <Label htmlFor="reset-code" className="login-label">{t("loginResetCode")}</Label>
                 <Input
                   id="reset-code"
                   name="code"
                   type="text"
                   autoComplete="one-time-code"
                   value={resetCode}
-                  placeholder="12345678"
+                  placeholder={t("loginResetCodePlaceholder")}
                   onChange={(e) => setResetCode(e.target.value)}
                   disabled={isProcessing}
                   className="login-input"
                   required
                 />
                 <p className="login-hint-text">
-                  Enter the 8-digit code sent to {passwordResetStep.email}
+                  {t("loginResetCodeHint").replace("{email}", passwordResetStep.email)}
                 </p>
               </div>
 
               <div className="login-field-group">
-                <Label htmlFor="new-password" className="login-label">New password</Label>
+                <Label htmlFor="new-password" className="login-label">{t("loginNewPassword")}</Label>
                 <div className="login-password-wrapper">
                   <Input
                     id="new-password"
@@ -571,7 +653,7 @@ const LoginPage = () => {
                     type={showNewPassword ? "text" : "password"}
                     autoComplete="new-password"
                     value={newPassword}
-                    placeholder="••••••••••••"
+                    placeholder={t("loginPasswordPlaceholder")}
                     onChange={(e) => setNewPassword(e.target.value)}
                     disabled={isProcessing}
                     className="login-input login-password-input"
@@ -590,22 +672,7 @@ const LoginPage = () => {
                     )}
                   </button>
                 </div>
-                {newPassword.length > 0 && (
-                  <div className="login-password-requirements">
-                    <div className={`login-requirement ${passwordValidation.minLength ? "valid" : ""}`}>
-                      At least 8 characters
-                    </div>
-                    <div className={`login-requirement ${passwordValidation.hasUpperCase ? "valid" : ""}`}>
-                      One uppercase letter
-                    </div>
-                    <div className={`login-requirement ${passwordValidation.hasLowerCase ? "valid" : ""}`}>
-                      One lowercase letter
-                    </div>
-                    <div className={`login-requirement ${passwordValidation.hasNumber ? "valid" : ""}`}>
-                      One number
-                    </div>
-                  </div>
-                )}
+                {renderPasswordRequirements(newPassword)}
               </div>
 
               {error && (
@@ -616,7 +683,7 @@ const LoginPage = () => {
 
               {status === "success" && (
                 <p className="login-success">
-                  Password reset successful. Redirecting…
+                  {t("loginPasswordResetSuccess")}
                 </p>
               )}
 
@@ -625,7 +692,7 @@ const LoginPage = () => {
                 disabled={isProcessing || !isFormValid}
                 className="login-submit-button"
               >
-                {status === "submitting" ? "Resetting password…" : "Reset password"}
+                {status === "submitting" ? t("loginResettingPassword") : t("loginResetPassword")}
               </Button>
 
               <Button
@@ -635,148 +702,135 @@ const LoginPage = () => {
                 className="login-cancel-button"
                 disabled={isProcessing}
               >
-                Cancel
+                {t("cancel")}
               </Button>
             </form>
           )
         ) : (
           <form className="login-form" onSubmit={handleSubmit} noValidate>
-          {mode === "register" && (
+            {mode === "register" && (
+              <div className="login-field-group">
+                <Label htmlFor="name" className="login-label">{t("loginName")}</Label>
+                <Input
+                  id="name"
+                  name="name"
+                  type="text"
+                  autoComplete="name"
+                  value={name}
+                  placeholder={t("loginNamePlaceholder")}
+                  onChange={(e) => setName(e.target.value)}
+                  disabled={isProcessing}
+                  className="login-input"
+                  required
+                />
+              </div>
+            )}
+
             <div className="login-field-group">
-              <Label htmlFor="name" className="login-label">Name</Label>
+              <Label htmlFor="email" className="login-label">{t("loginEmail")}</Label>
               <Input
-                id="name"
-                name="name"
-                type="text"
-                autoComplete="name"
-                value={name}
-                placeholder="John Doe"
-                onChange={(e) => setName(e.target.value)}
+                id="email"
+                name="email"
+                type="email"
+                autoComplete="email"
+                value={email}
+                placeholder={t("loginEmailPlaceholder")}
+                onChange={(e) => setEmail(e.target.value)}
                 disabled={isProcessing}
                 className="login-input"
                 required
               />
             </div>
-          )}
 
-          <div className="login-field-group">
-            <Label htmlFor="email" className="login-label">Email</Label>
-            <Input
-              id="email"
-              name="email"
-              type="email"
-              autoComplete="email"
-              value={email}
-              placeholder="alan.turing@example.com"
-              onChange={(e) => setEmail(e.target.value)}
-              disabled={isProcessing}
-              className="login-input"
-              required
-            />
-          </div>
-
-          <div className="login-field-group">
-            <div className="login-label-row">
-              <Label htmlFor="password" className="login-label">Password</Label>
-              {mode === "login" && (
-                <a href="#" className="login-forgot-link" onClick={handleForgotPasswordClick}>
-                  Forgot your password?
-                </a>
-              )}
-            </div>
-            <div className="login-password-wrapper">
-              <Input
-                id="password"
-                name="password"
-                type={showPassword ? "text" : "password"}
-                autoComplete={mode === "register" ? "new-password" : "current-password"}
-                value={password}
-                placeholder="••••••••••••"
-                onChange={(e) => setPassword(e.target.value)}
-                disabled={isProcessing}
-                className="login-input login-password-input"
-                required
-              />
-              <button
-                type="button"
-                onClick={() => setShowPassword(!showPassword)}
-                className="login-password-toggle"
-                tabIndex={-1}
-              >
-                {showPassword ? (
-                  <EyeOff className="h-4 w-4 text-muted-foreground" />
-                ) : (
-                  <Eye className="h-4 w-4 text-muted-foreground" />
+            <div className="login-field-group">
+              <div className="login-label-row">
+                <Label htmlFor="password" className="login-label">{t("loginPassword")}</Label>
+                {mode === "login" && (
+                  <a href="#" className="login-forgot-link" onClick={handleForgotPasswordClick}>
+                    {t("loginForgotPassword")}
+                  </a>
                 )}
-              </button>
-            </div>
-            {mode === "register" && password.length > 0 && (
-              <div className="login-password-requirements">
-                <div className={`login-requirement ${passwordValidation.minLength ? "valid" : ""}`}>
-                  At least 8 characters
-                </div>
-                <div className={`login-requirement ${passwordValidation.hasUpperCase ? "valid" : ""}`}>
-                  One uppercase letter
-                </div>
-                <div className={`login-requirement ${passwordValidation.hasLowerCase ? "valid" : ""}`}>
-                  One lowercase letter
-                </div>
-                <div className={`login-requirement ${passwordValidation.hasNumber ? "valid" : ""}`}>
-                  One number
-                </div>
               </div>
+              <div className="login-password-wrapper">
+                <Input
+                  id="password"
+                  name="password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete={mode === "register" ? "new-password" : "current-password"}
+                  value={password}
+                  placeholder={t("loginPasswordPlaceholder")}
+                  onChange={(e) => setPassword(e.target.value)}
+                  disabled={isProcessing}
+                  className="login-input login-password-input"
+                  required
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword(!showPassword)}
+                  className="login-password-toggle"
+                  tabIndex={-1}
+                >
+                  {showPassword ? (
+                    <EyeOff className="h-4 w-4 text-muted-foreground" />
+                  ) : (
+                    <Eye className="h-4 w-4 text-muted-foreground" />
+                  )}
+                </button>
+              </div>
+              {mode === "register" && renderPasswordRequirements(password)}
+            </div>
+
+            {error && (
+              <p role="alert" className="login-error">
+                {error}
+              </p>
             )}
-          </div>
 
-          {error && (
-            <p role="alert" className="login-error">
-              {error}
-            </p>
-          )}
+            {status === "success" && (
+              <p className="login-success">
+                {mode === "register"
+                  ? t("loginAccountCreatedRedirecting")
+                  : t("loginSignedInRedirecting")}
+              </p>
+            )}
 
-          {status === "success" && (
-            <p className="login-success">
-              {mode === "register" ? "Account created. Redirecting…" : "Signed in. Redirecting…"}
-            </p>
-          )}
-
-          <Button
-            type="submit"
-            disabled={isProcessing || !isFormValid}
-            className="login-submit-button"
-          >
-            {buttonLabel}
-          </Button>
-        </form>
+            <Button
+              type="submit"
+              disabled={isProcessing || !isFormValid}
+              className="login-submit-button"
+            >
+              {buttonLabel}
+            </Button>
+          </form>
         )}
 
         {!passwordResetStep && (
           <div className="login-mode-switch">
-          <p className="login-mode-text">
-            {mode === "login" ? "Don't have an account? " : "Already have an account? "}
-            <button
-              type="button"
-              onClick={switchMode}
-              className="login-mode-link"
-              disabled={isProcessing}
-            >
-              {mode === "login" ? "Sign up" : "Log in"}
-            </button>
-          </p>
+            <p className="login-mode-text">
+              {mode === "login" ? t("loginNoAccount") : t("loginHasAccount")}
+              <button
+                type="button"
+                onClick={switchMode}
+                className="login-mode-link"
+                disabled={isProcessing}
+              >
+                {mode === "login" ? t("loginSignUp") : t("loginLogInLink")}
+              </button>
+            </p>
           </div>
         )}
 
         {!passwordResetStep && (
           <p className="login-footer-text">
-          By signing in, you agree to our{" "}
-          <a href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}/en/terms`} className="login-footer-link" target="_blank" rel="noopener noreferrer">
-            Terms
-          </a>{" "}
-          and{" "}
-          <a href={`https://${import.meta.env.VITE_VOD_SITE_URL || "rehamdiva.com"}/en/privacy`} className="login-footer-link" target="_blank" rel="noopener noreferrer">
-            Privacy Policy
-          </a>
-          .
+            {t("loginTermsPrefix")}
+            <a href={termsUrl} className="login-footer-link" target="_blank" rel="noopener noreferrer">
+              {t("loginTerms")}
+            </a>
+            {t("loginAnd")}
+            <a href={privacyUrl} className="login-footer-link" target="_blank" rel="noopener noreferrer">
+              {t("loginPrivacyPolicy")}
+            </a>
+            .
           </p>
         )}
       </div>
@@ -785,4 +839,3 @@ const LoginPage = () => {
 };
 
 export default LoginPage;
-

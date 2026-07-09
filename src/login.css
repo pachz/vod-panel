@@ -26,6 +26,18 @@
   position: relative;
 }
 
+.login-language-toggle {
+  position: absolute;
+  top: 1.25rem;
+  right: 1.25rem;
+  z-index: 2;
+}
+
+[dir="rtl"] .login-language-toggle {
+  right: auto;
+  left: 1.25rem;
+}
+
 .login-container::before {
   content: "";
   position: absolute;
@@ -209,6 +221,11 @@
   padding-right: 2.75rem;
 }
 
+[dir="rtl"] .login-password-input {
+  padding-right: 1rem;
+  padding-left: 2.75rem;
+}
+
 .login-password-toggle {
   position: absolute;
   right: 0.75rem;
@@ -223,6 +240,11 @@
   color: #64748b;
   transition: color 0.15s ease;
   padding: 0;
+}
+
+[dir="rtl"] .login-password-toggle {
+  right: auto;
+  left: 0.75rem;
 }
 
 .login-password-toggle:hover {
