@@ -1,16 +1,20 @@
 import { useCallback, useEffect, useState } from "react";
-import { useMutation, usePaginatedQuery } from "convex/react";
+import { useMutation, usePaginatedQuery, useQuery } from "convex/react";
 import { Link } from "react-router-dom";
 import { Plus, Settings2 } from "lucide-react";
 import { useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
+import { SiteGPTComparePanel } from "@/components/assistant/SiteGPTComparePanel";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
 import { trackPosthogEvent } from "@/lib/posthog";
+import { cn } from "@/lib/utils";
 
 const AssistantTest = () => {
   const { t, isRTL, language } = useLanguage();
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const isAdmin = currentUser?.isGod ?? false;
   const [searchParams, setSearchParams] = useSearchParams();
   const [threadId, setThreadId] = useState<string | null>(searchParams.get("thread"));
   const createThread = useMutation(api.assistant.threads.createAssistantThread);
@@ -56,11 +60,21 @@ const AssistantTest = () => {
   );
 
   return (
-    <div className="mx-auto flex h-[calc(100vh-8rem)] max-w-6xl flex-col gap-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div
+      className={cn(
+        "mx-auto flex h-[calc(100vh-8rem)] flex-col gap-4",
+        isAdmin ? "max-w-[90rem]" : "max-w-6xl",
+      )}
+      dir={isRTL ? "rtl" : "ltr"}
+    >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Reham Diva Assistant</h1>
-          <p className="max-w-2xl text-muted-foreground">{t("assistantTagline")}</p>
+          <p className="max-w-2xl text-muted-foreground">
+            {isAdmin
+              ? "Compare the in-panel assistant with the live SiteGPT chatbot side by side."
+              : t("assistantTagline")}
+          </p>
         </div>
         <Button asChild variant="outline" size="sm">
           <Link to="/assistant-settings">
@@ -100,21 +114,37 @@ const AssistantTest = () => {
           </div>
         </aside>
 
-        <div className="flex min-h-0 flex-1 flex-col gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            className="w-fit justify-start lg:hidden"
-            onClick={handleStartNewConversation}
-            aria-label={t("assistantNewConversation")}
-          >
-            <Plus className="h-4 w-4 me-2" />
-            {t("assistantNewConversation")}
-          </Button>
-          <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-border/50 bg-card/50 p-4 shadow-card backdrop-blur sm:p-6">
-            <AssistantChat threadId={threadId} onCreateThread={handleCreateThread} />
+        <div
+          className={cn(
+            "flex min-h-0 flex-1 gap-4",
+            isAdmin ? "flex-col xl:flex-row" : "flex-col",
+          )}
+        >
+          <div className="flex min-h-0 flex-1 flex-col gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-fit justify-start lg:hidden"
+              onClick={handleStartNewConversation}
+              aria-label={t("assistantNewConversation")}
+            >
+              <Plus className="h-4 w-4 me-2" />
+              {t("assistantNewConversation")}
+            </Button>
+            {isAdmin && (
+              <p className="text-sm font-medium text-muted-foreground">In-panel assistant</p>
+            )}
+            <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-border/50 bg-card/50 p-4 shadow-card backdrop-blur sm:p-6">
+              <AssistantChat threadId={threadId} onCreateThread={handleCreateThread} />
+            </div>
           </div>
+
+          {isAdmin && (
+            <div className="flex min-h-0 flex-1 flex-col xl:min-w-0">
+              <SiteGPTComparePanel />
+            </div>
+          )}
         </div>
       </div>
     </div>
