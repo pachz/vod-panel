@@ -6,6 +6,7 @@ import {
   pickLocalizedCourseText,
   secondsToMinutes,
 } from "./lib";
+import { isCourseRelevantToQuery } from "./courseSearchRelevance";
 import {
   assistantLanguageValidator,
   courseSearchResultValidator,
@@ -13,6 +14,7 @@ import {
 
 const MAX_RESULTS = 10;
 const DEFAULT_RESULTS = 5;
+const SEARCH_CANDIDATE_MULTIPLIER = 4;
 
 function normalizeLimit(limit: number | undefined): number {
   const requested = limit ?? DEFAULT_RESULTS;
@@ -94,6 +96,7 @@ export const searchCoursesInternal = internalQuery({
     const limit = normalizeLimit(args.limit);
     const language = args.language ?? (containsArabic(searchTerm) ? "ar" : "en");
     const searchBoth = !args.language && !containsArabic(searchTerm);
+    const candidateLimit = Math.min(limit * SEARCH_CANDIDATE_MULTIPLIER, 40);
 
     const seen = new Set<string>();
     const courses: Array<Doc<"courses">> = [];
@@ -105,7 +108,7 @@ export const searchCoursesInternal = internalQuery({
         }
         seen.add(course._id);
         courses.push(course);
-        if (courses.length >= limit) {
+        if (courses.length >= candidateLimit) {
           break;
         }
       }
@@ -117,50 +120,60 @@ export const searchCoursesInternal = internalQuery({
         "search_text_en",
         "search_courses_en",
         searchTerm,
-        limit,
+        candidateLimit,
       );
       addCourses(enResults);
 
-      if (courses.length < limit) {
+      if (courses.length < candidateLimit) {
         const fallbackResults = await searchPublishedCourses(
           ctx,
           "name_search",
           "search_name",
           searchTerm,
-          limit - courses.length,
+          candidateLimit - courses.length,
         );
         addCourses(fallbackResults);
       }
     }
 
-    if ((language === "ar" || searchBoth) && courses.length < limit) {
+    if ((language === "ar" || searchBoth) && courses.length < candidateLimit) {
       const arResults = await searchPublishedCourses(
         ctx,
         "search_text_ar",
         "search_courses_ar",
         searchTerm,
-        limit - courses.length,
+        candidateLimit - courses.length,
       );
       addCourses(arResults);
 
-      if (courses.length < limit) {
+      if (courses.length < candidateLimit) {
         const fallbackResults = await searchPublishedCourses(
           ctx,
           "name_search",
           "search_name",
           searchTerm,
-          limit - courses.length,
+          candidateLimit - courses.length,
         );
         addCourses(fallbackResults);
       }
     }
 
+    const relevantCourses: Array<Doc<"courses">> = [];
+    for (const course of courses) {
+      const category = await ctx.db.get(course.category_id);
+      if (!isCourseRelevantToQuery(course, category, searchTerm)) {
+        continue;
+      }
+      relevantCourses.push(course);
+      if (relevantCourses.length >= limit) {
+        break;
+      }
+    }
+
     return await Promise.all(
-      courses
-        .slice(0, limit)
-        .map((course) =>
-          mapCourseToResult(ctx, course, language, args.userId, args.nowMs),
-        ),
+      relevantCourses.map((course) =>
+        mapCourseToResult(ctx, course, language, args.userId, args.nowMs),
+      ),
     );
   },
 });

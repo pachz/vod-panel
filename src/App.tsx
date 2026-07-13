@@ -31,6 +31,7 @@ import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
 import Coaches from "@/pages/Coaches";
 import CoachDetail from "@/pages/CoachDetail";
 import AssistantTest from "@/pages/AssistantTest";
+import AssistantSettings from "@/pages/AssistantSettings";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -179,18 +180,6 @@ const UserProviders = () => (
   </QueryClientProvider>
 );
 
-const AssistantProviders = () => (
-  <QueryClientProvider client={queryClient}>
-    <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
-      <TooltipProvider>
-        <Toaster />
-        <Sonner />
-        <Outlet />
-      </TooltipProvider>
-    </ThemeProvider>
-  </QueryClientProvider>
-);
-
 const DashboardProviders = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
@@ -286,6 +275,8 @@ const App = () => (
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
             <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
             <Route element={<TechRoute />}>
+              <Route path="/assistant-test" element={<AssistantTest />} />
+              <Route path="/assistant-settings" element={<AssistantSettings />} />
               <Route path="/personal-tests" element={<PersonalTests />} />
               <Route path="/personal-tests/:id" element={<PersonalTestDetail />} />
               <Route
@@ -308,10 +299,6 @@ const App = () => (
             <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
             <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
           </Route>
-        </Route>
-        {/* Standalone assistant test page — direct URL only, no main nav */}
-        <Route element={<AssistantProviders />}>
-          <Route path="/assistant-test" element={<AssistantTest />} />
         </Route>
         {/* Root redirect */}
         <Route path="/" element={<RootRedirect />} />

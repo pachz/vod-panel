@@ -1,28 +1,32 @@
 import { getThreadMetadata } from "@convex-dev/agent";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Doc, Id } from "../_generated/dataModel";
-import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
+import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { components } from "../_generated/api";
 import { pickPrimarySubscriptionForUserDisplay } from "../paymentInternal";
 import { usesPackageSubscriptionModel } from "../../shared/subscriptionModel";
+import { requireUser } from "../utils/auth";
 
 type AccessStatus = "included" | "locked" | "unknown";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-export async function authorizeThreadAccess(
-  ctx: QueryCtx | MutationCtx | ActionCtx,
-  threadId: string,
+export async function requireAssistantTech(
+  ctx: QueryCtx | MutationCtx,
 ): Promise<Id<"users">> {
-  const identity = await ctx.auth.getUserIdentity();
-  if (!identity) {
-    throw new Error("Authentication required");
-  }
-
+  await requireUser(ctx, { requireTech: true });
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("Authentication required");
   }
+  return userId as Id<"users">;
+}
+
+export async function authorizeThreadAccess(
+  ctx: QueryCtx | MutationCtx,
+  threadId: string,
+): Promise<Id<"users">> {
+  const userId = await requireAssistantTech(ctx);
 
   const { userId: threadUserId } = await getThreadMetadata(ctx, components.agent, {
     threadId,

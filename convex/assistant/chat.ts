@@ -11,10 +11,16 @@ export const streamAssistantResponse = internalAction({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
+    const nowMs = Date.now();
+    const system = await ctx.runQuery(internal.assistant.promptRuntime.getSystemInstructions, {
+      userId: args.userId,
+      nowMs,
+    });
+
     const result = await rehamDivaAgent.streamText(
       ctx,
       { threadId: args.threadId, userId: args.userId },
-      { promptMessageId: args.promptMessageId },
+      { promptMessageId: args.promptMessageId, system },
       { saveStreamDeltas: { chunking: "word", throttleMs: 100 } },
     );
     await result.consumeStream();

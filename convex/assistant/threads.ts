@@ -6,11 +6,10 @@ import {
   vStreamArgs,
 } from "@convex-dev/agent";
 import { paginationOptsValidator } from "convex/server";
-import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { components } from "../_generated/api";
 import { internalMutation, mutation, query } from "../_generated/server";
-import { authorizeThreadAccess } from "./lib";
+import { authorizeThreadAccess, requireAssistantTech } from "./lib";
 import { assistantLanguageValidator, conversationTitleUpdateResultValidator } from "./validators";
 import { rehamDivaAgent } from "./agent";
 import {
@@ -27,15 +26,7 @@ export const listThreads = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Authentication required");
-    }
-
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+    const userId = await requireAssistantTech(ctx);
 
     return await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
       userId,
@@ -51,15 +42,7 @@ export const createAssistantThread = mutation({
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const identity = await ctx.auth.getUserIdentity();
-    if (!identity) {
-      throw new Error("Authentication required");
-    }
-
-    const userId = await getAuthUserId(ctx);
-    if (!userId) {
-      throw new Error("Authentication required");
-    }
+    const userId = await requireAssistantTech(ctx);
 
     const threadId = await createThread(ctx, components.agent, {
       userId,

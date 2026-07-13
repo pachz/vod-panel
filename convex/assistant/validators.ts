@@ -47,3 +47,8 @@ export const conversationTitleUpdateResultValidator = v.object({
   title: v.optional(v.string()),
   reason: v.optional(v.string()),
 });
+
+export const userMemoryUpdateResultValidator = v.object({
+  success: v.boolean(),
+  reason: v.optional(v.string()),
+});

@@ -446,4 +446,19 @@ export default defineSchema({
     .index("by_testId_status", ["testId", "status"])
     .index("by_testId_status_completedAt", ["testId", "status", "completedAt"])
     .index("by_status_startedAt", ["status", "startedAt"]),
+
+  /** Singleton assistant prompt customization (editable section only). */
+  assistantSettings: defineTable({
+    key: v.literal("global"),
+    customInstructions: v.string(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  }).index("by_key", ["key"]),
+
+  /** Private per-user notes the assistant can read and update. */
+  assistantUserMemory: defineTable({
+    userId: v.id("users"),
+    memory: v.string(),
+    updatedAt: v.number(),
+  }).index("by_user", ["userId"]),
 });
