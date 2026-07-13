@@ -10,6 +10,17 @@
 
 import type * as ResendOTPPasswordReset from "../ResendOTPPasswordReset.js";
 import type * as activityLog from "../activityLog.js";
+import type * as assistant_agent from "../assistant/agent.js";
+import type * as assistant_auth from "../assistant/auth.js";
+import type * as assistant_billing from "../assistant/billing.js";
+import type * as assistant_chat from "../assistant/chat.js";
+import type * as assistant_lib from "../assistant/lib.js";
+import type * as assistant_messages from "../assistant/messages.js";
+import type * as assistant_search from "../assistant/search.js";
+import type * as assistant_subscription from "../assistant/subscription.js";
+import type * as assistant_threads from "../assistant/threads.js";
+import type * as assistant_titles from "../assistant/titles.js";
+import type * as assistant_validators from "../assistant/validators.js";
 import type * as auth from "../auth.js";
 import type * as category from "../category.js";
 import type * as chapter from "../chapter.js";
@@ -25,6 +36,7 @@ import type * as legacySubscriptionMigration from "../legacySubscriptionMigratio
 import type * as legacySubscriptionMigrationStripe from "../legacySubscriptionMigrationStripe.js";
 import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
+import type * as lib_courseSearchText from "../lib/courseSearchText.js";
 import type * as lib_personalTestAttemptAggregates from "../lib/personalTestAttemptAggregates.js";
 import type * as lib_personalTestScoring from "../lib/personalTestScoring.js";
 import type * as lib_personalTestSubmissions from "../lib/personalTestSubmissions.js";
@@ -58,6 +70,17 @@ import type {
 declare const fullApi: ApiFromModules<{
   ResendOTPPasswordReset: typeof ResendOTPPasswordReset;
   activityLog: typeof activityLog;
+  "assistant/agent": typeof assistant_agent;
+  "assistant/auth": typeof assistant_auth;
+  "assistant/billing": typeof assistant_billing;
+  "assistant/chat": typeof assistant_chat;
+  "assistant/lib": typeof assistant_lib;
+  "assistant/messages": typeof assistant_messages;
+  "assistant/search": typeof assistant_search;
+  "assistant/subscription": typeof assistant_subscription;
+  "assistant/threads": typeof assistant_threads;
+  "assistant/titles": typeof assistant_titles;
+  "assistant/validators": typeof assistant_validators;
   auth: typeof auth;
   category: typeof category;
   chapter: typeof chapter;
@@ -73,6 +96,7 @@ declare const fullApi: ApiFromModules<{
   legacySubscriptionMigrationStripe: typeof legacySubscriptionMigrationStripe;
   lesson: typeof lesson;
   lessonProgress: typeof lessonProgress;
+  "lib/courseSearchText": typeof lib_courseSearchText;
   "lib/personalTestAttemptAggregates": typeof lib_personalTestAttemptAggregates;
   "lib/personalTestScoring": typeof lib_personalTestScoring;
   "lib/personalTestSubmissions": typeof lib_personalTestSubmissions;
@@ -125,6 +149,7 @@ export declare const internal: FilterApi<
 >;
 
 export declare const components: {
+  agent: import("@convex-dev/agent/_generated/component.js").ComponentApi<"agent">;
   actionRetrier: import("@convex-dev/action-retrier/_generated/component.js").ComponentApi<"actionRetrier">;
   aggregateCategories: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregateCategories">;
   aggregateLessonWatched: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregateLessonWatched">;

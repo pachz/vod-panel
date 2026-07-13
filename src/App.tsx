@@ -30,6 +30,7 @@ import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
 import Coaches from "@/pages/Coaches";
 import CoachDetail from "@/pages/CoachDetail";
+import AssistantTest from "@/pages/AssistantTest";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -178,6 +179,18 @@ const UserProviders = () => (
   </QueryClientProvider>
 );
 
+const AssistantProviders = () => (
+  <QueryClientProvider client={queryClient}>
+    <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
+      <TooltipProvider>
+        <Toaster />
+        <Sonner />
+        <Outlet />
+      </TooltipProvider>
+    </ThemeProvider>
+  </QueryClientProvider>
+);
+
 const DashboardProviders = () => (
   <QueryClientProvider client={queryClient}>
     <ThemeProvider defaultTheme="light" storageKey="coursehub-theme">
@@ -295,6 +308,10 @@ const App = () => (
             <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
             <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
           </Route>
+        </Route>
+        {/* Standalone assistant test page — direct URL only, no main nav */}
+        <Route element={<AssistantProviders />}>
+          <Route path="/assistant-test" element={<AssistantTest />} />
         </Route>
         {/* Root redirect */}
         <Route path="/" element={<RootRedirect />} />

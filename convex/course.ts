@@ -14,6 +14,7 @@ import { generateUniqueSlug, slugify } from "./utils/slug";
 import { requireUser } from "./utils/auth";
 import { logActivity } from "./utils/activityLog";
 import { recalculateLessonCount } from "./lesson";
+import { buildCourseSearchFields } from "./lib/courseSearchText";
 
 const validateCourseInput = (input: CourseInput) => {
   const result = courseInputSchema.safeParse(input);
@@ -379,11 +380,20 @@ export const createCourse = mutation({
     });
     const now = Date.now();
 
-    const nameSearch = [validated.name, validated.nameAr].filter(Boolean).join(" ").trim();
+    const searchFields = buildCourseSearchFields({
+      name: validated.name,
+      name_ar: validated.nameAr,
+      short_description: validated.shortDescription,
+      short_description_ar: validated.shortDescriptionAr,
+      categoryNameEn: category.name,
+      categoryNameAr: category.name_ar,
+    });
     const courseId = await ctx.db.insert("courses", {
       name: validated.name,
       name_ar: validated.nameAr,
-      name_search: nameSearch || undefined,
+      name_search: searchFields.name_search,
+      search_text_en: searchFields.search_text_en,
+      search_text_ar: searchFields.search_text_ar,
       short_description: validated.shortDescription,
       short_description_ar: validated.shortDescriptionAr,
       slug,
@@ -679,11 +689,23 @@ export const updateCourse = mutation({
       });
     }
 
-    const nameSearch = [validated.name, validated.nameAr].filter(Boolean).join(" ").trim();
+    const searchFields = buildCourseSearchFields({
+      name: validated.name,
+      name_ar: validated.nameAr,
+      short_description: validated.shortDescription,
+      short_description_ar: validated.shortDescriptionAr,
+      description: validated.description,
+      description_ar: validated.descriptionAr,
+      instructor: validated.instructor,
+      categoryNameEn: targetCategory.name,
+      categoryNameAr: targetCategory.name_ar,
+    });
     await ctx.db.patch(id, {
       name: validated.name,
       name_ar: validated.nameAr,
-      name_search: nameSearch || undefined,
+      name_search: searchFields.name_search,
+      search_text_en: searchFields.search_text_en,
+      search_text_ar: searchFields.search_text_ar,
       short_description: validated.shortDescription,
       short_description_ar: validated.shortDescriptionAr,
       description: validated.description,

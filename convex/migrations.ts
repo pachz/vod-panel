@@ -1,6 +1,7 @@
 import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
+import { buildCourseSearchFields } from "./lib/courseSearchText";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
@@ -10,10 +11,43 @@ export const run = migrations.runner();
  */
 export const backfillCoursesNameSearch = migrations.define({
   table: "courses",
-  migrateOne: (_ctx, course) => {
+  migrateOne: async (_ctx, course) => {
     if (course.name_search !== undefined) return;
     const combined = [course.name, course.name_ar].filter(Boolean).join(" ").trim();
     return { name_search: combined || undefined };
+  },
+});
+
+/**
+ * Backfill courses.search_text_en / search_text_ar for bilingual full-text search.
+ * Separate from backfillCoursesNameSearch so it can run after that migration already completed.
+ */
+export const backfillCoursesSearchText = migrations.define({
+  table: "courses",
+  migrateOne: async (ctx, course) => {
+    const category = await ctx.db.get(course.category_id);
+    const searchFields = buildCourseSearchFields({
+      name: course.name,
+      name_ar: course.name_ar,
+      short_description: course.short_description,
+      short_description_ar: course.short_description_ar,
+      description: course.description,
+      description_ar: course.description_ar,
+      instructor: course.instructor,
+      categoryNameEn: category?.name,
+      categoryNameAr: category?.name_ar,
+    });
+
+    const updates: Record<string, string | undefined> = {};
+    if (course.search_text_en === undefined && searchFields.search_text_en) {
+      updates.search_text_en = searchFields.search_text_en;
+    }
+    if (course.search_text_ar === undefined && searchFields.search_text_ar) {
+      updates.search_text_ar = searchFields.search_text_ar;
+    }
+
+    if (Object.keys(updates).length === 0) return;
+    return updates;
   },
 });
 
@@ -99,9 +133,15 @@ export const assignLessonsToDefaultChapter = migrations.define({
   },
 });
 
+/** Backfill course search_text_en / search_text_ar. */
+export const runBackfillCoursesSearchText = migrations.runner(
+  internal.migrations.backfillCoursesSearchText,
+);
+
 /** Run all migrations in order. */
 export const runAll = migrations.runner([
   internal.migrations.backfillCoursesNameSearch,
+  internal.migrations.backfillCoursesSearchText,
   internal.migrations.backfillLessonsTitleSearch,
   internal.migrations.normalizeUserEmails,
   internal.migrations.normalizeAuthAccountEmails,
