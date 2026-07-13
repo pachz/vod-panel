@@ -54,9 +54,8 @@ const adminMenuItems: MenuItem[] = [
   { title: "Payments", url: "/payments", icon: CreditCard },
 ];
 
-const assistantMenuItem: MenuItem = { title: "Assistant", url: "/assistant-test", icon: Bot };
-
 const techMenuItems: MenuItem[] = [
+  { title: "Assistant", url: "/assistant-test", icon: Bot },
   { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
   { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },
   { title: "Personal Tests", url: "/personal-tests", icon: ClipboardList },
@@ -91,7 +90,6 @@ export function AdminSidebar() {
     const items: MenuItem[] = [];
     if (isAdmin) {
       items.push(...adminMenuItems);
-      items.push(assistantMenuItem);
     }
     if (isAdmin || isTech) {
       items.push(subscriptionPlansMenuItem);

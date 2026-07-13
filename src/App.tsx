@@ -292,10 +292,8 @@ const App = () => (
             </Route>
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
             <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
-            <Route element={<GodOrTechRoute />}>
-              <Route path="/assistant-test" element={<AssistantTest />} />
-            </Route>
             <Route element={<TechRoute />}>
+              <Route path="/assistant-test" element={<AssistantTest />} />
               <Route path="/assistant-settings" element={<AssistantSettings />} />
               <Route path="/personal-tests" element={<PersonalTests />} />
               <Route path="/personal-tests/:id" element={<PersonalTestDetail />} />
