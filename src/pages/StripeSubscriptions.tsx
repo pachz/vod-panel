@@ -1,10 +1,8 @@
 import { useMemo, useState } from "react";
-import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { usePaginatedQuery } from "convex/react";
-import { CreditCard, ExternalLink, Search } from "lucide-react";
+import { CreditCard, Search } from "lucide-react";
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -25,6 +23,11 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { formatPrice } from "@/pages/Payments/utils";
+import {
+  AutoRenewCell,
+  SubscriptionRowActions,
+  type SubscriptionRow,
+} from "./StripeSubscriptions/SubscriptionRowActions";
 
 type SubscriptionStatus =
   | "active"
@@ -33,29 +36,6 @@ type SubscriptionStatus =
   | "unpaid"
   | "incomplete"
   | "trialing";
-
-type SubscriptionRow = {
-  subscriptionDocId: Id<"subscriptions">;
-  subscriptionId: string;
-  customerId: string;
-  userId: Id<"users">;
-  userName: string | null;
-  userEmail: string | null;
-  status: SubscriptionStatus;
-  planName: string | null;
-  priceAmount: number | null;
-  priceCurrency: string | null;
-  interval: string | null;
-  intervalCount: number | null;
-  currentPeriodStart: number;
-  currentPeriodEnd: number;
-  cancelAtPeriodEnd: boolean;
-  canceledAt: number | null;
-  isAdminGranted: boolean;
-  isStripeBacked: boolean;
-  createdAt: number;
-  updatedAt: number;
-};
 
 const STATUS_OPTIONS: Array<{ value: "all" | SubscriptionStatus; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -131,7 +111,8 @@ const StripeSubscriptions = () => {
           Stripe Subscriptions
         </h1>
         <p className="text-muted-foreground mt-1">
-          All subscriptions synced from Stripe — user, plan, price, billing period, and status.
+          All subscriptions synced from Stripe — user, plan, price, billing period, auto-renewal, and
+          status.
         </p>
       </div>
 
@@ -139,7 +120,7 @@ const StripeSubscriptions = () => {
         <CardHeader>
           <CardTitle>Subscription list</CardTitle>
           <CardDescription>
-            Data is stored locally from Stripe webhooks and sync jobs. Open a user for full account details.
+            Manage auto-renewal and scheduled renewal prices for active Stripe subscriptions.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -200,6 +181,7 @@ const StripeSubscriptions = () => {
                   <TableHead>Price</TableHead>
                   <TableHead>Interval</TableHead>
                   <TableHead>Status</TableHead>
+                  <TableHead>Auto-renew</TableHead>
                   <TableHead>Current period</TableHead>
                   <TableHead>Stripe ID</TableHead>
                   <TableHead className="text-right">Actions</TableHead>
@@ -208,13 +190,13 @@ const StripeSubscriptions = () => {
               <TableBody>
                 {rows === undefined ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                       Loading subscriptions…
                     </TableCell>
                   </TableRow>
                 ) : rows.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="h-24 text-center text-muted-foreground">
+                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
                       No subscriptions found.
                     </TableCell>
                   </TableRow>
@@ -235,17 +217,25 @@ const StripeSubscriptions = () => {
                               Admin grant
                             </Badge>
                           )}
-                          {row.cancelAtPeriodEnd && row.status !== "canceled" && (
-                            <Badge variant="secondary" className="text-xs">
-                              Cancels at period end
-                            </Badge>
-                          )}
                         </div>
                       </TableCell>
                       <TableCell>
-                        {row.priceAmount != null && row.priceCurrency
-                          ? formatPrice(row.priceAmount, row.priceCurrency)
-                          : "—"}
+                        <div className="space-y-1">
+                          <p>
+                            {row.priceAmount != null && row.priceCurrency
+                              ? formatPrice(row.priceAmount, row.priceCurrency)
+                              : "—"}
+                          </p>
+                          {row.hasScheduledRenewalPrice && (
+                            <p className="text-xs text-amber-700 dark:text-amber-400">
+                              Renews at{" "}
+                              {row.renewalPriceAmount != null && row.renewalPriceCurrency
+                                ? formatPrice(row.renewalPriceAmount, row.renewalPriceCurrency)
+                                : "a different price"}
+                              {row.renewalPlanName ? ` · ${row.renewalPlanName}` : ""}
+                            </p>
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="capitalize">
                         {formatInterval(row.interval, row.intervalCount)}
@@ -254,6 +244,9 @@ const StripeSubscriptions = () => {
                         <Badge variant={statusBadgeVariant(row.status)} className="capitalize">
                           {row.status.replace("_", " ")}
                         </Badge>
+                      </TableCell>
+                      <TableCell>
+                        <AutoRenewCell row={row} />
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
                         {formatPeriod(row.currentPeriodStart, row.currentPeriodEnd)}
@@ -264,12 +257,7 @@ const StripeSubscriptions = () => {
                         </code>
                       </TableCell>
                       <TableCell className="text-right">
-                        <Button variant="outline" size="sm" asChild>
-                          <Link to={`/users/${row.userId}/info`}>
-                            <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
-                            User
-                          </Link>
-                        </Button>
+                        <SubscriptionRowActions row={row} />
                       </TableCell>
                     </TableRow>
                   ))

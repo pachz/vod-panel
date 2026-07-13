@@ -161,21 +161,41 @@ export const upsertSubscription = internalMutation({
     if (existing) {
       const preserveMigratedPlan =
         existing.legacyMigrationStatus === "migrated" && existing.planId != null;
+      const periodRolledOver = args.currentPeriodStart > existing.currentPeriodStart;
 
-      await ctx.db.patch(existing._id, {
+      const patch: Record<string, unknown> = {
         status: args.status,
         currentPeriodStart: args.currentPeriodStart,
         currentPeriodEnd: args.currentPeriodEnd,
         cancelAtPeriodEnd: args.cancelAtPeriodEnd,
         canceledAt: args.canceledAt,
-        ...(args.interval !== undefined && { interval: args.interval }),
-        ...(args.intervalCount !== undefined && { intervalCount: args.intervalCount }),
-        ...(args.planId !== undefined &&
-          !preserveMigratedPlan && { planId: args.planId }),
-        ...(args.stripePriceId !== undefined &&
-          !preserveMigratedPlan && { stripePriceId: args.stripePriceId }),
         updatedAt: Date.now(),
-      });
+      };
+
+      if (args.interval !== undefined) {
+        patch.interval = args.interval;
+      }
+      if (args.intervalCount !== undefined) {
+        patch.intervalCount = args.intervalCount;
+      }
+
+      if (periodRolledOver && existing.renewalStripePriceId) {
+        patch.stripePriceId = existing.renewalStripePriceId;
+        if (existing.renewalPlanId && !preserveMigratedPlan) {
+          patch.planId = existing.renewalPlanId;
+        }
+        patch.renewalStripePriceId = undefined;
+        patch.renewalPlanId = undefined;
+      } else {
+        if (args.planId !== undefined && !preserveMigratedPlan) {
+          patch.planId = args.planId;
+        }
+        if (args.stripePriceId !== undefined && !preserveMigratedPlan) {
+          patch.stripePriceId = args.stripePriceId;
+        }
+      }
+
+      await ctx.db.patch(existing._id, patch);
       await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
         userId: args.userId,
       });
