@@ -32,6 +32,7 @@ import Coaches from "@/pages/Coaches";
 import CoachDetail from "@/pages/CoachDetail";
 import AssistantTest from "@/pages/AssistantTest";
 import AssistantSettings from "@/pages/AssistantSettings";
+import StripeSubscriptions from "@/pages/StripeSubscriptions";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -130,6 +131,21 @@ const TechRoute = () => {
 };
 
 const PanelRoute = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const location = useLocation();
+
+  if (currentUser === undefined) {
+    return <LoadingScreen />;
+  }
+
+  if (!currentUser?.isGod && !currentUser?.isTech) {
+    return <Navigate to="/" replace state={{ from: location }} />;
+  }
+
+  return <Outlet />;
+};
+
+const GodOrTechRoute = () => {
   const currentUser = useQuery(api.user.getCurrentUser);
   const location = useLocation();
 
@@ -270,6 +286,8 @@ const App = () => (
               <Route path="/coaches" element={<Coaches />} />
               <Route path="/coaches/:id" element={<CoachDetail />} />
               <Route path="/users" element={<Users />} />
+            </Route>
+            <Route element={<GodOrTechRoute />}>
               <Route path="/users/:id/info" element={<UserInfo />} />
             </Route>
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
@@ -285,6 +303,7 @@ const App = () => (
               />
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
+              <Route path="/stripe-subscriptions" element={<StripeSubscriptions />} />
             </Route>
           </Route>
         </Route>

@@ -987,7 +987,7 @@ export const getUserInfo = query({
     id: v.id("users"),
   },
   handler: async (ctx, { id }) => {
-    await requireUser(ctx, { requireGod: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const user = await ctx.db.get(id);
 

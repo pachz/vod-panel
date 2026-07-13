@@ -52,6 +52,8 @@ const UserInfo = () => {
     api.user.getUserInfo,
     id ? { id: id as Id<"users"> } : "skip"
   );
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const backPath = currentUser?.isGod ? "/users" : "/stripe-subscriptions";
   const grantPlans = useQuery(
     api.plans.listPlansForAdminGrant,
     giveSubOpen && userInfo?.user.subscriptionModel === "packages" ? {} : "skip",
@@ -72,7 +74,7 @@ const UserInfo = () => {
   if (!userInfo) {
     return (
       <div className="space-y-4">
-        <Button variant="ghost" onClick={() => navigate("/users")}>
+        <Button variant="ghost" onClick={() => navigate(backPath)}>
           <ArrowLeft className="mr-2 h-4 w-4" />
           Back to Users
         </Button>
@@ -180,7 +182,7 @@ const UserInfo = () => {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" onClick={() => navigate("/users")}>
+          <Button variant="ghost" size="icon" onClick={() => navigate(backPath)}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>

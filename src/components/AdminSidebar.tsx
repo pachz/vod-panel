@@ -57,6 +57,7 @@ const adminMenuItems: MenuItem[] = [
 const techMenuItems: MenuItem[] = [
   { title: "Assistant", url: "/assistant-test", icon: Bot },
   { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
+  { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },
   { title: "Personal Tests", url: "/personal-tests", icon: ClipboardList },
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
 ];

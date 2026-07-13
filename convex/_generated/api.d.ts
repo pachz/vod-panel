@@ -62,6 +62,7 @@ import type * as plansStripe from "../plansStripe.js";
 import type * as refetchLessonDurations from "../refetchLessonDurations.js";
 import type * as seed from "../seed.js";
 import type * as subscriptionCron from "../subscriptionCron.js";
+import type * as subscriptionsAdmin from "../subscriptionsAdmin.js";
 import type * as user from "../user.js";
 import type * as utils_activityLog from "../utils/activityLog.js";
 import type * as utils_auth from "../utils/auth.js";
@@ -129,6 +130,7 @@ declare const fullApi: ApiFromModules<{
   refetchLessonDurations: typeof refetchLessonDurations;
   seed: typeof seed;
   subscriptionCron: typeof subscriptionCron;
+  subscriptionsAdmin: typeof subscriptionsAdmin;
   user: typeof user;
   "utils/activityLog": typeof utils_activityLog;
   "utils/auth": typeof utils_auth;
