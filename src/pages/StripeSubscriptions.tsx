@@ -1,6 +1,5 @@
 import { useMemo, useState } from "react";
-import { format } from "date-fns";
-import { usePaginatedQuery } from "convex/react";
+import { useQuery } from "convex/react";
 import { CreditCard, Search } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
@@ -14,20 +13,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { formatPrice } from "@/pages/Payments/utils";
-import {
-  AutoRenewCell,
-  SubscriptionRowActions,
-  type SubscriptionRow,
-} from "./StripeSubscriptions/SubscriptionRowActions";
+import type { SubscriptionRow } from "./StripeSubscriptions/SubscriptionRowActions";
+import { StripeSubscriptionsTable } from "./StripeSubscriptions/StripeSubscriptionsTable";
 
 type SubscriptionStatus =
   | "active"
@@ -36,6 +24,16 @@ type SubscriptionStatus =
   | "unpaid"
   | "incomplete"
   | "trialing";
+
+type PriceGroup = {
+  key: string;
+  stripePriceId: string | null;
+  planName: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  interval: string | null;
+  rows: SubscriptionRow[];
+};
 
 const STATUS_OPTIONS: Array<{ value: "all" | SubscriptionStatus; label: string }> = [
   { value: "all", label: "All statuses" },
@@ -47,35 +45,60 @@ const STATUS_OPTIONS: Array<{ value: "all" | SubscriptionStatus; label: string }
   { value: "incomplete", label: "Incomplete" },
 ];
 
-function formatPeriod(startMs: number, endMs: number) {
-  return `${format(new Date(startMs), "MMM d, yyyy")} – ${format(new Date(endMs), "MMM d, yyyy")}`;
-}
-
-function formatInterval(interval: string | null, intervalCount: number | null) {
+function formatInterval(interval: string | null) {
   if (!interval) {
-    return "—";
+    return null;
   }
-  const count = intervalCount ?? 1;
-  if (count === 1) {
-    return interval;
-  }
-  return `every ${count} ${interval}s`;
+  return interval;
 }
 
-function statusBadgeVariant(status: SubscriptionStatus): "default" | "secondary" | "destructive" | "outline" {
-  switch (status) {
-    case "active":
-    case "trialing":
-      return "default";
-    case "past_due":
-    case "unpaid":
-    case "incomplete":
-      return "destructive";
-    case "canceled":
-      return "secondary";
-    default:
-      return "outline";
+function groupLabel(group: PriceGroup) {
+  const price =
+    group.priceAmount != null && group.priceCurrency
+      ? formatPrice(group.priceAmount, group.priceCurrency)
+      : null;
+  const interval = formatInterval(group.interval);
+  const parts = [group.planName ?? "Unknown plan"];
+  if (price) {
+    parts.push(interval ? `${price} / ${interval}` : price);
   }
+  return parts.join(" · ");
+}
+
+function groupByStripePrice(rows: SubscriptionRow[]): PriceGroup[] {
+  const groups = new Map<string, PriceGroup>();
+
+  for (const row of rows) {
+    const key = row.stripePriceId ?? "unknown-price";
+    const existing = groups.get(key);
+    if (existing) {
+      existing.rows.push(row);
+      continue;
+    }
+
+    groups.set(key, {
+      key,
+      stripePriceId: row.stripePriceId,
+      planName: row.planName,
+      priceAmount: row.priceAmount,
+      priceCurrency: row.priceCurrency,
+      interval: row.interval,
+      rows: [row],
+    });
+  }
+
+  return Array.from(groups.values())
+    .map((group) => ({
+      ...group,
+      rows: group.rows.sort((a, b) => b.updatedAt - a.updatedAt),
+    }))
+    .sort((a, b) => {
+      const nameCompare = (a.planName ?? "").localeCompare(b.planName ?? "");
+      if (nameCompare !== 0) {
+        return nameCompare;
+      }
+      return (b.priceAmount ?? 0) - (a.priceAmount ?? 0);
+    });
 }
 
 const StripeSubscriptions = () => {
@@ -91,13 +114,11 @@ const StripeSubscriptions = () => {
     [statusFilter, search],
   );
 
-  const { results, status, loadMore } = usePaginatedQuery(
-    api.subscriptionsAdmin.listForTechAdmin,
-    queryArgs,
-    { initialNumItems: 50 },
-  );
+  const rows = useQuery(api.subscriptionsAdmin.listForTechAdmin, queryArgs) as
+    | SubscriptionRow[]
+    | undefined;
 
-  const rows = results as SubscriptionRow[] | undefined;
+  const priceGroups = useMemo(() => groupByStripePrice(rows ?? []), [rows]);
 
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -111,16 +132,16 @@ const StripeSubscriptions = () => {
           Stripe Subscriptions
         </h1>
         <p className="text-muted-foreground mt-1">
-          All subscriptions synced from Stripe — user, plan, price, billing period, auto-renewal, and
-          status.
+          Stripe-backed subscriptions only, grouped by current Stripe price.
         </p>
       </div>
 
       <Card className="card-elevated">
         <CardHeader>
-          <CardTitle>Subscription list</CardTitle>
+          <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Manage auto-renewal and scheduled renewal prices for active Stripe subscriptions.
+            Search and filter Stripe subscriptions. Results are split into one table per Stripe
+            price.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -171,113 +192,43 @@ const StripeSubscriptions = () => {
               </SelectContent>
             </Select>
           </div>
-
-          <div className="rounded-lg border overflow-x-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>User</TableHead>
-                  <TableHead>Plan</TableHead>
-                  <TableHead>Price</TableHead>
-                  <TableHead>Interval</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Auto-renew</TableHead>
-                  <TableHead>Current period</TableHead>
-                  <TableHead>Stripe ID</TableHead>
-                  <TableHead className="text-right">Actions</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows === undefined ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                      Loading subscriptions…
-                    </TableCell>
-                  </TableRow>
-                ) : rows.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={9} className="h-24 text-center text-muted-foreground">
-                      No subscriptions found.
-                    </TableCell>
-                  </TableRow>
-                ) : (
-                  rows.map((row) => (
-                    <TableRow key={row.subscriptionDocId}>
-                      <TableCell>
-                        <div>
-                          <p className="font-medium">{row.userName ?? "—"}</p>
-                          <p className="text-xs text-muted-foreground">{row.userEmail ?? "—"}</p>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p>{row.planName ?? "—"}</p>
-                          {row.isAdminGranted && (
-                            <Badge variant="outline" className="text-xs">
-                              Admin grant
-                            </Badge>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="space-y-1">
-                          <p>
-                            {row.priceAmount != null && row.priceCurrency
-                              ? formatPrice(row.priceAmount, row.priceCurrency)
-                              : "—"}
-                          </p>
-                          {row.hasScheduledRenewalPrice && (
-                            <p className="text-xs text-amber-700 dark:text-amber-400">
-                              Renews at{" "}
-                              {row.renewalPriceAmount != null && row.renewalPriceCurrency
-                                ? formatPrice(row.renewalPriceAmount, row.renewalPriceCurrency)
-                                : "a different price"}
-                              {row.renewalPlanName ? ` · ${row.renewalPlanName}` : ""}
-                            </p>
-                          )}
-                        </div>
-                      </TableCell>
-                      <TableCell className="capitalize">
-                        {formatInterval(row.interval, row.intervalCount)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={statusBadgeVariant(row.status)} className="capitalize">
-                          {row.status.replace("_", " ")}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <AutoRenewCell row={row} />
-                      </TableCell>
-                      <TableCell className="text-sm text-muted-foreground whitespace-nowrap">
-                        {formatPeriod(row.currentPeriodStart, row.currentPeriodEnd)}
-                      </TableCell>
-                      <TableCell>
-                        <code className="text-xs text-muted-foreground">
-                          {row.isStripeBacked ? row.subscriptionId : row.subscriptionId.slice(0, 24)}
-                        </code>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <SubscriptionRowActions row={row} />
-                      </TableCell>
-                    </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
-          </div>
-
-          {status === "CanLoadMore" && (
-            <div className="flex justify-center">
-              <Button variant="outline" onClick={() => loadMore(50)}>
-                Load more
-              </Button>
-            </div>
-          )}
-          {status === "LoadingMore" && (
-            <p className="text-center text-sm text-muted-foreground">Loading more…</p>
-          )}
         </CardContent>
       </Card>
+
+      {rows === undefined ? (
+        <Card className="card-elevated">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            Loading Stripe subscriptions…
+          </CardContent>
+        </Card>
+      ) : priceGroups.length === 0 ? (
+        <Card className="card-elevated">
+          <CardContent className="py-12 text-center text-muted-foreground">
+            No Stripe subscriptions found.
+          </CardContent>
+        </Card>
+      ) : (
+        priceGroups.map((group) => (
+          <Card key={group.key} className="card-elevated">
+            <CardHeader>
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="space-y-1">
+                  <CardTitle>{groupLabel(group)}</CardTitle>
+                  <CardDescription className="font-mono text-xs">
+                    {group.stripePriceId ?? "No Stripe price ID"}
+                  </CardDescription>
+                </div>
+                <Badge variant="secondary">
+                  {group.rows.length} subscription{group.rows.length === 1 ? "" : "s"}
+                </Badge>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <StripeSubscriptionsTable rows={group.rows} />
+            </CardContent>
+          </Card>
+        ))
+      )}
     </div>
   );
 };

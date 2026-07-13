@@ -1,8 +1,13 @@
 import { internalMutation, internalQuery, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
-import { paginationOptsValidator } from "convex/server";
 import { ConvexError, v } from "convex/values";
 import { requireUser } from "./utils/auth";
+
+const MAX_STRIPE_SUBSCRIPTIONS = 2000;
+
+function isStripeSubscription(sub: Pick<Doc<"subscriptions">, "subscriptionId">): boolean {
+  return sub.subscriptionId.startsWith("sub_");
+}
 
 const subscriptionStatusValidator = v.union(
   v.literal("active"),
@@ -636,15 +641,10 @@ export const setScheduledRenewalPriceInternal = internalMutation({
 
 export const listForTechAdmin = query({
   args: {
-    paginationOpts: paginationOptsValidator,
     status: v.optional(subscriptionStatusValidator),
     search: v.optional(v.string()),
   },
-  returns: v.object({
-    page: v.array(subscriptionRowValidator),
-    isDone: v.boolean(),
-    continueCursor: v.string(),
-  }),
+  returns: v.array(subscriptionRowValidator),
   handler: async (ctx, args) => {
     await requireUser(ctx, { requireTech: true });
 
@@ -661,16 +661,18 @@ export const listForTechAdmin = query({
         )
         .take(50);
 
-      const matchedUserIds = new Set(matchedUsers.map((user) => user._id));
       const rows = [];
 
-      for (const userId of matchedUserIds) {
+      for (const user of matchedUsers) {
         const subs = await ctx.db
           .query("subscriptions")
-          .withIndex("userId", (q) => q.eq("userId", userId))
+          .withIndex("userId", (q) => q.eq("userId", user._id))
           .collect();
 
         for (const sub of subs) {
+          if (!isStripeSubscription(sub)) {
+            continue;
+          }
           if (args.status && sub.status !== args.status) {
             continue;
           }
@@ -681,38 +683,33 @@ export const listForTechAdmin = query({
       }
 
       rows.sort((a, b) => b.updatedAt - a.updatedAt);
-
-      const start = args.paginationOpts.cursor
-        ? Number.parseInt(args.paginationOpts.cursor, 10)
-        : 0;
-      const end = start + args.paginationOpts.numItems;
-      const page = rows.slice(start, end);
-
-      return {
-        page,
-        isDone: end >= rows.length,
-        continueCursor: String(end),
-      };
+      return rows.slice(0, MAX_STRIPE_SUBSCRIPTIONS);
     }
 
-    const result = args.status
+    const subscriptions = args.status
       ? await ctx.db
           .query("subscriptions")
           .withIndex("status", (q) => q.eq("status", args.status!))
           .order("desc")
-          .paginate(args.paginationOpts)
-      : await ctx.db.query("subscriptions").order("desc").paginate(args.paginationOpts);
+          .take(MAX_STRIPE_SUBSCRIPTIONS * 2)
+      : await ctx.db
+          .query("subscriptions")
+          .order("desc")
+          .take(MAX_STRIPE_SUBSCRIPTIONS * 2);
 
-    const page = await Promise.all(
-      result.page.map((sub) =>
-        enrichSubscriptionRow(ctx, sub, paymentSettings, planCache, userCache),
-      ),
-    );
+    const rows = [];
+    for (const sub of subscriptions) {
+      if (!isStripeSubscription(sub)) {
+        continue;
+      }
+      rows.push(
+        await enrichSubscriptionRow(ctx, sub, paymentSettings, planCache, userCache),
+      );
+      if (rows.length >= MAX_STRIPE_SUBSCRIPTIONS) {
+        break;
+      }
+    }
 
-    return {
-      page,
-      isDone: result.isDone,
-      continueCursor: result.continueCursor,
-    };
+    return rows;
   },
 });

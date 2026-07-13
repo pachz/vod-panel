@@ -58,6 +58,7 @@ export type SubscriptionRow = {
   canManageStripe: boolean;
   isAdminGranted: boolean;
   isStripeBacked: boolean;
+  updatedAt: number;
 };
 
 type EligiblePrice = {
