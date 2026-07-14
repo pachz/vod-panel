@@ -23,6 +23,325 @@ async function requireTechAction(ctx: import("./_generated/server").ActionCtx) {
   await ctx.runQuery(internal.user.requireTechQuery, {});
 }
 
+const stripeComparisonStatusValidator = v.union(
+  v.literal("active"),
+  v.literal("canceled"),
+  v.literal("past_due"),
+  v.literal("unpaid"),
+  v.literal("incomplete"),
+  v.literal("trialing"),
+);
+
+const stripeComparisonRowValidator = v.object({
+  stripeSubscriptionId: v.string(),
+  stripeCustomerId: v.string(),
+  stripeCustomerEmail: v.union(v.string(), v.null()),
+  stripeStatus: stripeComparisonStatusValidator,
+  stripePriceId: v.union(v.string(), v.null()),
+  stripeCurrentPeriodStart: v.number(),
+  stripeCurrentPeriodEnd: v.number(),
+  stripeCancelAtPeriodEnd: v.boolean(),
+  localSubscriptionDocId: v.union(v.id("subscriptions"), v.null()),
+  localUserId: v.union(v.id("users"), v.null()),
+  localUserName: v.union(v.string(), v.null()),
+  localUserEmail: v.union(v.string(), v.null()),
+  localStatus: v.union(stripeComparisonStatusValidator, v.null()),
+  localCurrentPeriodStart: v.union(v.number(), v.null()),
+  localCurrentPeriodEnd: v.union(v.number(), v.null()),
+  localCancelAtPeriodEnd: v.union(v.boolean(), v.null()),
+  localStripePriceId: v.union(v.string(), v.null()),
+  mappedUserId: v.union(v.id("users"), v.null()),
+  mappedUserName: v.union(v.string(), v.null()),
+  mappedUserEmail: v.union(v.string(), v.null()),
+  inSync: v.boolean(),
+  syncNeeded: v.boolean(),
+  canSync: v.boolean(),
+  syncReasons: v.array(v.string()),
+});
+
+function normalizeStripeStatusForComparison(
+  status: Stripe.Subscription.Status,
+): "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing" {
+  switch (status) {
+    case "active":
+    case "canceled":
+    case "past_due":
+    case "unpaid":
+    case "incomplete":
+    case "trialing":
+      return status;
+    case "incomplete_expired":
+      return "incomplete";
+    case "paused":
+      return "active";
+    default:
+      return "canceled";
+  }
+}
+
+function stripePriceIdFromSubscription(sub: Stripe.Subscription): string | null {
+  const price = sub.items.data[0]?.price;
+  if (!price) {
+    return null;
+  }
+  return typeof price === "string" ? price : price.id ?? null;
+}
+
+function stripePeriodMs(sub: Stripe.Subscription): { start: number; end: number } {
+  const startRaw =
+    (sub as { current_period_start?: number }).current_period_start ??
+    sub.items.data[0]?.current_period_start;
+  const endRaw =
+    (sub as { current_period_end?: number }).current_period_end ??
+    sub.items.data[0]?.current_period_end;
+
+  const start = typeof startRaw === "number" && startRaw > 0 ? startRaw * 1000 : 0;
+  const end = typeof endRaw === "number" && endRaw > 0 ? endRaw * 1000 : 0;
+  return { start, end };
+}
+
+function timestampsDiffer(a: number, b: number): boolean {
+  if (a <= 0 || b <= 0) {
+    return a !== b;
+  }
+  return Math.abs(a - b) > 1000;
+}
+
+function buildStripeComparisonRow(
+  sub: Stripe.Subscription,
+  local: {
+    subscriptionDocId: Id<"subscriptions">;
+    userId: Id<"users">;
+    status: "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing";
+    currentPeriodStart: number;
+    currentPeriodEnd: number;
+    cancelAtPeriodEnd: boolean;
+    stripePriceId: string | null;
+    userName: string | null;
+    userEmail: string | null;
+  } | null,
+  mappedUser: {
+    userId: Id<"users">;
+    userName: string | null;
+    userEmail: string | null;
+  } | null,
+): {
+  stripeSubscriptionId: string;
+  stripeCustomerId: string;
+  stripeCustomerEmail: string | null;
+  stripeStatus: "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing";
+  stripePriceId: string | null;
+  stripeCurrentPeriodStart: number;
+  stripeCurrentPeriodEnd: number;
+  stripeCancelAtPeriodEnd: boolean;
+  localSubscriptionDocId: Id<"subscriptions"> | null;
+  localUserId: Id<"users"> | null;
+  localUserName: string | null;
+  localUserEmail: string | null;
+  localStatus: "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing" | null;
+  localCurrentPeriodStart: number | null;
+  localCurrentPeriodEnd: number | null;
+  localCancelAtPeriodEnd: boolean | null;
+  localStripePriceId: string | null;
+  mappedUserId: Id<"users"> | null;
+  mappedUserName: string | null;
+  mappedUserEmail: string | null;
+  inSync: boolean;
+  syncNeeded: boolean;
+  canSync: boolean;
+  syncReasons: string[];
+} {
+  const customerRaw = sub.customer;
+  const stripeCustomerId =
+    typeof customerRaw === "string" ? customerRaw : customerRaw?.id ?? "";
+  const stripeCustomerEmail =
+    customerRaw &&
+    typeof customerRaw === "object" &&
+    "email" in customerRaw &&
+    typeof customerRaw.email === "string"
+      ? customerRaw.email
+      : null;
+
+  const stripeStatus = normalizeStripeStatusForComparison(sub.status);
+  const stripePriceId = stripePriceIdFromSubscription(sub);
+  const { start, end } = stripePeriodMs(sub);
+  const stripeCancelAtPeriodEnd = Boolean(
+    (sub as { cancel_at_period_end?: boolean }).cancel_at_period_end,
+  );
+
+  const syncReasons: string[] = [];
+
+  if (!local) {
+    syncReasons.push("Missing in database");
+  } else {
+    if (local.status !== stripeStatus) {
+      syncReasons.push(`Status: Stripe "${stripeStatus}" vs local "${local.status}"`);
+    }
+    if (timestampsDiffer(local.currentPeriodStart, start)) {
+      syncReasons.push("Current period start differs");
+    }
+    if (timestampsDiffer(local.currentPeriodEnd, end)) {
+      syncReasons.push("Current period end differs");
+    }
+    if (local.cancelAtPeriodEnd !== stripeCancelAtPeriodEnd) {
+      syncReasons.push("Cancel-at-period-end flag differs");
+    }
+    if (
+      stripePriceId &&
+      local.stripePriceId &&
+      local.stripePriceId !== stripePriceId
+    ) {
+      syncReasons.push("Stripe price id differs");
+    }
+    if (mappedUser && local.userId !== mappedUser.userId) {
+      syncReasons.push("Local user does not match Stripe customer mapping");
+    }
+  }
+
+  if (!mappedUser && !local) {
+    syncReasons.push("No Convex user mapped to Stripe customer");
+  }
+
+  const resolvedUserId = local?.userId ?? mappedUser?.userId ?? null;
+  const canSync = resolvedUserId != null;
+  const syncNeeded = syncReasons.length > 0;
+  const inSync = local != null && !syncNeeded;
+
+  return {
+    stripeSubscriptionId: sub.id,
+    stripeCustomerId,
+    stripeCustomerEmail,
+    stripeStatus,
+    stripePriceId,
+    stripeCurrentPeriodStart: start,
+    stripeCurrentPeriodEnd: end,
+    stripeCancelAtPeriodEnd,
+    localSubscriptionDocId: local?.subscriptionDocId ?? null,
+    localUserId: local?.userId ?? null,
+    localUserName: local?.userName ?? null,
+    localUserEmail: local?.userEmail ?? null,
+    localStatus: local?.status ?? null,
+    localCurrentPeriodStart: local?.currentPeriodStart ?? null,
+    localCurrentPeriodEnd: local?.currentPeriodEnd ?? null,
+    localCancelAtPeriodEnd: local?.cancelAtPeriodEnd ?? null,
+    localStripePriceId: local?.stripePriceId ?? null,
+    mappedUserId: mappedUser?.userId ?? null,
+    mappedUserName: mappedUser?.userName ?? null,
+    mappedUserEmail: mappedUser?.userEmail ?? null,
+    inSync,
+    syncNeeded,
+    canSync,
+    syncReasons,
+  };
+}
+
+type LocalSubscriptionComparison = {
+  subscriptionDocId: Id<"subscriptions">;
+  subscriptionId: string;
+  userId: Id<"users">;
+  customerId: string;
+  status: "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing";
+  currentPeriodStart: number;
+  currentPeriodEnd: number;
+  cancelAtPeriodEnd: boolean;
+  stripePriceId: string | null;
+  userName: string | null;
+  userEmail: string | null;
+  updatedAt: number;
+};
+
+type StripeComparisonRow = ReturnType<typeof buildStripeComparisonRow>;
+
+type StripeComparisonPage = {
+  items: StripeComparisonRow[];
+  hasMore: boolean;
+  nextStartingAfter: string | null;
+};
+
+export const listStripeSubscriptionComparison = action({
+  args: {
+    startingAfter: v.optional(v.string()),
+    limit: v.optional(v.number()),
+    status: v.optional(
+      v.union(
+        v.literal("all"),
+        v.literal("active"),
+        v.literal("canceled"),
+        v.literal("past_due"),
+        v.literal("unpaid"),
+        v.literal("incomplete"),
+        v.literal("trialing"),
+      ),
+    ),
+  },
+  returns: v.object({
+    items: v.array(stripeComparisonRowValidator),
+    hasMore: v.boolean(),
+    nextStartingAfter: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args): Promise<StripeComparisonPage> => {
+    await requireTechAction(ctx);
+
+    const stripe = getStripe();
+    const pageLimit = Math.min(Math.max(args.limit ?? 50, 1), 100);
+    const statusFilter = args.status ?? "all";
+
+    const page = await stripe.subscriptions.list({
+      status: statusFilter === "all" ? "all" : statusFilter,
+      limit: pageLimit,
+      ...(args.startingAfter ? { starting_after: args.startingAfter } : {}),
+      expand: ["data.customer", "data.items.data.price"],
+    });
+
+    const items: StripeComparisonRow[] = [];
+
+    for (const sub of page.data) {
+      const local: LocalSubscriptionComparison | null = await ctx.runQuery(
+        internal.paymentInternal.getLocalSubscriptionForComparison,
+        {
+          subscriptionId: sub.id,
+        },
+      );
+
+      const customerId =
+        typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? "";
+      let mappedUser: {
+        userId: Id<"users">;
+        userName: string | null;
+        userEmail: string | null;
+      } | null = null;
+
+      if (customerId) {
+        const mappedUserId: Id<"users"> | null = await ctx.runQuery(
+          internal.paymentInternal.getUserIdByStripeCustomerId,
+          { customerId },
+        );
+        if (mappedUserId) {
+          const user = await ctx.runQuery(internal.paymentInternal.getUserDisplayInfo, {
+            userId: mappedUserId,
+          });
+          mappedUser = {
+            userId: mappedUserId,
+            userName: user?.userName ?? null,
+            userEmail: user?.userEmail ?? null,
+          };
+        }
+      }
+
+      items.push(buildStripeComparisonRow(sub, local, mappedUser));
+    }
+
+    const nextStartingAfter =
+      page.has_more && page.data.length > 0 ? page.data[page.data.length - 1]!.id : null;
+
+    return {
+      items,
+      hasMore: page.has_more,
+      nextStartingAfter,
+    };
+  },
+});
+
 export const setAutoRenewal = action({
   args: {
     subscriptionDocId: v.id("subscriptions"),

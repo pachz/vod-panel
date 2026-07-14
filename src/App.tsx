@@ -33,6 +33,7 @@ import CoachDetail from "@/pages/CoachDetail";
 import AssistantTest from "@/pages/AssistantTest";
 import AssistantSettings from "@/pages/AssistantSettings";
 import StripeSubscriptions from "@/pages/StripeSubscriptions";
+import StripeSubscriptionSync from "@/pages/StripeSubscriptionSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -304,6 +305,7 @@ const App = () => (
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
               <Route path="/stripe-subscriptions" element={<StripeSubscriptions />} />
+              <Route path="/stripe-subscriptions/sync" element={<StripeSubscriptionSync />} />
             </Route>
           </Route>
         </Route>

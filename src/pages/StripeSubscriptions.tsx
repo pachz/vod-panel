@@ -1,6 +1,7 @@
+import { Link } from "react-router-dom";
 import { useMemo, useState } from "react";
 import { useQuery } from "convex/react";
-import { CreditCard, Search } from "lucide-react";
+import { CreditCard, GitCompareArrows, Search } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -126,14 +127,22 @@ const StripeSubscriptions = () => {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-          <CreditCard className="h-8 w-8 text-primary" />
-          Stripe Subscriptions
-        </h1>
-        <p className="text-muted-foreground mt-1">
-          Stripe-backed subscriptions only, grouped by current Stripe price.
-        </p>
+      <div className="flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
+            <CreditCard className="h-8 w-8 text-primary" />
+            Stripe Subscriptions
+          </h1>
+          <p className="text-muted-foreground mt-1">
+            Stripe-backed subscriptions only, grouped by current Stripe price.
+          </p>
+        </div>
+        <Button variant="outline" asChild>
+          <Link to="/stripe-subscriptions/sync">
+            <GitCompareArrows className="mr-2 h-4 w-4" />
+            Stripe sync check
+          </Link>
+        </Button>
       </div>
 
       <Card className="card-elevated">

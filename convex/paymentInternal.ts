@@ -283,6 +283,65 @@ export const getUserIdByStripeCustomerId = internalQuery({
   },
 });
 
+const localSubscriptionComparisonValidator = v.object({
+  subscriptionDocId: v.id("subscriptions"),
+  subscriptionId: v.string(),
+  userId: v.id("users"),
+  customerId: v.string(),
+  status: v.union(
+    v.literal("active"),
+    v.literal("canceled"),
+    v.literal("past_due"),
+    v.literal("unpaid"),
+    v.literal("incomplete"),
+    v.literal("trialing"),
+  ),
+  currentPeriodStart: v.number(),
+  currentPeriodEnd: v.number(),
+  cancelAtPeriodEnd: v.boolean(),
+  stripePriceId: v.union(v.string(), v.null()),
+  userName: v.union(v.string(), v.null()),
+  userEmail: v.union(v.string(), v.null()),
+  updatedAt: v.number(),
+});
+
+/**
+ * Local subscription row for Stripe comparison / admin sync.
+ */
+export const getLocalSubscriptionForComparison = internalQuery({
+  args: {
+    subscriptionId: v.string(),
+  },
+  returns: v.union(localSubscriptionComparisonValidator, v.null()),
+  handler: async (ctx, args) => {
+    const sub = await ctx.db
+      .query("subscriptions")
+      .withIndex("subscriptionId", (q) => q.eq("subscriptionId", args.subscriptionId))
+      .first();
+
+    if (!sub) {
+      return null;
+    }
+
+    const user = await ctx.db.get(sub.userId);
+
+    return {
+      subscriptionDocId: sub._id,
+      subscriptionId: sub.subscriptionId,
+      userId: sub.userId,
+      customerId: sub.customerId,
+      status: sub.status,
+      currentPeriodStart: sub.currentPeriodStart,
+      currentPeriodEnd: sub.currentPeriodEnd,
+      cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
+      stripePriceId: sub.stripePriceId ?? null,
+      userName: user?.name ?? null,
+      userEmail: user?.email ?? null,
+      updatedAt: sub.updatedAt,
+    };
+  },
+});
+
 /**
  * Internal query to get checkout session by session ID
  */
@@ -559,6 +618,32 @@ export const getUserById = internalQuery({
     return {
       _id: user._id,
       isGod: user.isGod,
+    };
+  },
+});
+
+export const getUserDisplayInfo = internalQuery({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: v.union(
+    v.object({
+      userId: v.id("users"),
+      userName: v.union(v.string(), v.null()),
+      userEmail: v.union(v.string(), v.null()),
+    }),
+    v.null(),
+  ),
+  handler: async (ctx, args) => {
+    const user = await ctx.db.get(args.userId);
+    if (!user) {
+      return null;
+    }
+
+    return {
+      userId: user._id,
+      userName: user.name ?? null,
+      userEmail: user.email ?? null,
     };
   },
 });

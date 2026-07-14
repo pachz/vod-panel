@@ -1041,6 +1041,7 @@ async function persistStripeSubscriptionForConvex(
   }
   const dates = getSubscriptionDates(subscription, existingDates);
   const intervalInfo = getSubscriptionInterval(subscription);
+  const planFields = await resolvePlanFieldsForStripeSubscription(ctx, subscription);
   const canceledAtRaw = (subscription as { canceled_at?: number }).canceled_at;
   await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscription.id,
@@ -1055,8 +1056,98 @@ async function persistStripeSubscriptionForConvex(
       : undefined,
     interval: intervalInfo?.interval,
     intervalCount: intervalInfo?.intervalCount,
+    planId: planFields.planId,
+    stripePriceId: planFields.stripePriceId,
   });
 }
+
+/**
+ * Tech admin: sync one Stripe subscription into Convex by Stripe subscription id.
+ */
+export const adminSyncStripeSubscriptionById = action({
+  args: {
+    subscriptionId: v.string(),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+    status: v.optional(v.string()),
+  }),
+  handler: async (ctx, args) => {
+    await requireUserAction(ctx);
+    await ctx.runQuery(internal.user.requireTechQuery, {});
+
+    if (!args.subscriptionId.startsWith("sub_")) {
+      return {
+        success: false,
+        message: "Invalid Stripe subscription id.",
+      };
+    }
+
+    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
+    if (!stripeSecretKey) {
+      throw new Error(
+        "STRIPE_SECRET_KEY is not configured. Please set it in your Convex environment variables.",
+      );
+    }
+
+    const stripe = new Stripe(stripeSecretKey);
+    const local = await ctx.runQuery(internal.paymentInternal.getLocalSubscriptionForComparison, {
+      subscriptionId: args.subscriptionId,
+    });
+
+    try {
+      const subscription = await resolveStripeSubscriptionForSync(stripe, args.subscriptionId);
+      const customerId = stripeCustomerIdFromSubscription(subscription);
+      if (!customerId) {
+        return {
+          success: false,
+          message: "Stripe subscription has no customer id.",
+        };
+      }
+
+      let userId: Id<"users"> | null =
+        local?.userId ?? (await resolveUserIdForStripeCustomer(ctx, customerId));
+
+      if (!userId) {
+        return {
+          success: false,
+          message:
+            "Cannot resolve a Convex user for this Stripe customer. Link the customer to a user first.",
+        };
+      }
+
+      const existingDates = local
+        ? {
+            currentPeriodStart: local.currentPeriodStart,
+            currentPeriodEnd: local.currentPeriodEnd,
+          }
+        : undefined;
+
+      await persistStripeSubscriptionForConvex(ctx, subscription, userId, existingDates);
+
+      if (subscription.id !== args.subscriptionId) {
+        const original = await stripe.subscriptions.retrieve(args.subscriptionId, {
+          expand: ["items.data.price"],
+        });
+        await persistStripeSubscriptionForConvex(ctx, original, userId, existingDates);
+      }
+
+      return {
+        success: true,
+        message: "Subscription synced from Stripe.",
+        status: subscription.status,
+      };
+    } catch (error) {
+      console.error("Error syncing Stripe subscription by id (admin):", error);
+      throw new Error(
+        error instanceof Error
+          ? `Failed to sync subscription: ${error.message}`
+          : "Failed to sync subscription",
+      );
+    }
+  },
+});
 
 /**
  * Internal action: sync all Stripe-backed subscription statuses from Stripe.
