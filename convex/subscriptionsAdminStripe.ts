@@ -50,6 +50,12 @@ const stripeComparisonRowValidator = v.object({
   localCurrentPeriodEnd: v.union(v.number(), v.null()),
   localCancelAtPeriodEnd: v.union(v.boolean(), v.null()),
   localStripePriceId: v.union(v.string(), v.null()),
+  localRenewalStripePriceId: v.union(v.string(), v.null()),
+  localPlanId: v.union(v.id("subscriptionPlans"), v.null()),
+  localPlanName: v.union(v.string(), v.null()),
+  legacyMigrationStatus: v.union(v.literal("migrated"), v.null()),
+  stripePriceLinkedToPlan: v.boolean(),
+  needsPackageAssignment: v.boolean(),
   mappedUserId: v.union(v.id("users"), v.null()),
   mappedUserName: v.union(v.string(), v.null()),
   mappedUserEmail: v.union(v.string(), v.null()),
@@ -57,6 +63,7 @@ const stripeComparisonRowValidator = v.object({
   syncNeeded: v.boolean(),
   canSync: v.boolean(),
   syncReasons: v.array(v.string()),
+  expectedDifferences: v.array(v.string()),
 });
 
 function normalizeStripeStatusForComparison(
@@ -117,6 +124,10 @@ function buildStripeComparisonRow(
     currentPeriodEnd: number;
     cancelAtPeriodEnd: boolean;
     stripePriceId: string | null;
+    renewalStripePriceId: string | null;
+    planId: Id<"subscriptionPlans"> | null;
+    planName: string | null;
+    legacyMigrationStatus: "migrated" | null;
     userName: string | null;
     userEmail: string | null;
   } | null,
@@ -125,6 +136,7 @@ function buildStripeComparisonRow(
     userName: string | null;
     userEmail: string | null;
   } | null,
+  stripePriceLinkedToPlan: boolean,
 ): {
   stripeSubscriptionId: string;
   stripeCustomerId: string;
@@ -143,6 +155,12 @@ function buildStripeComparisonRow(
   localCurrentPeriodEnd: number | null;
   localCancelAtPeriodEnd: boolean | null;
   localStripePriceId: string | null;
+  localRenewalStripePriceId: string | null;
+  localPlanId: Id<"subscriptionPlans"> | null;
+  localPlanName: string | null;
+  legacyMigrationStatus: "migrated" | null;
+  stripePriceLinkedToPlan: boolean;
+  needsPackageAssignment: boolean;
   mappedUserId: Id<"users"> | null;
   mappedUserName: string | null;
   mappedUserEmail: string | null;
@@ -150,6 +168,7 @@ function buildStripeComparisonRow(
   syncNeeded: boolean;
   canSync: boolean;
   syncReasons: string[];
+  expectedDifferences: string[];
 } {
   const customerRaw = sub.customer;
   const stripeCustomerId =
@@ -170,6 +189,7 @@ function buildStripeComparisonRow(
   );
 
   const syncReasons: string[] = [];
+  const expectedDifferences: string[] = [];
 
   if (!local) {
     syncReasons.push("Missing in database");
@@ -191,10 +211,41 @@ function buildStripeComparisonRow(
       local.stripePriceId &&
       local.stripePriceId !== stripePriceId
     ) {
-      syncReasons.push("Stripe price id differs");
+      if (local.legacyMigrationStatus === "migrated") {
+        syncReasons.push(
+          "Stripe price id differs (legacy migration lock — sync will reset migration)",
+        );
+      } else if (local.renewalStripePriceId === stripePriceId) {
+        syncReasons.push(
+          "Stripe price id differs (scheduled renewal — sync will align to Stripe)",
+        );
+      } else {
+        syncReasons.push("Stripe price id differs");
+      }
     }
     if (mappedUser && local.userId !== mappedUser.userId) {
       syncReasons.push("Local user does not match Stripe customer mapping");
+    }
+
+    const priceMatches =
+      !stripePriceId ||
+      !local.stripePriceId ||
+      local.stripePriceId === stripePriceId;
+
+    if (priceMatches && stripePriceId && !stripePriceLinkedToPlan) {
+      if (local.planId) {
+        expectedDifferences.push(
+          `Internal package override: "${local.planName ?? local.planId}" (Stripe price not linked)`,
+        );
+      } else {
+        expectedDifferences.push(
+          "Stripe price is not linked to a package — assign an internal package for access",
+        );
+      }
+    }
+
+    if (priceMatches && local.legacyMigrationStatus === "migrated") {
+      syncReasons.push("Legacy migration flag still set — sync will clear it");
     }
   }
 
@@ -202,10 +253,18 @@ function buildStripeComparisonRow(
     syncReasons.push("No Convex user mapped to Stripe customer");
   }
 
+  const needsPackageAssignment =
+    Boolean(local) &&
+    Boolean(stripePriceId) &&
+    !stripePriceLinkedToPlan &&
+    local?.planId == null &&
+    (!local?.stripePriceId || local.stripePriceId === stripePriceId);
+
   const resolvedUserId = local?.userId ?? mappedUser?.userId ?? null;
   const canSync = resolvedUserId != null;
+  // Package assignment is a separate action from Stripe sync.
   const syncNeeded = syncReasons.length > 0;
-  const inSync = local != null && !syncNeeded;
+  const inSync = local != null && !syncNeeded && !needsPackageAssignment;
 
   return {
     stripeSubscriptionId: sub.id,
@@ -225,6 +284,12 @@ function buildStripeComparisonRow(
     localCurrentPeriodEnd: local?.currentPeriodEnd ?? null,
     localCancelAtPeriodEnd: local?.cancelAtPeriodEnd ?? null,
     localStripePriceId: local?.stripePriceId ?? null,
+    localRenewalStripePriceId: local?.renewalStripePriceId ?? null,
+    localPlanId: local?.planId ?? null,
+    localPlanName: local?.planName ?? null,
+    legacyMigrationStatus: local?.legacyMigrationStatus ?? null,
+    stripePriceLinkedToPlan,
+    needsPackageAssignment,
     mappedUserId: mappedUser?.userId ?? null,
     mappedUserName: mappedUser?.userName ?? null,
     mappedUserEmail: mappedUser?.userEmail ?? null,
@@ -232,6 +297,7 @@ function buildStripeComparisonRow(
     syncNeeded,
     canSync,
     syncReasons,
+    expectedDifferences,
   };
 }
 
@@ -245,6 +311,10 @@ type LocalSubscriptionComparison = {
   currentPeriodEnd: number;
   cancelAtPeriodEnd: boolean;
   stripePriceId: string | null;
+  renewalStripePriceId: string | null;
+  planId: Id<"subscriptionPlans"> | null;
+  planName: string | null;
+  legacyMigrationStatus: "migrated" | null;
   userName: string | null;
   userEmail: string | null;
   updatedAt: number;
@@ -328,7 +398,16 @@ export const listStripeSubscriptionComparison = action({
         }
       }
 
-      items.push(buildStripeComparisonRow(sub, local, mappedUser));
+      const stripePriceId = stripePriceIdFromSubscription(sub);
+      const linkedPlanId: Id<"subscriptionPlans"> | null = stripePriceId
+        ? await ctx.runQuery(internal.plansInternal.resolvePlanFromStripePriceId, {
+            stripePriceId,
+          })
+        : null;
+
+      items.push(
+        buildStripeComparisonRow(sub, local, mappedUser, linkedPlanId != null),
+      );
     }
 
     const nextStartingAfter =

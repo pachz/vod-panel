@@ -1,7 +1,9 @@
-import { internalMutation, internalQuery, query } from "./_generated/server";
+import { internalMutation, internalQuery, mutation, query } from "./_generated/server";
 import type { Doc, Id } from "./_generated/dataModel";
 import { ConvexError, v } from "convex/values";
 import { requireUser } from "./utils/auth";
+import { internal } from "./_generated/api";
+import { SUBSCRIPTION_MODEL } from "../shared/subscriptionModel";
 
 const MAX_STRIPE_SUBSCRIPTIONS = 2000;
 
@@ -711,5 +713,109 @@ export const listForTechAdmin = query({
     }
 
     return rows;
+  },
+});
+
+const packagePlanOptionValidator = v.object({
+  _id: v.id("subscriptionPlans"),
+  name: v.string(),
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  isHidden: v.boolean(),
+  isActive: v.boolean(),
+});
+
+/** Plans available for tech to assign as an internal package override. */
+export const listPackagePlansForAssignment = query({
+  args: {},
+  returns: v.array(packagePlanOptionValidator),
+  handler: async (ctx) => {
+    await requireUser(ctx, { requireTech: true });
+
+    const plans = await ctx.db.query("subscriptionPlans").collect();
+    return plans
+      .filter((plan) => plan.deletedAt === undefined)
+      .sort((a, b) => a.displayOrder - b.displayOrder)
+      .map((plan) => ({
+        _id: plan._id,
+        name: plan.name,
+        billingInterval: plan.billingInterval,
+        priceAmount: plan.priceAmount,
+        priceCurrency: plan.priceCurrency,
+        isHidden: plan.isHidden === true,
+        isActive: plan.isActive,
+      }));
+  },
+});
+
+/**
+ * Tech admin: set the internal package plan for a Stripe subscription without
+ * changing the Stripe price (override used when Stripe price is unlinked).
+ */
+export const setInternalPackagePlan = mutation({
+  args: {
+    subscriptionDocId: v.id("subscriptions"),
+    planId: v.id("subscriptionPlans"),
+  },
+  returns: v.object({
+    success: v.boolean(),
+    message: v.string(),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+
+    const sub = await ctx.db.get(args.subscriptionDocId);
+    if (!sub) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Subscription not found.",
+      });
+    }
+
+    if (!sub.subscriptionId.startsWith("sub_")) {
+      throw new ConvexError({
+        code: "INVALID",
+        message: "Only Stripe-backed subscriptions can receive a package override.",
+      });
+    }
+
+    const plan = await ctx.db.get(args.planId);
+    if (!plan || plan.deletedAt !== undefined) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Package plan not found.",
+      });
+    }
+
+    const user = await ctx.db.get(sub.userId);
+    if (!user || user.deletedAt) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "User not found.",
+      });
+    }
+
+    await ctx.db.patch(args.subscriptionDocId, {
+      planId: args.planId,
+      legacyMigrationStatus: undefined,
+      legacyMigratedAt: undefined,
+      updatedAt: Date.now(),
+    });
+
+    if (user.subscriptionModel !== SUBSCRIPTION_MODEL.PACKAGES) {
+      await ctx.db.patch(sub.userId, {
+        subscriptionModel: SUBSCRIPTION_MODEL.PACKAGES,
+      });
+    }
+
+    await ctx.scheduler.runAfter(0, internal.mailchimp.syncUserToMailchimp, {
+      userId: sub.userId,
+    });
+
+    return {
+      success: true,
+      message: `Internal package set to "${plan.name}". Stripe billing price was left unchanged.`,
+    };
   },
 });

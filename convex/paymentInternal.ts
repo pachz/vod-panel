@@ -149,6 +149,15 @@ export const upsertSubscription = internalMutation({
     intervalCount: v.optional(v.number()),
     planId: v.optional(v.id("subscriptionPlans")),
     stripePriceId: v.optional(v.string()),
+    /** Tech admin sync: clear legacy migration lock so Stripe price can apply. */
+    clearLegacyMigration: v.optional(v.boolean()),
+    /** Tech admin sync: drop scheduled renewal fields and apply Stripe current price. */
+    clearScheduledRenewal: v.optional(v.boolean()),
+    /**
+     * Tech admin sync: always write stripePriceId from Stripe.
+     * When true and planId is omitted, keeps the existing planId (package override).
+     */
+    forceStripePrice: v.optional(v.boolean()),
   },
   returns: v.id("subscriptions"),
   handler: async (ctx, args) => {
@@ -159,9 +168,19 @@ export const upsertSubscription = internalMutation({
       .first();
 
     if (existing) {
+      const clearLegacyMigration = args.clearLegacyMigration === true;
+      const clearScheduledRenewal = args.clearScheduledRenewal === true;
+      const forceStripePrice = args.forceStripePrice === true;
+
       const preserveMigratedPlan =
-        existing.legacyMigrationStatus === "migrated" && existing.planId != null;
-      const periodRolledOver = args.currentPeriodStart > existing.currentPeriodStart;
+        !clearLegacyMigration &&
+        !forceStripePrice &&
+        existing.legacyMigrationStatus === "migrated" &&
+        existing.planId != null;
+      const periodRolledOver =
+        !forceStripePrice &&
+        !clearScheduledRenewal &&
+        args.currentPeriodStart > existing.currentPeriodStart;
 
       const patch: Record<string, unknown> = {
         status: args.status,
@@ -177,6 +196,16 @@ export const upsertSubscription = internalMutation({
       }
       if (args.intervalCount !== undefined) {
         patch.intervalCount = args.intervalCount;
+      }
+
+      if (clearLegacyMigration) {
+        patch.legacyMigrationStatus = undefined;
+        patch.legacyMigratedAt = undefined;
+      }
+
+      if (clearScheduledRenewal) {
+        patch.renewalStripePriceId = undefined;
+        patch.renewalPlanId = undefined;
       }
 
       if (periodRolledOver && existing.renewalStripePriceId) {
@@ -300,6 +329,10 @@ const localSubscriptionComparisonValidator = v.object({
   currentPeriodEnd: v.number(),
   cancelAtPeriodEnd: v.boolean(),
   stripePriceId: v.union(v.string(), v.null()),
+  renewalStripePriceId: v.union(v.string(), v.null()),
+  planId: v.union(v.id("subscriptionPlans"), v.null()),
+  planName: v.union(v.string(), v.null()),
+  legacyMigrationStatus: v.union(v.literal("migrated"), v.null()),
   userName: v.union(v.string(), v.null()),
   userEmail: v.union(v.string(), v.null()),
   updatedAt: v.number(),
@@ -324,6 +357,7 @@ export const getLocalSubscriptionForComparison = internalQuery({
     }
 
     const user = await ctx.db.get(sub.userId);
+    const plan = sub.planId ? await ctx.db.get(sub.planId) : null;
 
     return {
       subscriptionDocId: sub._id,
@@ -335,6 +369,10 @@ export const getLocalSubscriptionForComparison = internalQuery({
       currentPeriodEnd: sub.currentPeriodEnd,
       cancelAtPeriodEnd: sub.cancelAtPeriodEnd,
       stripePriceId: sub.stripePriceId ?? null,
+      renewalStripePriceId: sub.renewalStripePriceId ?? null,
+      planId: sub.planId ?? null,
+      planName: plan?.name ?? null,
+      legacyMigrationStatus: sub.legacyMigrationStatus ?? null,
       userName: user?.name ?? null,
       userEmail: user?.email ?? null,
       updatedAt: sub.updatedAt,

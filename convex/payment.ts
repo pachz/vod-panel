@@ -1034,7 +1034,11 @@ async function persistStripeSubscriptionForConvex(
   subscription: Stripe.Subscription,
   userId: Id<"users">,
   existingDates?: { currentPeriodStart: number; currentPeriodEnd: number },
-): Promise<void> {
+  options?: {
+    /** Admin sync-check: reset migration/renewal and force Stripe price to match. */
+    adminForceSync?: boolean;
+  },
+): Promise<{ stripePriceId?: string; planId?: Id<"subscriptionPlans"> }> {
   const customerId = stripeCustomerIdFromSubscription(subscription);
   if (!customerId) {
     throw new Error(`Stripe subscription ${subscription.id} has no customer id`);
@@ -1043,6 +1047,8 @@ async function persistStripeSubscriptionForConvex(
   const intervalInfo = getSubscriptionInterval(subscription);
   const planFields = await resolvePlanFieldsForStripeSubscription(ctx, subscription);
   const canceledAtRaw = (subscription as { canceled_at?: number }).canceled_at;
+  const adminForceSync = options?.adminForceSync === true;
+
   await ctx.runMutation(internal.paymentInternal.upsertSubscription, {
     subscriptionId: subscription.id,
     userId,
@@ -1056,9 +1062,20 @@ async function persistStripeSubscriptionForConvex(
       : undefined,
     interval: intervalInfo?.interval,
     intervalCount: intervalInfo?.intervalCount,
-    planId: planFields.planId,
+    // Only overwrite planId when Stripe price resolves to a package; otherwise keep
+    // any existing local package override for unlinked Stripe prices.
+    ...(planFields.planId ? { planId: planFields.planId } : {}),
     stripePriceId: planFields.stripePriceId,
+    ...(adminForceSync
+      ? {
+          clearLegacyMigration: true,
+          clearScheduledRenewal: true,
+          forceStripePrice: true,
+        }
+      : {}),
   });
+
+  return planFields;
 }
 
 /**
@@ -1072,6 +1089,9 @@ export const adminSyncStripeSubscriptionById = action({
     success: v.boolean(),
     message: v.string(),
     status: v.optional(v.string()),
+    stripePriceId: v.optional(v.string()),
+    planLinked: v.optional(v.boolean()),
+    needsPackageAssignment: v.optional(v.boolean()),
   }),
   handler: async (ctx, args) => {
     await requireUserAction(ctx);
@@ -1124,19 +1144,42 @@ export const adminSyncStripeSubscriptionById = action({
           }
         : undefined;
 
-      await persistStripeSubscriptionForConvex(ctx, subscription, userId, existingDates);
+      // Always reset migration / scheduled-renewal locks and make local match Stripe.
+      const planFields = await persistStripeSubscriptionForConvex(
+        ctx,
+        subscription,
+        userId,
+        existingDates,
+        { adminForceSync: true },
+      );
 
       if (subscription.id !== args.subscriptionId) {
         const original = await stripe.subscriptions.retrieve(args.subscriptionId, {
           expand: ["items.data.price"],
         });
-        await persistStripeSubscriptionForConvex(ctx, original, userId, existingDates);
+        await persistStripeSubscriptionForConvex(ctx, original, userId, existingDates, {
+          adminForceSync: true,
+        });
       }
+
+      const after = await ctx.runQuery(
+        internal.paymentInternal.getLocalSubscriptionForComparison,
+        { subscriptionId: args.subscriptionId },
+      );
+      const planLinked = Boolean(planFields.planId);
+      const needsPackageAssignment = !planLinked && after?.planId == null;
 
       return {
         success: true,
-        message: "Subscription synced from Stripe.",
+        message: needsPackageAssignment
+          ? "Synced from Stripe. This Stripe price is not linked to a package — assign a package for internal access."
+          : planLinked
+            ? "Synced from Stripe. Package plan matched from Stripe price."
+            : "Synced from Stripe. Existing internal package kept as override for this Stripe price.",
         status: subscription.status,
+        stripePriceId: planFields.stripePriceId,
+        planLinked,
+        needsPackageAssignment,
       };
     } catch (error) {
       console.error("Error syncing Stripe subscription by id (admin):", error);

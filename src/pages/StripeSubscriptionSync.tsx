@@ -1,7 +1,7 @@
 import { useCallback, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
-import { useAction } from "convex/react";
+import { useAction, useMutation, useQuery } from "convex/react";
 import {
   ArrowLeft,
   CheckCircle2,
@@ -9,6 +9,7 @@ import {
   Loader2,
   RefreshCw,
   GitCompareArrows,
+  Package,
 } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../convex/_generated/api";
@@ -16,6 +17,15 @@ import type { Id } from "../../convex/_generated/dataModel";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Select,
   SelectContent,
@@ -37,6 +47,7 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@/components/ui/tooltip";
+import { formatPrice } from "@/pages/Payments/utils";
 
 type ComparisonRow = {
   stripeSubscriptionId: string;
@@ -56,6 +67,12 @@ type ComparisonRow = {
   localCurrentPeriodEnd: number | null;
   localCancelAtPeriodEnd: boolean | null;
   localStripePriceId: string | null;
+  localRenewalStripePriceId: string | null;
+  localPlanId: Id<"subscriptionPlans"> | null;
+  localPlanName: string | null;
+  legacyMigrationStatus: "migrated" | null;
+  stripePriceLinkedToPlan: boolean;
+  needsPackageAssignment: boolean;
   mappedUserId: Id<"users"> | null;
   mappedUserName: string | null;
   mappedUserEmail: string | null;
@@ -63,6 +80,7 @@ type ComparisonRow = {
   syncNeeded: boolean;
   canSync: boolean;
   syncReasons: string[];
+  expectedDifferences: string[];
 };
 
 type StatusFilter =
@@ -74,7 +92,7 @@ type StatusFilter =
   | "incomplete"
   | "trialing";
 
-type ViewFilter = "all" | "needs_sync" | "in_sync";
+type ViewFilter = "all" | "needs_sync" | "needs_package" | "in_sync";
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "All Stripe statuses" },
@@ -101,26 +119,45 @@ function userLabel(name: string | null, email: string | null) {
 }
 
 function SyncStatusBadge({ row }: { row: ComparisonRow }) {
-  if (row.inSync) {
+  if (row.syncNeeded) {
+    if (!row.canSync) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          Cannot sync
+        </Badge>
+      );
+    }
     return (
-      <Badge variant="default" className="gap-1">
-        <CheckCircle2 className="h-3 w-3" />
-        In sync
-      </Badge>
-    );
-  }
-  if (!row.canSync) {
-    return (
-      <Badge variant="destructive" className="gap-1">
+      <Badge variant="secondary" className="gap-1 text-amber-800 dark:text-amber-300">
         <AlertTriangle className="h-3 w-3" />
-        Cannot sync
+        Needs sync
       </Badge>
     );
   }
+
+  if (row.needsPackageAssignment) {
+    return (
+      <Badge variant="secondary" className="gap-1 text-amber-800 dark:text-amber-300">
+        <Package className="h-3 w-3" />
+        Needs package
+      </Badge>
+    );
+  }
+
+  if (row.expectedDifferences.length > 0) {
+    return (
+      <Badge variant="outline" className="gap-1">
+        <CheckCircle2 className="h-3 w-3" />
+        OK (package override)
+      </Badge>
+    );
+  }
+
   return (
-    <Badge variant="secondary" className="gap-1 text-amber-800 dark:text-amber-300">
-      <AlertTriangle className="h-3 w-3" />
-      Needs sync
+    <Badge variant="default" className="gap-1">
+      <CheckCircle2 className="h-3 w-3" />
+      In sync
     </Badge>
   );
 }
@@ -133,7 +170,16 @@ function ComparisonRowActions({
   onSynced: () => void;
 }) {
   const [loading, setLoading] = useState(false);
+  const [packageDialogOpen, setPackageDialogOpen] = useState(false);
+  const [selectedPlanId, setSelectedPlanId] = useState("");
+  const [packageLoading, setPackageLoading] = useState(false);
+
   const syncSubscription = useAction(api.payment.adminSyncStripeSubscriptionById);
+  const setInternalPackagePlan = useMutation(api.subscriptionsAdmin.setInternalPackagePlan);
+  const packagePlans = useQuery(
+    api.subscriptionsAdmin.listPackagePlansForAssignment,
+    packageDialogOpen ? {} : "skip",
+  );
 
   const handleSync = async () => {
     setLoading(true);
@@ -144,6 +190,9 @@ function ComparisonRowActions({
       if (result.success) {
         toast.success(result.message);
         onSynced();
+        if (result.needsPackageAssignment && row.localSubscriptionDocId) {
+          setPackageDialogOpen(true);
+        }
       } else {
         toast.error(result.message);
       }
@@ -156,36 +205,128 @@ function ComparisonRowActions({
     }
   };
 
+  const handleAssignPackage = async () => {
+    if (!row.localSubscriptionDocId || !selectedPlanId) {
+      return;
+    }
+    setPackageLoading(true);
+    try {
+      const result = await setInternalPackagePlan({
+        subscriptionDocId: row.localSubscriptionDocId,
+        planId: selectedPlanId as Id<"subscriptionPlans">,
+      });
+      toast.success(result.message);
+      setPackageDialogOpen(false);
+      onSynced();
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to assign package";
+      toast.error(message);
+    } finally {
+      setPackageLoading(false);
+    }
+  };
+
   const userId = row.localUserId ?? row.mappedUserId;
+  const canAssignPackage =
+    row.localSubscriptionDocId != null &&
+    (row.needsPackageAssignment ||
+      (!row.stripePriceLinkedToPlan &&
+        row.localStripePriceId != null &&
+        row.localStripePriceId === row.stripePriceId));
 
   return (
-    <div className="flex flex-col items-end gap-2">
-      {row.syncNeeded && row.canSync && (
-        <Button variant="outline" size="sm" disabled={loading} onClick={handleSync}>
-          {loading ? (
-            <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          ) : (
-            <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
-          )}
-          Sync from Stripe
-        </Button>
-      )}
-      {row.syncNeeded && !row.canSync && (
-        <Tooltip>
-          <TooltipTrigger asChild>
-            <span className="text-xs text-destructive cursor-help">Cannot sync</span>
-          </TooltipTrigger>
-          <TooltipContent>
-            Link the Stripe customer to a Convex user before syncing.
-          </TooltipContent>
-        </Tooltip>
-      )}
-      {userId && (
-        <Button variant="ghost" size="sm" asChild>
-          <Link to={`/users/${userId}/info`}>View user</Link>
-        </Button>
-      )}
-    </div>
+    <>
+      <div className="flex flex-col items-end gap-2">
+        {row.syncNeeded && row.canSync && (
+          <Button variant="outline" size="sm" disabled={loading} onClick={handleSync}>
+            {loading ? (
+              <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+            ) : (
+              <RefreshCw className="mr-1.5 h-3.5 w-3.5" />
+            )}
+            Sync from Stripe
+          </Button>
+        )}
+        {row.syncNeeded && !row.canSync && (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-xs text-destructive cursor-help">Cannot sync</span>
+            </TooltipTrigger>
+            <TooltipContent>
+              Link the Stripe customer to a Convex user before syncing.
+            </TooltipContent>
+          </Tooltip>
+        )}
+        {canAssignPackage && (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setSelectedPlanId(row.localPlanId ?? "");
+              setPackageDialogOpen(true);
+            }}
+          >
+            <Package className="mr-1.5 h-3.5 w-3.5" />
+            {row.localPlanId ? "Change package" : "Assign package"}
+          </Button>
+        )}
+        {userId && (
+          <Button variant="ghost" size="sm" asChild>
+            <Link to={`/users/${userId}/info`}>View user</Link>
+          </Button>
+        )}
+      </div>
+
+      <Dialog open={packageDialogOpen} onOpenChange={setPackageDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Assign internal package</DialogTitle>
+            <DialogDescription>
+              Stripe billing stays on{" "}
+              <code className="text-xs">{row.stripePriceId ?? "this price"}</code>. Choose the
+              package that should control course access internally.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-2">
+            <Label>Package plan</Label>
+            {packagePlans === undefined ? (
+              <p className="text-sm text-muted-foreground">Loading plans…</p>
+            ) : packagePlans.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No package plans available.</p>
+            ) : (
+              <Select value={selectedPlanId} onValueChange={setSelectedPlanId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Select a package" />
+                </SelectTrigger>
+                <SelectContent>
+                  {packagePlans.map((plan) => (
+                    <SelectItem key={plan._id} value={plan._id}>
+                      {plan.name} — {formatPrice(plan.priceAmount, plan.priceCurrency)} /{" "}
+                      {plan.billingInterval}
+                      {plan.isHidden ? " (hidden)" : ""}
+                      {!plan.isActive ? " (inactive)" : ""}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={() => setPackageDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button
+              onClick={handleAssignPackage}
+              disabled={packageLoading || !selectedPlanId || packagePlans?.length === 0}
+            >
+              {packageLoading && <Loader2 className="mr-1.5 h-4 w-4 animate-spin" />}
+              Save package
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   );
 }
 
@@ -247,6 +388,9 @@ const StripeSubscriptionSync = () => {
     if (viewFilter === "needs_sync") {
       return rows.filter((row) => row.syncNeeded);
     }
+    if (viewFilter === "needs_package") {
+      return rows.filter((row) => row.needsPackageAssignment);
+    }
     if (viewFilter === "in_sync") {
       return rows.filter((row) => row.inSync);
     }
@@ -256,8 +400,9 @@ const StripeSubscriptionSync = () => {
   const summary = useMemo(() => {
     const needsSync = rows.filter((row) => row.syncNeeded && row.canSync).length;
     const cannotSync = rows.filter((row) => row.syncNeeded && !row.canSync).length;
+    const needsPackage = rows.filter((row) => row.needsPackageAssignment).length;
     const inSync = rows.filter((row) => row.inSync).length;
-    return { needsSync, cannotSync, inSync, total: rows.length };
+    return { needsSync, cannotSync, needsPackage, inSync, total: rows.length };
   }, [rows]);
 
   return (
@@ -323,6 +468,7 @@ const StripeSubscriptionSync = () => {
             <SelectContent>
               <SelectItem value="all">All loaded rows</SelectItem>
               <SelectItem value="needs_sync">Needs sync only</SelectItem>
+              <SelectItem value="needs_package">Needs package only</SelectItem>
               <SelectItem value="in_sync">In sync only</SelectItem>
             </SelectContent>
           </Select>
@@ -333,6 +479,8 @@ const StripeSubscriptionSync = () => {
               <span>{summary.inSync} in sync</span>
               <span>·</span>
               <span>{summary.needsSync} need sync</span>
+              <span>·</span>
+              <span>{summary.needsPackage} need package</span>
               {summary.cannotSync > 0 && (
                 <>
                   <span>·</span>
@@ -428,9 +576,20 @@ const StripeSubscriptionSync = () => {
                                     row.localCurrentPeriodEnd ?? 0,
                                   )}
                                 </p>
+                                {row.localPlanName && (
+                                  <p className="text-xs">
+                                    Package: {row.localPlanName}
+                                    {!row.stripePriceLinkedToPlan ? " (override)" : ""}
+                                  </p>
+                                )}
                                 {row.localStripePriceId && (
                                   <p className="font-mono text-xs text-muted-foreground">
                                     {row.localStripePriceId}
+                                  </p>
+                                )}
+                                {row.legacyMigrationStatus === "migrated" && (
+                                  <p className="text-xs text-amber-700 dark:text-amber-400">
+                                    Legacy migration flag
                                   </p>
                                 )}
                                 {row.localCancelAtPeriodEnd && (
@@ -481,12 +640,18 @@ const StripeSubscriptionSync = () => {
                             </div>
                           </TableCell>
                           <TableCell className="min-w-[180px]">
-                            {row.syncReasons.length === 0 ? (
+                            {row.syncReasons.length === 0 &&
+                            row.expectedDifferences.length === 0 ? (
                               <span className="text-sm text-muted-foreground">—</span>
                             ) : (
                               <ul className="space-y-1 text-xs text-muted-foreground">
                                 {row.syncReasons.map((reason) => (
                                   <li key={reason}>{reason}</li>
+                                ))}
+                                {row.expectedDifferences.map((note) => (
+                                  <li key={note} className="text-muted-foreground/90">
+                                    {note}
+                                  </li>
                                 ))}
                               </ul>
                             )}
