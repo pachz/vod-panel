@@ -62,7 +62,7 @@ const PersonalTestPreview = () => {
       previousLabel="Previous"
       nextLabel="Next"
       seeResultsLabel="See results"
-      savingResultsLabel="Saving your results…"
+      savingResultsLabel="Loading results…"
       noRecommendationsLabel="No course recommendations matched your answers."
       completedInLabel={(duration) => `Completed in ${duration}`}
       restartLabel="Restart preview"

@@ -383,6 +383,8 @@ export default defineSchema({
       v.literal("published"),
       v.literal("disabled"),
     ),
+    /** Lower values appear first in test listings. */
+    displayOrder: v.optional(v.number()),
     questionCount: v.number(),
     resultSettings: v.object({
       showAll: v.boolean(),

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { useMutation } from "convex/react";
-import { ArrowLeft, ArrowRight, Check } from "lucide-react";
+import { useMutation, useQuery } from "convex/react";
+import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../../convex/_generated/api";
@@ -43,13 +43,9 @@ function CelebrationIcon() {
 const answerControlClassName =
   "mt-0.5 h-5 w-5 shrink-0 border-muted-foreground/40 text-cta data-[state=checked]:border-cta";
 
-const answerOptionCardClassName = (
-  isSelected: boolean,
-  isArabic: boolean,
-) =>
+const answerOptionCardClassName = (isSelected: boolean) =>
   cn(
-    "flex w-full cursor-pointer items-start gap-3 rounded-xl border p-4 transition-colors hover:border-cta/40 hover:bg-cta/5",
-    isArabic ? "flex-row-reverse text-right" : "text-left",
+    "flex w-full cursor-pointer items-start gap-3 rounded-xl border p-4 text-start transition-colors hover:border-cta/40 hover:bg-cta/5",
     isSelected && "border-cta bg-cta/5 ring-1 ring-cta/25",
   );
 
@@ -123,6 +119,7 @@ type PersonalTestRunnerProps = {
   secondaryAction?: { href: string; label: string };
   /** When set, show a single language instead of bilingual content. */
   language?: Language;
+  isRTL?: boolean;
   questionProgressLabel?: (current: number, total: number) => string;
   percentCompleteLabel?: (percent: number) => string;
   showQuestionArabic?: boolean;
@@ -157,6 +154,7 @@ export function PersonalTestRunner({
   restartLabel,
   secondaryAction,
   language,
+  isRTL: isRTLProp,
   questionProgressLabel,
   percentCompleteLabel,
   showQuestionArabic = true,
@@ -180,6 +178,7 @@ export function PersonalTestRunner({
   const attemptFinishedRef = useRef(false);
   const isSingleLanguage = language !== undefined;
   const isArabic = language === "ar";
+  const isRTL = isRTLProp ?? isArabic;
 
   const getQuestionTitle = (question: PersonalTestQuestion["question"]) =>
     isSingleLanguage
@@ -224,6 +223,13 @@ export function PersonalTestRunner({
     [selectedAnswers],
   );
 
+  const previewResults = useQuery(
+    api.personalTest.previewPersonalTestResults,
+    isPreview && showResults && allSelectedAnswerIds.length > 0
+      ? { testId, selectedAnswerIds: allSelectedAnswerIds }
+      : "skip",
+  );
+
   const getElapsedSeconds = useCallback(() => {
     if (!startedAtRef.current) {
       return 1;
@@ -232,6 +238,10 @@ export function PersonalTestRunner({
   }, []);
 
   const abandonCurrentAttempt = useCallback(async () => {
+    if (isPreview) {
+      return;
+    }
+
     const attemptId = attemptIdRef.current;
     if (!attemptId || attemptFinishedRef.current || !startedAtRef.current) {
       return;
@@ -246,10 +256,16 @@ export function PersonalTestRunner({
     } catch {
       // Best effort when leaving the test.
     }
-  }, [abandonAttempt, getElapsedSeconds]);
+  }, [abandonAttempt, getElapsedSeconds, isPreview]);
 
   const beginAttempt = useCallback(async () => {
-    const result = await startAttempt({ testId, isPreview });
+    if (isPreview) {
+      startedAtRef.current = Date.now();
+      attemptFinishedRef.current = false;
+      return;
+    }
+
+    const result = await startAttempt({ testId, isPreview: false });
     attemptIdRef.current = result.attemptId;
     startedAtRef.current = result.startedAt;
     attemptFinishedRef.current = false;
@@ -267,9 +283,27 @@ export function PersonalTestRunner({
     return () => {
       void abandonCurrentAttempt();
     };
-  }, [active, testId, questions.length, isPreview, beginAttempt, abandonCurrentAttempt]);
+  }, [active, testId, questions.length, beginAttempt, abandonCurrentAttempt]);
 
   useEffect(() => {
+    if (isPreview) {
+      if (!showResults || allSelectedAnswerIds.length === 0) {
+        return;
+      }
+
+      if (previewResults === undefined) {
+        setIsFinalizing(true);
+        return;
+      }
+
+      setIsFinalizing(false);
+      setCompletedResults({
+        durationSeconds: getElapsedSeconds(),
+        courses: previewResults.courses,
+      });
+      return;
+    }
+
     if (!showResults || attemptFinishedRef.current || !attemptIdRef.current) {
       return;
     }
@@ -307,7 +341,14 @@ export function PersonalTestRunner({
     return () => {
       cancelled = true;
     };
-  }, [showResults, allSelectedAnswerIds, completeAttempt, getElapsedSeconds]);
+  }, [
+    isPreview,
+    showResults,
+    allSelectedAnswerIds,
+    previewResults,
+    completeAttempt,
+    getElapsedSeconds,
+  ]);
 
   const currentQuestion = questions[currentIndex];
   const progressPercent =
@@ -355,7 +396,9 @@ export function PersonalTestRunner({
   };
 
   const handleRestart = async () => {
-    await abandonCurrentAttempt();
+    if (!isPreview) {
+      await abandonCurrentAttempt();
+    }
     resetRunnerState();
     onRestart?.();
     if (!active) {
@@ -375,12 +418,21 @@ export function PersonalTestRunner({
   return (
     <div
       className="mx-auto max-w-3xl space-y-6"
-      dir={isSingleLanguage ? (isArabic ? "rtl" : "ltr") : undefined}
+      dir={isSingleLanguage ? (isRTL ? "rtl" : "ltr") : undefined}
     >
       <div className="flex items-center justify-between gap-4">
-        <Button variant="ghost" size="sm" asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={cn(isRTL ? "-mr-2" : "-ml-2")}
+          asChild
+        >
           <Link to={backHref}>
-            <ArrowLeft className="mr-2 h-4 w-4" />
+            {isRTL ? (
+              <ArrowRight className="ml-2 h-4 w-4" />
+            ) : (
+              <ArrowLeft className="mr-2 h-4 w-4" />
+            )}
             {backLabel}
           </Link>
         </Button>
@@ -404,6 +456,7 @@ export function PersonalTestRunner({
             </div>
             <div
               className="h-1.5 w-full overflow-hidden rounded-full bg-muted"
+              dir={isRTL ? "rtl" : "ltr"}
               role="progressbar"
               aria-valuenow={progressPercent}
               aria-valuemin={0}
@@ -415,10 +468,7 @@ export function PersonalTestRunner({
               }
             >
               <div
-                className={cn(
-                  "h-full rounded-full bg-cta transition-all duration-300 ease-out",
-                  isArabic && "ms-auto",
-                )}
+                className="h-full rounded-full bg-cta transition-all duration-300 ease-out"
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
@@ -464,7 +514,7 @@ export function PersonalTestRunner({
                     <label
                       key={answer._id}
                       htmlFor={`answer-${answer._id}`}
-                      className={answerOptionCardClassName(isSelected, isArabic)}
+                      className={answerOptionCardClassName(isSelected)}
                     >
                       <RadioGroupItem
                         id={`answer-${answer._id}`}
@@ -493,7 +543,7 @@ export function PersonalTestRunner({
                   <label
                     key={answer._id}
                     htmlFor={`answer-${answer._id}`}
-                    className={answerOptionCardClassName(isSelected, isArabic)}
+                    className={answerOptionCardClassName(isSelected)}
                   >
                     <Checkbox
                       id={`answer-${answer._id}`}
@@ -524,17 +574,38 @@ export function PersonalTestRunner({
             )}
           </div>
 
-          <div className="flex justify-between pt-2">
-            <Button
-              variant="outline"
-              disabled={currentIndex === 0}
-              onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-            >
-              {previousLabel}
-            </Button>
-            <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
-              {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
-            </Button>
+          <div className="flex justify-between gap-3 pt-2">
+            {isRTL ? (
+              <>
+                <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
+                  {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
+                  <ChevronLeft className="ms-2 h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  disabled={currentIndex === 0}
+                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                >
+                  <ChevronRight className="me-2 h-4 w-4" />
+                  {previousLabel}
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  disabled={currentIndex === 0}
+                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+                >
+                  <ChevronLeft className="me-2 h-4 w-4" />
+                  {previousLabel}
+                </Button>
+                <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
+                  {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
+                  <ChevronRight className="ms-2 h-4 w-4" />
+                </Button>
+              </>
+            )}
           </div>
         </div>
       ) : (
@@ -565,10 +636,7 @@ export function PersonalTestRunner({
                 {completedResults.courses.map((course) => (
                   <li
                     key={course._id}
-                    className={cn(
-                      "flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center",
-                      isArabic && "sm:flex-row-reverse",
-                    )}
+                    className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
                   >
                     <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
                       {course.thumbnail_image_url ? (
@@ -584,12 +652,7 @@ export function PersonalTestRunner({
                         </div>
                       )}
                     </div>
-                    <div
-                      className={cn(
-                        "min-w-0 flex-1 space-y-1",
-                        isArabic ? "text-right" : "text-left",
-                      )}
-                    >
+                    <div className="min-w-0 flex-1 space-y-1 text-start">
                       <p className="font-semibold leading-snug">{getCourseName(course)}</p>
                       {getCourseDescription(course) && (
                         <p className="text-sm text-muted-foreground line-clamp-2">
@@ -627,7 +690,7 @@ export function PersonalTestRunner({
                 <Link to={secondaryAction.href}>
                   {secondaryAction.label}
                   <ArrowRight
-                    className={cn("h-4 w-4", isArabic ? "mr-2 rotate-180" : "ml-2")}
+                    className={cn("h-4 w-4", isRTL ? "me-2 rotate-180" : "ms-2")}
                   />
                 </Link>
               </Button>

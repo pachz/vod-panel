@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -47,7 +47,11 @@ const UserPersonalTestTake = () => {
       <div className="mx-auto max-w-2xl space-y-6" dir={isRTL ? "rtl" : "ltr"}>
         <Button variant="ghost" size="sm" asChild>
           <Link to={testsPath}>
-            <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            {isRTL ? (
+              <ArrowRight className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            ) : (
+              <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            )}
             {t("backToPersonalTests")}
           </Link>
         </Button>
@@ -89,6 +93,7 @@ const UserPersonalTestTake = () => {
       isPreview={false}
       active={hasStarted}
       language={language}
+      isRTL={isRTL}
       backHref={testsPath}
       backLabel={t("backToPersonalTests")}
       testCompletedTitle={t("testCompletedTitle")}

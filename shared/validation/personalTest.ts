@@ -24,6 +24,11 @@ export const personalTestUpdateSchema = z.object({
     .trim()
     .min(1, "Arabic name is required.")
     .max(120, "Arabic name must be 120 characters or less."),
+  displayOrder: z
+    .number()
+    .int("Ordering must be a whole number.")
+    .min(0, "Ordering must be 0 or greater.")
+    .max(1000, "Ordering must be 1000 or less."),
   description: z
     .string()
     .trim()

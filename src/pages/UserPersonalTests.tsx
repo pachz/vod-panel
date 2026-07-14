@@ -115,7 +115,12 @@ const UserPersonalTests = () => {
 
   const sortedTests = useMemo(() => {
     if (!tests) return [];
-    return [...tests].sort((a, b) => a.name.localeCompare(b.name));
+    return [...tests].sort((a, b) => {
+      if (a.displayOrder !== b.displayOrder) {
+        return a.displayOrder - b.displayOrder;
+      }
+      return a.name.localeCompare(b.name);
+    });
   }, [tests]);
 
   const handleOpenTest = (testId: Id<"personalTests">) => {
@@ -168,12 +173,7 @@ const UserPersonalTests = () => {
       </div>
 
       <Tabs value={activeTab} onValueChange={handleTabChange}>
-        <TabsList
-          className={cn(
-            "mx-auto grid w-full max-w-md grid-cols-2",
-            isRTL && "flex-row-reverse",
-          )}
-        >
+        <TabsList className="mx-auto grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="available">{t("availableTestsTab")}</TabsTrigger>
           <TabsTrigger value="results">{t("myResultsTab")}</TabsTrigger>
         </TabsList>
@@ -301,7 +301,6 @@ const UserPersonalTests = () => {
                       <div
                         className={cn(
                           "flex flex-col sm:flex-row",
-                          isRTL && "sm:flex-row-reverse",
                         )}
                       >
                         <div className="relative h-36 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-44">

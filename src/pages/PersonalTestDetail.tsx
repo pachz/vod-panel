@@ -236,6 +236,7 @@ const PersonalTestDetail = () => {
   );
   const [name, setName] = useState("");
   const [nameAr, setNameAr] = useState("");
+  const [displayOrder, setDisplayOrder] = useState("50");
   const [description, setDescription] = useState("");
   const [descriptionAr, setDescriptionAr] = useState("");
   const [showAllResults, setShowAllResults] = useState(true);
@@ -268,6 +269,7 @@ const PersonalTestDetail = () => {
     if (!data) return;
     setName(data.test.name);
     setNameAr(data.test.name_ar);
+    setDisplayOrder(String(data.test.displayOrder));
     setDescription(data.test.description ?? "");
     setDescriptionAr(data.test.description_ar ?? "");
     setShowAllResults(data.test.resultSettings.showAll);
@@ -448,9 +450,11 @@ const PersonalTestDetail = () => {
     if (!data) return;
 
     const parsedMax = maxCourses.trim() ? Number.parseInt(maxCourses, 10) : undefined;
+    const parsedDisplayOrder = Number.parseInt(displayOrder, 10);
     const result = personalTestUpdateSchema.safeParse({
       name,
       nameAr,
+      displayOrder: Number.isFinite(parsedDisplayOrder) ? parsedDisplayOrder : NaN,
       description: description || undefined,
       descriptionAr: descriptionAr || undefined,
       resultSettings: {
@@ -476,6 +480,7 @@ const PersonalTestDetail = () => {
     const infoChanged =
       name !== test.name ||
       nameAr !== test.name_ar ||
+      result.data.displayOrder !== test.displayOrder ||
       (description || "") !== (test.description ?? "") ||
       (descriptionAr || "") !== (test.description_ar ?? "");
 
@@ -499,6 +504,7 @@ const PersonalTestDetail = () => {
           testId,
           name: result.data.name,
           nameAr: result.data.nameAr,
+          displayOrder: result.data.displayOrder,
           description: result.data.description,
           descriptionAr: result.data.descriptionAr,
           resultSettings: result.data.resultSettings,
@@ -700,6 +706,20 @@ const PersonalTestDetail = () => {
                   onChange={(e) => setNameAr(e.target.value)}
                 />
               </div>
+            </div>
+            <div className="space-y-2 max-w-xs">
+              <Label htmlFor="display-order">Ordering</Label>
+              <Input
+                id="display-order"
+                type="number"
+                min={0}
+                max={1000}
+                value={displayOrder}
+                onChange={(e) => setDisplayOrder(e.target.value)}
+              />
+              <p className="text-sm text-muted-foreground">
+                Lower numbers appear first on the take-test page.
+              </p>
             </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">

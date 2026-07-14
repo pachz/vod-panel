@@ -1,6 +1,6 @@
 import { Link, useParams } from "react-router-dom";
 import { useQuery } from "convex/react";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, ArrowRight } from "lucide-react";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
@@ -38,7 +38,11 @@ const UserPersonalTestResults = () => {
       <div className="mx-auto max-w-3xl space-y-4" dir={isRTL ? "rtl" : "ltr"}>
         <Button variant="ghost" size="sm" className={cn(isRTL ? "-mr-2" : "-ml-2")} asChild>
           <Link to={testsPath}>
-            <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            {isRTL ? (
+              <ArrowRight className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            ) : (
+              <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            )}
             {t("backToPersonalTests")}
           </Link>
         </Button>
@@ -63,7 +67,11 @@ const UserPersonalTestResults = () => {
       <div className="space-y-2">
         <Button variant="ghost" size="sm" className={cn(isRTL ? "-mr-2" : "-ml-2")} asChild>
           <Link to={testsPath}>
-            <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            {isRTL ? (
+              <ArrowRight className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            ) : (
+              <ArrowLeft className={cn("h-4 w-4", isRTL ? "ml-2" : "mr-2")} />
+            )}
             {t("backToPersonalTests")}
           </Link>
         </Button>
@@ -92,10 +100,7 @@ const UserPersonalTestResults = () => {
               return (
                 <li
                   key={course.courseId}
-                  className={cn(
-                    "flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center",
-                    isRTL && "sm:flex-row-reverse",
-                  )}
+                  className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
                 >
                   <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
                     {course.thumbnail_image_url ? (
@@ -111,12 +116,7 @@ const UserPersonalTestResults = () => {
                       </div>
                     )}
                   </div>
-                  <div
-                    className={cn(
-                      "min-w-0 flex-1 space-y-1",
-                      isRTL ? "text-right" : "text-left",
-                    )}
-                  >
+                  <div className="min-w-0 flex-1 space-y-1 text-start">
                     <p className="font-semibold leading-snug">{courseName}</p>
                     {description && (
                       <p className="text-sm text-muted-foreground line-clamp-2">
@@ -159,7 +159,7 @@ const UserPersonalTestResults = () => {
                   : t("selectedAnswer");
 
               return (
-                <li key={response.questionId} className="rounded-lg border p-4 space-y-3">
+                <li key={response.questionId} className="rounded-lg border p-4 space-y-3 text-start">
                   <div>
                     <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
                       {t("questionProgress")

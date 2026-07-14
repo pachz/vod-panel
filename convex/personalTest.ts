@@ -18,6 +18,36 @@ const defaultResultSettings = {
   maxCourses: undefined as number | undefined,
 };
 
+const DEFAULT_DISPLAY_ORDER = 50;
+
+function comparePersonalTestsByDisplayOrder(
+  a: { displayOrder?: number; name: string; createdAt?: number },
+  b: { displayOrder?: number; name: string; createdAt?: number },
+) {
+  const orderA = a.displayOrder ?? DEFAULT_DISPLAY_ORDER;
+  const orderB = b.displayOrder ?? DEFAULT_DISPLAY_ORDER;
+  if (orderA !== orderB) {
+    return orderA - orderB;
+  }
+  if (
+    a.createdAt !== undefined &&
+    b.createdAt !== undefined &&
+    a.createdAt !== b.createdAt
+  ) {
+    return a.createdAt - b.createdAt;
+  }
+  return a.name.localeCompare(b.name);
+}
+
+const previewCourseResultValidator = v.object({
+  _id: v.id("courses"),
+  name: v.string(),
+  name_ar: v.string(),
+  thumbnail_image_url: v.optional(v.string()),
+  short_description: v.optional(v.string()),
+  short_description_ar: v.optional(v.string()),
+});
+
 function buildNameSearch(name: string, nameAr: string) {
   return `${name} ${nameAr}`.trim();
 }
@@ -233,6 +263,7 @@ const testListItemValidator = v.object({
     v.literal("published"),
     v.literal("disabled"),
   ),
+  displayOrder: v.number(),
   questionCount: v.number(),
   createdAt: v.number(),
   updatedAt: v.number(),
@@ -274,18 +305,21 @@ export const listPersonalTests = query({
         .paginate({ cursor: cursor ?? null, numItems });
 
       return {
-        page: results.page.map((test) => ({
-          _id: test._id,
-          _creationTime: test._creationTime,
-          name: test.name,
-          name_ar: test.name_ar,
-          status: test.status,
-          questionCount: test.questionCount,
-          createdAt: test.createdAt,
-          updatedAt: test.updatedAt,
-          hasPublishedSnapshot: test.publishedSnapshot !== undefined,
-          hasUnpublishedChanges: resolveHasUnpublishedChanges(test),
-        })),
+        page: results.page
+          .map((test) => ({
+            _id: test._id,
+            _creationTime: test._creationTime,
+            name: test.name,
+            name_ar: test.name_ar,
+            status: test.status,
+            displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
+            questionCount: test.questionCount,
+            createdAt: test.createdAt,
+            updatedAt: test.updatedAt,
+            hasPublishedSnapshot: test.publishedSnapshot !== undefined,
+            hasUnpublishedChanges: resolveHasUnpublishedChanges(test),
+          }))
+          .sort(comparePersonalTestsByDisplayOrder),
         isDone: results.isDone,
         continueCursor: results.continueCursor,
       };
@@ -308,18 +342,21 @@ export const listPersonalTests = query({
     });
 
     return {
-      page: results.page.map((test) => ({
-        _id: test._id,
-        _creationTime: test._creationTime,
-        name: test.name,
-        name_ar: test.name_ar,
-        status: test.status,
-        questionCount: test.questionCount,
-        createdAt: test.createdAt,
-        updatedAt: test.updatedAt,
-        hasPublishedSnapshot: test.publishedSnapshot !== undefined,
-        hasUnpublishedChanges: resolveHasUnpublishedChanges(test),
-      })),
+      page: results.page
+        .map((test) => ({
+          _id: test._id,
+          _creationTime: test._creationTime,
+          name: test.name,
+          name_ar: test.name_ar,
+          status: test.status,
+          displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
+          questionCount: test.questionCount,
+          createdAt: test.createdAt,
+          updatedAt: test.updatedAt,
+          hasPublishedSnapshot: test.publishedSnapshot !== undefined,
+          hasUnpublishedChanges: resolveHasUnpublishedChanges(test),
+        }))
+        .sort(comparePersonalTestsByDisplayOrder),
       isDone: results.isDone,
       continueCursor: results.continueCursor,
     };
@@ -343,6 +380,7 @@ export const getPersonalTest = query({
           v.literal("published"),
           v.literal("disabled"),
         ),
+        displayOrder: v.number(),
         questionCount: v.number(),
         resultSettings: v.object({
           showAll: v.boolean(),
@@ -400,6 +438,7 @@ export const getPersonalTest = query({
         description_ar: test.description_ar,
         thumbnail_image_url: test.thumbnail_image_url,
         status: test.status,
+        displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
         questionCount: test.questionCount,
         resultSettings: test.resultSettings,
         publishedSnapshot: test.publishedSnapshot,
@@ -445,11 +484,21 @@ export const createPersonalTest = mutation({
     const data = validateCreateInput(args);
     const now = Date.now();
 
+    const existingTests = await ctx.db
+      .query("personalTests")
+      .withIndex("by_deletedAt", (q) => q.eq("deletedAt", undefined))
+      .collect();
+    const maxDisplayOrder = existingTests.reduce(
+      (max, test) => Math.max(max, test.displayOrder ?? DEFAULT_DISPLAY_ORDER),
+      -1,
+    );
+
     return await ctx.db.insert("personalTests", {
       name: data.name,
       name_ar: data.nameAr,
       name_search: buildNameSearch(data.name, data.nameAr),
       status: "draft",
+      displayOrder: maxDisplayOrder + 1,
       questionCount: 0,
       resultSettings: defaultResultSettings,
       createdAt: now,
@@ -465,6 +514,7 @@ export const updatePersonalTest = mutation({
     nameAr: v.string(),
     description: v.optional(v.string()),
     descriptionAr: v.optional(v.string()),
+    displayOrder: v.number(),
     resultSettings: v.object({
       showAll: v.boolean(),
       maxCourses: v.optional(v.number()),
@@ -479,6 +529,7 @@ export const updatePersonalTest = mutation({
       nameAr: args.nameAr,
       description: args.description,
       descriptionAr: args.descriptionAr,
+      displayOrder: args.displayOrder,
       resultSettings: args.resultSettings,
     });
 
@@ -490,6 +541,7 @@ export const updatePersonalTest = mutation({
       name_search: buildNameSearch(data.name, data.nameAr),
       description: data.description || undefined,
       description_ar: data.descriptionAr || undefined,
+      displayOrder: data.displayOrder,
       resultSettings: data.resultSettings,
       updatedAt: Date.now(),
     });
@@ -822,6 +874,7 @@ const publishedTestListItemValidator = v.object({
   description_ar: v.optional(v.string()),
   thumbnail_image_url: v.optional(v.string()),
   questionCount: v.number(),
+  displayOrder: v.number(),
 });
 
 const publishedTestQuestionValidator = v.object({
@@ -839,6 +892,27 @@ const publishedTestQuestionValidator = v.object({
       text_ar: v.string(),
     }),
   ),
+});
+
+export const previewPersonalTestResults = query({
+  args: {
+    testId: v.id("personalTests"),
+    selectedAnswerIds: v.array(v.id("personalTestAnswers")),
+  },
+  returns: v.object({
+    courses: v.array(previewCourseResultValidator),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireTech: true });
+    const test = await getTestOrThrow(ctx, args.testId);
+    const { courses } = await computeRecommendedCourses(
+      ctx,
+      args.testId,
+      args.selectedAnswerIds,
+      test.resultSettings,
+    );
+    return { courses };
+  },
 });
 
 export const listPublishedPersonalTests = query({
@@ -860,15 +934,18 @@ export const listPublishedPersonalTests = query({
         )
         .take(50);
 
-      return results.map((test) => ({
-        _id: test._id,
-        name: test.name,
-        name_ar: test.name_ar,
-        description: test.description,
-        description_ar: test.description_ar,
-        thumbnail_image_url: test.thumbnail_image_url,
-        questionCount: test.questionCount,
-      }));
+      return results
+        .map((test) => ({
+          _id: test._id,
+          name: test.name,
+          name_ar: test.name_ar,
+          description: test.description,
+          description_ar: test.description_ar,
+          thumbnail_image_url: test.thumbnail_image_url,
+          questionCount: test.questionCount,
+          displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
+        }))
+        .sort(comparePersonalTestsByDisplayOrder);
     }
 
     const tests = await ctx.db
@@ -879,15 +956,18 @@ export const listPublishedPersonalTests = query({
       .order("desc")
       .take(50);
 
-    return tests.map((test) => ({
-      _id: test._id,
-      name: test.name,
-      name_ar: test.name_ar,
-      description: test.description,
-      description_ar: test.description_ar,
-      thumbnail_image_url: test.thumbnail_image_url,
-      questionCount: test.questionCount,
-    }));
+    return tests
+      .map((test) => ({
+        _id: test._id,
+        name: test.name,
+        name_ar: test.name_ar,
+        description: test.description,
+        description_ar: test.description_ar,
+        thumbnail_image_url: test.thumbnail_image_url,
+        questionCount: test.questionCount,
+        displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
+      }))
+      .sort(comparePersonalTestsByDisplayOrder);
   },
 });
 

@@ -436,6 +436,10 @@ export const listPersonalTestAttempts = query({
     const results = [];
 
     for (const attempt of attempts) {
+      if (attempt.isPreview ?? false) {
+        continue;
+      }
+
       if (!userCache.has(attempt.userId)) {
         userCache.set(attempt.userId, await ctx.db.get("users", attempt.userId));
       }
