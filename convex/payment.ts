@@ -1093,7 +1093,17 @@ export const adminSyncStripeSubscriptionById = action({
     planLinked: v.optional(v.boolean()),
     needsPackageAssignment: v.optional(v.boolean()),
   }),
-  handler: async (ctx, args) => {
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    success: boolean;
+    message: string;
+    status?: string;
+    stripePriceId?: string;
+    planLinked?: boolean;
+    needsPackageAssignment?: boolean;
+  }> => {
     await requireUserAction(ctx);
     await ctx.runQuery(internal.user.requireTechQuery, {});
 
@@ -1112,7 +1122,24 @@ export const adminSyncStripeSubscriptionById = action({
     }
 
     const stripe = new Stripe(stripeSecretKey);
-    const local = await ctx.runQuery(internal.paymentInternal.getLocalSubscriptionForComparison, {
+    const local: {
+      subscriptionDocId: Id<"subscriptions">;
+      subscriptionId: string;
+      userId: Id<"users">;
+      customerId: string;
+      status: "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing";
+      currentPeriodStart: number;
+      currentPeriodEnd: number;
+      cancelAtPeriodEnd: boolean;
+      stripePriceId: string | null;
+      renewalStripePriceId: string | null;
+      planId: Id<"subscriptionPlans"> | null;
+      planName: string | null;
+      legacyMigrationStatus: "migrated" | null;
+      userName: string | null;
+      userEmail: string | null;
+      updatedAt: number;
+    } | null = await ctx.runQuery(internal.paymentInternal.getLocalSubscriptionForComparison, {
       subscriptionId: args.subscriptionId,
     });
 
@@ -1145,7 +1172,10 @@ export const adminSyncStripeSubscriptionById = action({
         : undefined;
 
       // Always reset migration / scheduled-renewal locks and make local match Stripe.
-      const planFields = await persistStripeSubscriptionForConvex(
+      const planFields: {
+        stripePriceId?: string;
+        planId?: Id<"subscriptionPlans">;
+      } = await persistStripeSubscriptionForConvex(
         ctx,
         subscription,
         userId,
@@ -1162,12 +1192,14 @@ export const adminSyncStripeSubscriptionById = action({
         });
       }
 
-      const after = await ctx.runQuery(
+      const after: {
+        planId: Id<"subscriptionPlans"> | null;
+      } | null = await ctx.runQuery(
         internal.paymentInternal.getLocalSubscriptionForComparison,
         { subscriptionId: args.subscriptionId },
       );
-      const planLinked = Boolean(planFields.planId);
-      const needsPackageAssignment = !planLinked && after?.planId == null;
+      const planLinked: boolean = Boolean(planFields.planId);
+      const needsPackageAssignment: boolean = !planLinked && after?.planId == null;
 
       return {
         success: true,
