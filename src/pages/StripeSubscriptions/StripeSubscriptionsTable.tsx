@@ -10,6 +10,7 @@ import {
 } from "@/components/ui/table";
 import { formatPrice } from "@/pages/Payments/utils";
 import { AutoRenewCell, SubscriptionRowActions, type SubscriptionRow } from "./SubscriptionRowActions";
+import { TableBatchActions } from "./TableBatchActions";
 
 type StripePriceDisplay = {
   stripePriceId: string;
@@ -61,7 +62,9 @@ export function StripeSubscriptionsTable({
   }
 
   return (
-    <div className="rounded-lg border overflow-x-auto">
+    <div className="space-y-0">
+      <TableBatchActions rows={rows} />
+      <div className="rounded-lg border overflow-x-auto">
       <Table>
         <TableHeader>
           <TableRow>
@@ -131,6 +134,7 @@ export function StripeSubscriptionsTable({
           })}
         </TableBody>
       </Table>
+      </div>
     </div>
   );
 }
