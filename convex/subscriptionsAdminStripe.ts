@@ -652,3 +652,70 @@ export const setRenewalPrice = action({
     };
   },
 });
+
+const stripePriceDisplayValidator = v.object({
+  stripePriceId: v.string(),
+  planName: v.union(v.string(), v.null()),
+  priceAmount: v.union(v.number(), v.null()),
+  priceCurrency: v.union(v.string(), v.null()),
+  interval: v.union(v.string(), v.null()),
+});
+
+function displayNameFromStripePrice(price: Stripe.Price): string | null {
+  const product = price.product;
+  if (typeof product === "string" || "deleted" in product) {
+    return null;
+  }
+  return product.name?.trim() || null;
+}
+
+/** Resolve display fields for Stripe price IDs not linked to internal plans. */
+export const lookupStripePriceDisplays = action({
+  args: {
+    stripePriceIds: v.array(v.string()),
+  },
+  returns: v.array(stripePriceDisplayValidator),
+  handler: async (ctx, args) => {
+    await requireTechAction(ctx);
+
+    const uniqueIds = [...new Set(args.stripePriceIds.filter((id) => id.startsWith("price_")))];
+    if (uniqueIds.length === 0) {
+      return [];
+    }
+
+    const stripe = getStripe();
+    const results: Array<{
+      stripePriceId: string;
+      planName: string | null;
+      priceAmount: number | null;
+      priceCurrency: string | null;
+      interval: string | null;
+    }> = [];
+
+    for (const stripePriceId of uniqueIds) {
+      try {
+        const price = await stripe.prices.retrieve(stripePriceId, {
+          expand: ["product"],
+        });
+        results.push({
+          stripePriceId,
+          planName: displayNameFromStripePrice(price),
+          priceAmount: price.unit_amount ?? null,
+          priceCurrency: price.currency ?? null,
+          interval: price.recurring?.interval ?? null,
+        });
+      } catch (error) {
+        console.error(`Failed to retrieve Stripe price ${stripePriceId}:`, error);
+        results.push({
+          stripePriceId,
+          planName: null,
+          priceAmount: null,
+          priceCurrency: null,
+          interval: null,
+        });
+      }
+    }
+
+    return results;
+  },
+});

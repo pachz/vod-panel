@@ -47,6 +47,7 @@ const subscriptionRowValidator = v.object({
   renewalPlanName: v.union(v.string(), v.null()),
   renewalPriceAmount: v.union(v.number(), v.null()),
   renewalPriceCurrency: v.union(v.string(), v.null()),
+  renewalStripePriceId: v.union(v.string(), v.null()),
   hasScheduledRenewalPrice: v.boolean(),
   interval: v.union(v.string(), v.null()),
   intervalCount: v.union(v.number(), v.null()),
@@ -80,6 +81,7 @@ function finalizeSubscriptionAdminRow(
       renewalPlanName?: string | null;
       renewalPriceAmount?: number | null;
       renewalPriceCurrency?: string | null;
+      renewalStripePriceId?: string | null;
       hasScheduledRenewalPrice?: boolean;
       interval: string | null;
       intervalCount: number | null;
@@ -102,6 +104,7 @@ function finalizeSubscriptionAdminRow(
     renewalPlanName: row.renewalPlanName ?? null,
     renewalPriceAmount: row.renewalPriceAmount ?? null,
     renewalPriceCurrency: row.renewalPriceCurrency ?? null,
+    renewalStripePriceId: row.renewalStripePriceId ?? null,
     hasScheduledRenewalPrice: row.hasScheduledRenewalPrice ?? false,
   };
 }
@@ -348,6 +351,7 @@ async function enrichSubscriptionRow(
     renewalPlanName: renewalPrice.planName,
     renewalPriceAmount: renewalPrice.priceAmount,
     renewalPriceCurrency: renewalPrice.priceCurrency,
+    renewalStripePriceId: sub.renewalStripePriceId ?? null,
     hasScheduledRenewalPrice,
     interval: sub.interval ?? null,
     intervalCount: sub.intervalCount ?? null,

@@ -1,6 +1,6 @@
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { useQuery } from "convex/react";
+import { useEffect, useMemo, useState } from "react";
+import { useAction, useQuery } from "convex/react";
 import { CreditCard, GitCompareArrows, Search } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { Badge } from "@/components/ui/badge";
@@ -26,6 +26,14 @@ type SubscriptionStatus =
   | "incomplete"
   | "trialing";
 
+type StripePriceDisplay = {
+  stripePriceId: string;
+  planName: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  interval: string | null;
+};
+
 type PriceGroup = {
   key: string;
   stripePriceId: string | null;
@@ -33,6 +41,7 @@ type PriceGroup = {
   priceAmount: number | null;
   priceCurrency: string | null;
   interval: string | null;
+  isUnlinkedStripePrice: boolean;
   rows: SubscriptionRow[];
 };
 
@@ -59,31 +68,41 @@ function groupLabel(group: PriceGroup) {
       ? formatPrice(group.priceAmount, group.priceCurrency)
       : null;
   const interval = formatInterval(group.interval);
-  const parts = [group.planName ?? "Unknown plan"];
+  const name = group.planName ?? "Unknown Stripe price";
+  const parts = [name];
   if (price) {
     parts.push(interval ? `${price} / ${interval}` : price);
+  }
+  if (group.isUnlinkedStripePrice) {
+    parts.push("(Stripe only)");
   }
   return parts.join(" · ");
 }
 
-function groupByStripePrice(rows: SubscriptionRow[]): PriceGroup[] {
+function groupByStripePrice(
+  rows: SubscriptionRow[],
+  stripePriceLookup: Map<string, StripePriceDisplay>,
+): PriceGroup[] {
   const groups = new Map<string, PriceGroup>();
 
   for (const row of rows) {
     const key = row.stripePriceId ?? "unknown-price";
+    const stripeLookup = row.stripePriceId ? stripePriceLookup.get(row.stripePriceId) : undefined;
     const existing = groups.get(key);
     if (existing) {
       existing.rows.push(row);
       continue;
     }
 
+    const hasInternalPlan = row.planName != null && row.priceAmount != null;
     groups.set(key, {
       key,
       stripePriceId: row.stripePriceId,
-      planName: row.planName,
-      priceAmount: row.priceAmount,
-      priceCurrency: row.priceCurrency,
-      interval: row.interval,
+      planName: row.planName ?? stripeLookup?.planName ?? null,
+      priceAmount: row.priceAmount ?? stripeLookup?.priceAmount ?? null,
+      priceCurrency: row.priceCurrency ?? stripeLookup?.priceCurrency ?? null,
+      interval: row.interval ?? stripeLookup?.interval ?? null,
+      isUnlinkedStripePrice: !hasInternalPlan && row.stripePriceId != null,
       rows: [row],
     });
   }
@@ -106,6 +125,11 @@ const StripeSubscriptions = () => {
   const [statusFilter, setStatusFilter] = useState<"all" | SubscriptionStatus>("all");
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
+  const [stripePriceLookup, setStripePriceLookup] = useState<Map<string, StripePriceDisplay>>(
+    () => new Map(),
+  );
+
+  const lookupStripePrices = useAction(api.subscriptionsAdminStripe.lookupStripePriceDisplays);
 
   const queryArgs = useMemo(
     () => ({
@@ -119,7 +143,62 @@ const StripeSubscriptions = () => {
     | SubscriptionRow[]
     | undefined;
 
-  const priceGroups = useMemo(() => groupByStripePrice(rows ?? []), [rows]);
+  const priceIdsNeedingLookup = useMemo(() => {
+    if (!rows) {
+      return [];
+    }
+    const ids = new Set<string>();
+    for (const row of rows) {
+      if (
+        row.stripePriceId &&
+        (row.planName == null || row.priceAmount == null || row.priceCurrency == null)
+      ) {
+        ids.add(row.stripePriceId);
+      }
+      if (
+        row.renewalStripePriceId &&
+        row.hasScheduledRenewalPrice &&
+        (row.renewalPlanName == null ||
+          row.renewalPriceAmount == null ||
+          row.renewalPriceCurrency == null)
+      ) {
+        ids.add(row.renewalStripePriceId);
+      }
+    }
+    return [...ids].sort();
+  }, [rows]);
+
+  useEffect(() => {
+    if (priceIdsNeedingLookup.length === 0) {
+      setStripePriceLookup(new Map());
+      return;
+    }
+
+    let cancelled = false;
+
+    void lookupStripePrices({ stripePriceIds: priceIdsNeedingLookup })
+      .then((displays) => {
+        if (cancelled) {
+          return;
+        }
+        setStripePriceLookup(new Map(displays.map((display) => [display.stripePriceId, display])));
+      })
+      .catch((error: unknown) => {
+        if (cancelled) {
+          return;
+        }
+        console.error("Failed to load Stripe price details:", error);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [lookupStripePrices, priceIdsNeedingLookup]);
+
+  const priceGroups = useMemo(
+    () => groupByStripePrice(rows ?? [], stripePriceLookup),
+    [rows, stripePriceLookup],
+  );
 
   const handleSearch = () => {
     setSearch(searchInput.trim());
@@ -233,7 +312,7 @@ const StripeSubscriptions = () => {
               </div>
             </CardHeader>
             <CardContent>
-              <StripeSubscriptionsTable rows={group.rows} />
+              <StripeSubscriptionsTable rows={group.rows} stripePriceLookup={stripePriceLookup} />
             </CardContent>
           </Card>
         ))

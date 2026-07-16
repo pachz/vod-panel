@@ -11,6 +11,14 @@ import {
 import { formatPrice } from "@/pages/Payments/utils";
 import { AutoRenewCell, SubscriptionRowActions, type SubscriptionRow } from "./SubscriptionRowActions";
 
+type StripePriceDisplay = {
+  stripePriceId: string;
+  planName: string | null;
+  priceAmount: number | null;
+  priceCurrency: string | null;
+  interval: string | null;
+};
+
 type SubscriptionStatus =
   | "active"
   | "canceled"
@@ -39,7 +47,13 @@ function statusBadgeVariant(status: SubscriptionStatus): "default" | "secondary"
   }
 }
 
-export function StripeSubscriptionsTable({ rows }: { rows: SubscriptionRow[] }) {
+export function StripeSubscriptionsTable({
+  rows,
+  stripePriceLookup,
+}: {
+  rows: SubscriptionRow[];
+  stripePriceLookup: Map<string, StripePriceDisplay>;
+}) {
   if (rows.length === 0) {
     return (
       <p className="py-8 text-center text-sm text-muted-foreground">No subscriptions on this price.</p>
@@ -61,7 +75,17 @@ export function StripeSubscriptionsTable({ rows }: { rows: SubscriptionRow[] }) 
           </TableRow>
         </TableHeader>
         <TableBody>
-          {rows.map((row) => (
+          {rows.map((row) => {
+            const renewalLookup = row.renewalStripePriceId
+              ? stripePriceLookup.get(row.renewalStripePriceId)
+              : undefined;
+            const renewalAmount =
+              row.renewalPriceAmount ?? renewalLookup?.priceAmount ?? null;
+            const renewalCurrency =
+              row.renewalPriceCurrency ?? renewalLookup?.priceCurrency ?? null;
+            const renewalName = row.renewalPlanName ?? renewalLookup?.planName ?? null;
+
+            return (
             <TableRow key={row.subscriptionDocId}>
               <TableCell>
                 <div>
@@ -84,12 +108,12 @@ export function StripeSubscriptionsTable({ rows }: { rows: SubscriptionRow[] }) 
                 {row.hasScheduledRenewalPrice ? (
                   <div className="space-y-1 text-sm">
                     <p className="text-amber-700 dark:text-amber-400">
-                      {row.renewalPriceAmount != null && row.renewalPriceCurrency
-                        ? formatPrice(row.renewalPriceAmount, row.renewalPriceCurrency)
+                      {renewalAmount != null && renewalCurrency
+                        ? formatPrice(renewalAmount, renewalCurrency)
                         : "Different price"}
                     </p>
-                    {row.renewalPlanName && (
-                      <p className="text-xs text-muted-foreground">{row.renewalPlanName}</p>
+                    {renewalName && (
+                      <p className="text-xs text-muted-foreground">{renewalName}</p>
                     )}
                   </div>
                 ) : (
@@ -103,7 +127,8 @@ export function StripeSubscriptionsTable({ rows }: { rows: SubscriptionRow[] }) 
                 <SubscriptionRowActions row={row} />
               </TableCell>
             </TableRow>
-          ))}
+            );
+          })}
         </TableBody>
       </Table>
     </div>

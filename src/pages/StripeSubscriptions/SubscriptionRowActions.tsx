@@ -48,6 +48,7 @@ export type SubscriptionRow = {
   renewalPlanName: string | null;
   renewalPriceAmount: number | null;
   renewalPriceCurrency: string | null;
+  renewalStripePriceId: string | null;
   hasScheduledRenewalPrice: boolean;
   interval: string | null;
   intervalCount: number | null;
