@@ -20,7 +20,6 @@ import { StripeSubscriptionsTable } from "./StripeSubscriptions/StripeSubscripti
 
 type SubscriptionStatus =
   | "active"
-  | "canceled"
   | "past_due"
   | "unpaid"
   | "incomplete"
@@ -50,7 +49,6 @@ const STATUS_OPTIONS: Array<{ value: "all" | SubscriptionStatus; label: string }
   { value: "active", label: "Active" },
   { value: "trialing", label: "Trialing" },
   { value: "past_due", label: "Past due" },
-  { value: "canceled", label: "Canceled" },
   { value: "unpaid", label: "Unpaid" },
   { value: "incomplete", label: "Incomplete" },
 ];

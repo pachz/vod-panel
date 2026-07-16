@@ -676,7 +676,7 @@ export const listForTechAdmin = query({
           .collect();
 
         for (const sub of subs) {
-          if (!isStripeSubscription(sub)) {
+          if (!isStripeSubscription(sub) || sub.status === "canceled") {
             continue;
           }
           if (args.status && sub.status !== args.status) {
@@ -705,7 +705,7 @@ export const listForTechAdmin = query({
 
     const rows = [];
     for (const sub of subscriptions) {
-      if (!isStripeSubscription(sub)) {
+      if (!isStripeSubscription(sub) || sub.status === "canceled") {
         continue;
       }
       rows.push(
