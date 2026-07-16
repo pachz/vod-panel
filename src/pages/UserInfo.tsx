@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, BookOpen, Gift, History, Loader2 } from "lucide-react";
-import { useQuery, useMutation, useAction } from "convex/react";
+import { ArrowLeft, User, Mail, Phone, CreditCard, Calendar, BookOpen, Gift, History } from "lucide-react";
+import { useQuery, useMutation } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 
 import { formatPrice } from "@/pages/Payments/utils";
+import { UserStripeBillingSection } from "@/pages/UserInfo/UserStripeBillingSection";
 
 // Subscription period dates from backend are Unix milliseconds (Stripe and admin-grant)
 const periodDate = (ms: number) => new Date(ms);
@@ -46,7 +47,6 @@ const UserInfo = () => {
   const [durationDays, setDurationDays] = useState<number>(365);
   const [selectedPlanId, setSelectedPlanId] = useState<string>("");
   const [isGranting, setIsGranting] = useState(false);
-  const [isRefreshingSub, setIsRefreshingSub] = useState(false);
 
   const userInfo = useQuery(
     api.user.getUserInfo,
@@ -59,9 +59,6 @@ const UserInfo = () => {
     giveSubOpen && userInfo?.user.subscriptionModel === "packages" ? {} : "skip",
   );
   const adminGrantSubscription = useMutation(api.user.adminGrantSubscription);
-  const adminSyncUserSubscriptionFromStripe = useAction(
-    api.payment.adminSyncUserSubscriptionFromStripe,
-  );
 
   if (userInfo === undefined) {
     return (
@@ -94,35 +91,6 @@ const UserInfo = () => {
     (subscription.status === "active" || subscription.status === "trialing") &&
     isPeriodActive(subscription.currentPeriodEnd);
   const canGrantSubscription = !user.isGod && !user.isTech && !hasActiveSubscription;
-
-  const handleRefreshSubscription = async () => {
-    if (!id) return;
-    setIsRefreshingSub(true);
-    try {
-      const result = await adminSyncUserSubscriptionFromStripe({
-        userId: id as Id<"users">,
-      });
-      if (!result.success) {
-        toast.error(result.message || "Failed to sync subscription");
-      } else {
-        toast.success(result.message || "Subscription synced successfully");
-      }
-    } catch (error: unknown) {
-      const msg =
-        error &&
-        typeof error === "object" &&
-        "data" in error &&
-        typeof (error as { data?: { message?: string } }).data?.message ===
-          "string"
-          ? (error as { data: { message: string } }).data.message
-          : error instanceof Error && error.message
-            ? error.message
-            : "Failed to sync subscription";
-      toast.error(msg);
-    } finally {
-      setIsRefreshingSub(false);
-    }
-  };
 
   const handleGrantSubscription = async () => {
     if (!id) return;
@@ -293,21 +261,6 @@ const UserInfo = () => {
             Current Subscription
           </CardTitle>
           <div className="flex items-center gap-2">
-            {subscription &&
-              !subscription.isAdminGranted &&
-              user.stripeCustomerId && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={handleRefreshSubscription}
-                  disabled={isRefreshingSub}
-                >
-                  {isRefreshingSub && (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  )}
-                  Refresh subscription
-                </Button>
-              )}
             {canGrantSubscription && (
               <Button
                 variant="cta"
@@ -344,6 +297,28 @@ const UserInfo = () => {
                   <div className="space-y-1">
                     <div className="text-sm text-muted-foreground">Plan</div>
                     <p className="font-medium">{subscription.planName}</p>
+                  </div>
+                )}
+                {subscription.hasScheduledRenewalPrice && subscription.renewalPlanName && (
+                  <div className="space-y-1">
+                    <div className="text-sm text-muted-foreground">Next billing</div>
+                    <p className="font-medium">
+                      {subscription.renewalPlanName}
+                      {subscription.renewalPriceAmount != null &&
+                        subscription.renewalPriceCurrency && (
+                          <>
+                            {" "}
+                            ·{" "}
+                            {formatPrice(
+                              subscription.renewalPriceAmount,
+                              subscription.renewalPriceCurrency,
+                            )}
+                          </>
+                        )}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      Starts {format(periodDate(subscription.currentPeriodEnd), "PPP")}
+                    </p>
                   </div>
                 )}
                 <div className="space-y-1">
@@ -383,6 +358,14 @@ const UserInfo = () => {
           )}
         </CardContent>
       </Card>
+
+      {user.stripeCustomerId && id && (
+        <UserStripeBillingSection
+          userId={id as Id<"users">}
+          stripeCustomerId={user.stripeCustomerId}
+          subscription={subscription}
+        />
+      )}
 
       {/* Subscription History */}
       {subscriptionHistory && subscriptionHistory.length > 0 && (

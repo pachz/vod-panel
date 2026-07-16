@@ -66,6 +66,22 @@ const stripeComparisonRowValidator = v.object({
   expectedDifferences: v.array(v.string()),
 });
 
+const stripePriceDisplayValidator = v.object({
+  stripePriceId: v.string(),
+  planName: v.union(v.string(), v.null()),
+  priceAmount: v.union(v.number(), v.null()),
+  priceCurrency: v.union(v.string(), v.null()),
+  interval: v.union(v.string(), v.null()),
+});
+
+function displayNameFromStripePrice(price: Stripe.Price): string | null {
+  const product = price.product;
+  if (typeof product === "string" || "deleted" in product) {
+    return null;
+  }
+  return product.name?.trim() || null;
+}
+
 function normalizeStripeStatusForComparison(
   status: Stripe.Subscription.Status,
 ): "active" | "canceled" | "past_due" | "unpaid" | "incomplete" | "trialing" {
@@ -398,6 +414,176 @@ export const getStripeSubscriptionComparisonRow = action({
   },
 });
 
+const userStripeDetailsValidator = v.object({
+  success: v.boolean(),
+  message: v.string(),
+  comparison: v.optional(stripeComparisonRowValidator),
+  canManageStripe: v.optional(v.boolean()),
+  stripePriceDisplay: v.optional(stripePriceDisplayValidator),
+  renewalPriceDisplay: v.optional(stripePriceDisplayValidator),
+});
+
+function pickBestStripeSubscription(
+  subs: Stripe.Subscription[],
+): Stripe.Subscription | null {
+  if (subs.length === 0) {
+    return null;
+  }
+  const rank = (status: Stripe.Subscription.Status) => {
+    if (status === "active" || status === "trialing") {
+      return 3;
+    }
+    if (status === "past_due") {
+      return 2;
+    }
+    if (status === "canceled") {
+      return 1;
+    }
+    return 0;
+  };
+  return [...subs].sort((a, b) => {
+    const statusDiff = rank(b.status) - rank(a.status);
+    if (statusDiff !== 0) {
+      return statusDiff;
+    }
+    return b.created - a.created;
+  })[0];
+}
+
+/**
+ * Tech admin: load live Stripe subscription data for a user and compare with Convex.
+ */
+export const fetchUserStripeSubscriptionDetails = action({
+  args: {
+    userId: v.id("users"),
+  },
+  returns: userStripeDetailsValidator,
+  handler: async (ctx, args): Promise<{
+    success: boolean;
+    message: string;
+    comparison?: StripeComparisonRow;
+    canManageStripe?: boolean;
+    stripePriceDisplay?: {
+      stripePriceId: string;
+      planName: string | null;
+      priceAmount: number | null;
+      priceCurrency: string | null;
+      interval: string | null;
+    };
+    renewalPriceDisplay?: {
+      stripePriceId: string;
+      planName: string | null;
+      priceAmount: number | null;
+      priceCurrency: string | null;
+      interval: string | null;
+    };
+  }> => {
+    await requireTechAction(ctx);
+
+    const user = await ctx.runQuery(internal.paymentInternal.getUserWithCustomer, {
+      userId: args.userId,
+    });
+    if (!user) {
+      return { success: false, message: "User not found." };
+    }
+    if (!user.stripeCustomerId) {
+      return { success: false, message: "User does not have a Stripe customer ID." };
+    }
+
+    const stripe = getStripe();
+    const anchor = await ctx.runQuery(
+      internal.paymentInternal.getStripeSubscriptionAnchorForAdminSync,
+      { userId: args.userId },
+    );
+
+    let sub: Stripe.Subscription | null = null;
+    if (anchor) {
+      try {
+        sub = await stripe.subscriptions.retrieve(anchor.subscriptionId, {
+          expand: ["customer", "items.data.price"],
+        });
+      } catch (error) {
+        console.error("Failed to retrieve anchored Stripe subscription:", error);
+      }
+    }
+
+    if (!sub) {
+      const listed = await stripe.subscriptions.list({
+        customer: user.stripeCustomerId,
+        status: "all",
+        limit: 20,
+        expand: ["data.customer", "data.items.data.price"],
+      });
+      sub = pickBestStripeSubscription(listed.data);
+    }
+
+    if (!sub) {
+      return {
+        success: false,
+        message: "No Stripe subscription found for this customer.",
+      };
+    }
+
+    const comparison = await buildComparisonRowForStripeSubscription(ctx, sub);
+    const canManageStripe =
+      comparison.stripeStatus === "active" || comparison.stripeStatus === "trialing";
+
+    const priceIdsToLookup = new Set<string>();
+    if (comparison.stripePriceId) {
+      priceIdsToLookup.add(comparison.stripePriceId);
+    }
+    if (
+      comparison.localRenewalStripePriceId &&
+      comparison.localRenewalStripePriceId !== comparison.stripePriceId
+    ) {
+      priceIdsToLookup.add(comparison.localRenewalStripePriceId);
+    }
+
+    const displays = new Map<
+      string,
+      {
+        stripePriceId: string;
+        planName: string | null;
+        priceAmount: number | null;
+        priceCurrency: string | null;
+        interval: string | null;
+      }
+    >();
+
+    for (const stripePriceId of priceIdsToLookup) {
+      try {
+        const price = await stripe.prices.retrieve(stripePriceId, {
+          expand: ["product"],
+        });
+        displays.set(stripePriceId, {
+          stripePriceId,
+          planName: displayNameFromStripePrice(price),
+          priceAmount: price.unit_amount ?? null,
+          priceCurrency: price.currency ?? null,
+          interval: price.recurring?.interval ?? null,
+        });
+      } catch (error) {
+        console.error(`Failed to retrieve Stripe price ${stripePriceId}:`, error);
+      }
+    }
+
+    return {
+      success: true,
+      message: "Loaded subscription data from Stripe.",
+      comparison,
+      canManageStripe,
+      stripePriceDisplay: comparison.stripePriceId
+        ? displays.get(comparison.stripePriceId)
+        : undefined,
+      renewalPriceDisplay:
+        comparison.localRenewalStripePriceId &&
+        comparison.localRenewalStripePriceId !== comparison.stripePriceId
+          ? displays.get(comparison.localRenewalStripePriceId)
+          : undefined,
+    };
+  },
+});
+
 export const listStripeSubscriptionComparison = action({
   args: {
     startingAfter: v.optional(v.string()),
@@ -652,22 +838,6 @@ export const setRenewalPrice = action({
     };
   },
 });
-
-const stripePriceDisplayValidator = v.object({
-  stripePriceId: v.string(),
-  planName: v.union(v.string(), v.null()),
-  priceAmount: v.union(v.number(), v.null()),
-  priceCurrency: v.union(v.string(), v.null()),
-  interval: v.union(v.string(), v.null()),
-});
-
-function displayNameFromStripePrice(price: Stripe.Price): string | null {
-  const product = price.product;
-  if (typeof product === "string" || "deleted" in product) {
-    return null;
-  }
-  return product.name?.trim() || null;
-}
 
 /** Resolve display fields for Stripe price IDs not linked to internal plans. */
 export const lookupStripePriceDisplays = action({

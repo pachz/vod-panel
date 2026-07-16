@@ -1028,6 +1028,15 @@ export const getUserInfo = query({
 
     const activePlan =
       subscription?.planId != null ? await ctx.db.get(subscription.planId) : null;
+    const renewalPlan =
+      subscription?.renewalPlanId != null
+        ? await ctx.db.get(subscription.renewalPlanId)
+        : null;
+    const isStripeBacked = subscription?.subscriptionId.startsWith("sub_") ?? false;
+    const hasScheduledRenewalPrice = Boolean(
+      subscription?.renewalStripePriceId &&
+        subscription.renewalStripePriceId !== subscription.stripePriceId,
+    );
 
     // Checkout sessions (payment history)
     const checkoutSessions = await ctx.db
@@ -1144,6 +1153,7 @@ export const getUserInfo = query({
       },
       subscription: subscription
         ? {
+            subscriptionDocId: subscription._id,
             subscriptionId: subscription.subscriptionId,
             status: subscription.status,
             currentPeriodStart: subscription.currentPeriodStart,
@@ -1152,8 +1162,18 @@ export const getUserInfo = query({
             canceledAt: subscription.canceledAt,
             createdAt: subscription.createdAt,
             isAdminGranted: subscription.subscriptionId.startsWith("admin-grant-"),
+            isStripeBacked,
+            canManageStripe:
+              isStripeBacked &&
+              (subscription.status === "active" || subscription.status === "trialing"),
             planId: subscription.planId,
             planName: activePlan?.name,
+            stripePriceId: subscription.stripePriceId ?? null,
+            renewalStripePriceId: subscription.renewalStripePriceId ?? null,
+            hasScheduledRenewalPrice,
+            renewalPlanName: renewalPlan?.name ?? null,
+            renewalPriceAmount: renewalPlan?.priceAmount ?? null,
+            renewalPriceCurrency: renewalPlan?.priceCurrency ?? null,
             interval: subscription.interval,
             legacyMigrationStatus: subscription.legacyMigrationStatus ?? null,
           }
