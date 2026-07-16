@@ -164,10 +164,10 @@ function SyncStatusBadge({ row }: { row: ComparisonRow }) {
 
 function ComparisonRowActions({
   row,
-  onSynced,
+  onRowUpdated,
 }: {
   row: ComparisonRow;
-  onSynced: () => void;
+  onRowUpdated: (subscriptionId: string) => Promise<void>;
 }) {
   const [loading, setLoading] = useState(false);
   const [packageDialogOpen, setPackageDialogOpen] = useState(false);
@@ -189,7 +189,7 @@ function ComparisonRowActions({
       });
       if (result.success) {
         toast.success(result.message);
-        onSynced();
+        await onRowUpdated(row.stripeSubscriptionId);
         if (result.needsPackageAssignment && row.localSubscriptionDocId) {
           setPackageDialogOpen(true);
         }
@@ -217,7 +217,7 @@ function ComparisonRowActions({
       });
       toast.success(result.message);
       setPackageDialogOpen(false);
-      onSynced();
+      await onRowUpdated(row.stripeSubscriptionId);
     } catch (error: unknown) {
       const message =
         error instanceof Error ? error.message : "Failed to assign package";
@@ -339,8 +339,10 @@ const StripeSubscriptionSync = () => {
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(false);
+  const [refreshingRowIds, setRefreshingRowIds] = useState<Set<string>>(new Set());
 
   const listComparison = useAction(api.subscriptionsAdminStripe.listStripeSubscriptionComparison);
+  const getComparisonRow = useAction(api.subscriptionsAdminStripe.getStripeSubscriptionComparisonRow);
 
   const fetchPage = useCallback(
     async (options: { append: boolean; startingAfter?: string | null }) => {
@@ -377,6 +379,31 @@ const StripeSubscriptionSync = () => {
   const handleRefresh = () => {
     void fetchPage({ append: false });
   };
+
+  const refreshRow = useCallback(
+    async (subscriptionId: string) => {
+      setRefreshingRowIds((prev) => new Set(prev).add(subscriptionId));
+      try {
+        const updatedRow = await getComparisonRow({ subscriptionId });
+        setRows((prev) =>
+          prev.map((row) =>
+            row.stripeSubscriptionId === subscriptionId ? updatedRow : row,
+          ),
+        );
+      } catch (error: unknown) {
+        const message =
+          error instanceof Error ? error.message : "Failed to refresh subscription row";
+        toast.error(message);
+      } finally {
+        setRefreshingRowIds((prev) => {
+          const next = new Set(prev);
+          next.delete(subscriptionId);
+          return next;
+        });
+      }
+    },
+    [getComparisonRow],
+  );
 
   const handleLoadMore = () => {
     if (nextCursor) {
@@ -532,9 +559,13 @@ const StripeSubscriptionSync = () => {
                     {filteredRows.map((row) => {
                       const mapped = userLabel(row.mappedUserName, row.mappedUserEmail);
                       const local = userLabel(row.localUserName, row.localUserEmail);
+                      const isRefreshingRow = refreshingRowIds.has(row.stripeSubscriptionId);
 
                       return (
-                        <TableRow key={row.stripeSubscriptionId}>
+                        <TableRow
+                          key={row.stripeSubscriptionId}
+                          className={isRefreshingRow ? "opacity-60" : undefined}
+                        >
                           <TableCell>
                             <SyncStatusBadge row={row} />
                           </TableCell>
@@ -657,7 +688,7 @@ const StripeSubscriptionSync = () => {
                             )}
                           </TableCell>
                           <TableCell className="text-right">
-                            <ComparisonRowActions row={row} onSynced={handleRefresh} />
+                            <ComparisonRowActions row={row} onRowUpdated={refreshRow} />
                           </TableCell>
                         </TableRow>
                       );

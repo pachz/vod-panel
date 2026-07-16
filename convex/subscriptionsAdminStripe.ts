@@ -328,6 +328,76 @@ type StripeComparisonPage = {
   nextStartingAfter: string | null;
 };
 
+async function buildComparisonRowForStripeSubscription(
+  ctx: import("./_generated/server").ActionCtx,
+  sub: Stripe.Subscription,
+): Promise<StripeComparisonRow> {
+  const local: LocalSubscriptionComparison | null = await ctx.runQuery(
+    internal.paymentInternal.getLocalSubscriptionForComparison,
+    {
+      subscriptionId: sub.id,
+    },
+  );
+
+  const customerId =
+    typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? "";
+  let mappedUser: {
+    userId: Id<"users">;
+    userName: string | null;
+    userEmail: string | null;
+  } | null = null;
+
+  if (customerId) {
+    const mappedUserId: Id<"users"> | null = await ctx.runQuery(
+      internal.paymentInternal.getUserIdByStripeCustomerId,
+      { customerId },
+    );
+    if (mappedUserId) {
+      const user = await ctx.runQuery(internal.paymentInternal.getUserDisplayInfo, {
+        userId: mappedUserId,
+      });
+      mappedUser = {
+        userId: mappedUserId,
+        userName: user?.userName ?? null,
+        userEmail: user?.userEmail ?? null,
+      };
+    }
+  }
+
+  const stripePriceId = stripePriceIdFromSubscription(sub);
+  const linkedPlanId: Id<"subscriptionPlans"> | null = stripePriceId
+    ? await ctx.runQuery(internal.plansInternal.resolvePlanFromStripePriceId, {
+        stripePriceId,
+      })
+    : null;
+
+  return buildStripeComparisonRow(sub, local, mappedUser, linkedPlanId != null);
+}
+
+export const getStripeSubscriptionComparisonRow = action({
+  args: {
+    subscriptionId: v.string(),
+  },
+  returns: stripeComparisonRowValidator,
+  handler: async (ctx, args): Promise<StripeComparisonRow> => {
+    await requireTechAction(ctx);
+
+    if (!args.subscriptionId.startsWith("sub_")) {
+      throw new ConvexError({
+        code: "INVALID_ID",
+        message: "Invalid Stripe subscription id.",
+      });
+    }
+
+    const stripe = getStripe();
+    const sub = await stripe.subscriptions.retrieve(args.subscriptionId, {
+      expand: ["customer", "items.data.price"],
+    });
+
+    return await buildComparisonRowForStripeSubscription(ctx, sub);
+  },
+});
+
 export const listStripeSubscriptionComparison = action({
   args: {
     startingAfter: v.optional(v.string()),
@@ -366,48 +436,7 @@ export const listStripeSubscriptionComparison = action({
     const items: StripeComparisonRow[] = [];
 
     for (const sub of page.data) {
-      const local: LocalSubscriptionComparison | null = await ctx.runQuery(
-        internal.paymentInternal.getLocalSubscriptionForComparison,
-        {
-          subscriptionId: sub.id,
-        },
-      );
-
-      const customerId =
-        typeof sub.customer === "string" ? sub.customer : sub.customer?.id ?? "";
-      let mappedUser: {
-        userId: Id<"users">;
-        userName: string | null;
-        userEmail: string | null;
-      } | null = null;
-
-      if (customerId) {
-        const mappedUserId: Id<"users"> | null = await ctx.runQuery(
-          internal.paymentInternal.getUserIdByStripeCustomerId,
-          { customerId },
-        );
-        if (mappedUserId) {
-          const user = await ctx.runQuery(internal.paymentInternal.getUserDisplayInfo, {
-            userId: mappedUserId,
-          });
-          mappedUser = {
-            userId: mappedUserId,
-            userName: user?.userName ?? null,
-            userEmail: user?.userEmail ?? null,
-          };
-        }
-      }
-
-      const stripePriceId = stripePriceIdFromSubscription(sub);
-      const linkedPlanId: Id<"subscriptionPlans"> | null = stripePriceId
-        ? await ctx.runQuery(internal.plansInternal.resolvePlanFromStripePriceId, {
-            stripePriceId,
-          })
-        : null;
-
-      items.push(
-        buildStripeComparisonRow(sub, local, mappedUser, linkedPlanId != null),
-      );
+      items.push(await buildComparisonRowForStripeSubscription(ctx, sub));
     }
 
     const nextStartingAfter =
