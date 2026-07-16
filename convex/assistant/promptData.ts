@@ -107,6 +107,7 @@ export async function buildRuntimeSystemInstructions(
   ctx: QueryCtx,
   userId: Id<"users">,
   nowMs: number,
+  preferredLanguage?: "en" | "ar",
 ): Promise<string> {
   const customInstructions = await loadCustomInstructions(ctx);
   const userContext = await loadUserContext(ctx, userId, nowMs);
@@ -116,6 +117,7 @@ export async function buildRuntimeSystemInstructions(
     customInstructions,
     userContext,
     userMemory,
+    preferredLanguage,
   });
 }
 

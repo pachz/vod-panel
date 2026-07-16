@@ -31,7 +31,7 @@ export function AssistantChat({
   threadId,
   onCreateThread,
 }: AssistantChatProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const [activeThreadId, setActiveThreadId] = useState<string | null>(threadId);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -94,7 +94,7 @@ export function AssistantChat({
         }
 
         trackPosthogEvent("assistant_message_sent");
-        await sendMessage({ threadId: nextThreadId, prompt });
+        await sendMessage({ threadId: nextThreadId, prompt, language });
       } catch {
         setError(t("assistantSendError"));
         trackPosthogEvent("assistant_error", { type: "send_message" });
@@ -103,7 +103,7 @@ export function AssistantChat({
         setIsSending(false);
       }
     },
-    [activeThreadId, input, isSending, onCreateThread, sendMessage, t],
+    [activeThreadId, input, isSending, language, onCreateThread, sendMessage, t],
   );
 
   const handleKeyDown = (event: React.KeyboardEvent<HTMLTextAreaElement>) => {

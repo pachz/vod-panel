@@ -13,8 +13,28 @@ type CourseRecommendationCardProps = {
 };
 
 export function CourseRecommendationCard({ course }: CourseRecommendationCardProps) {
-  const { t, localizedPath } = useLanguage();
+  const { language, t, localizedPath } = useLanguage();
   const courseUrl = localizedPath(`/courses/preview/${course.id}`);
+
+  const title =
+    language === "ar"
+      ? course.titleAr || course.title || course.titleEn
+      : course.titleEn || course.title || course.titleAr;
+  const description =
+    language === "ar"
+      ? course.descriptionAr || course.description || course.descriptionEn
+      : course.descriptionEn || course.description || course.descriptionAr;
+  const category =
+    language === "ar"
+      ? course.categoryAr || course.category || course.categoryEn
+      : course.categoryEn || course.category || course.categoryAr;
+
+  const preferredTitle = language === "ar" ? course.titleAr : course.titleEn;
+  const hasBilingualFields =
+    course.titleEn !== undefined || course.titleAr !== undefined;
+  const usedFallbackTranslation = hasBilingualFields
+    ? !preferredTitle?.trim() && Boolean(title?.trim())
+    : course.usedFallbackTranslation;
 
   const accessLabel =
     course.accessStatus === "included"
@@ -23,7 +43,7 @@ export function CourseRecommendationCard({ course }: CourseRecommendationCardPro
         ? t("assistantAccessLocked")
         : t("assistantAccessUnknown");
 
-  const descriptionPreview = formatCourseDescriptionPreview(course.description);
+  const descriptionPreview = formatCourseDescriptionPreview(description);
 
   return (
     <Card className="overflow-hidden border-border/60 bg-card/80">
@@ -31,7 +51,7 @@ export function CourseRecommendationCard({ course }: CourseRecommendationCardPro
         <div className="aspect-video w-full overflow-hidden bg-muted">
           <img
             src={course.imageUrl}
-            alt={course.title}
+            alt={title}
             className="h-full w-full object-cover"
             loading="lazy"
           />
@@ -39,10 +59,10 @@ export function CourseRecommendationCard({ course }: CourseRecommendationCardPro
       ) : null}
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
-          {course.category ? <Badge variant="secondary">{course.category}</Badge> : null}
+          {category ? <Badge variant="secondary">{category}</Badge> : null}
           <Badge variant="outline">{accessLabel}</Badge>
         </div>
-        <CardTitle className="text-lg leading-snug">{course.title}</CardTitle>
+        <CardTitle className="text-lg leading-snug">{title}</CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
         {descriptionPreview ? (
@@ -54,7 +74,7 @@ export function CourseRecommendationCard({ course }: CourseRecommendationCardPro
             {course.durationMinutes} {t("assistantMinutes")}
           </p>
         ) : null}
-        {course.usedFallbackTranslation ? (
+        {usedFallbackTranslation ? (
           <p className="text-xs text-muted-foreground">{t("assistantTranslationFallback")}</p>
         ) : null}
       </CardContent>

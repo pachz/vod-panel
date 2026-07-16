@@ -6,13 +6,14 @@ import { useSearchParams } from "react-router-dom";
 import { api } from "../../convex/_generated/api";
 import { AssistantChat } from "@/components/assistant/AssistantChat";
 import { SiteGPTComparePanel } from "@/components/assistant/SiteGPTComparePanel";
+import { LanguageToggle } from "@/components/LanguageToggle";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
 import { trackPosthogEvent } from "@/lib/posthog";
 import { cn } from "@/lib/utils";
 
 const AssistantTest = () => {
-  const { t, isRTL, language } = useLanguage();
+  const { language } = useLanguage();
   const currentUser = useQuery(api.user.getCurrentUser);
   const isTech = currentUser?.isTech ?? false;
   const [searchParams, setSearchParams] = useSearchParams();
@@ -65,7 +66,7 @@ const AssistantTest = () => {
         "mx-auto flex h-[calc(100vh-8rem)] flex-col gap-4",
         isTech ? "max-w-[90rem]" : "max-w-6xl",
       )}
-      dir={isRTL ? "rtl" : "ltr"}
+      dir="ltr"
     >
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div className="space-y-1">
@@ -73,15 +74,18 @@ const AssistantTest = () => {
           <p className="max-w-2xl text-muted-foreground">
             {isTech
               ? "Compare the in-panel assistant with the live SiteGPT chatbot side by side."
-              : t("assistantTagline")}
+              : "Discover femininity courses and self-love, and become the feminine woman you deserve to be."}
           </p>
         </div>
-        <Button asChild variant="outline" size="sm">
-          <Link to="/assistant-settings">
-            <Settings2 className="h-4 w-4 me-2" />
-            Assistant settings
-          </Link>
-        </Button>
+        <div className="flex flex-wrap items-center gap-2">
+          <LanguageToggle />
+          <Button asChild variant="outline" size="sm">
+            <Link to="/assistant-settings">
+              <Settings2 className="h-4 w-4 me-2" />
+              Assistant settings
+            </Link>
+          </Button>
+        </div>
       </div>
 
       <div className="flex min-h-0 flex-1 gap-4">
@@ -92,12 +96,12 @@ const AssistantTest = () => {
             size="sm"
             className="w-full justify-start"
             onClick={handleStartNewConversation}
-            aria-label={t("assistantNewConversation")}
+            aria-label="New conversation"
           >
             <Plus className="h-4 w-4 me-2" />
-            {t("assistantNewConversation")}
+            New conversation
           </Button>
-          <p className="text-sm font-medium text-muted-foreground">{t("assistantConversationHistory")}</p>
+          <p className="text-sm font-medium text-muted-foreground">Recent conversations</p>
           <div className="space-y-1">
             {threads.results?.map((thread) => (
               <Button
@@ -108,7 +112,7 @@ const AssistantTest = () => {
                 className="h-auto w-full justify-start whitespace-normal px-3 py-2 text-start"
                 onClick={() => handleSelectThread(thread._id)}
               >
-                {thread.title ?? t("assistantNewConversation")}
+                {thread.title ?? "New conversation"}
               </Button>
             ))}
           </div>
@@ -127,10 +131,10 @@ const AssistantTest = () => {
               size="sm"
               className="w-fit justify-start lg:hidden"
               onClick={handleStartNewConversation}
-              aria-label={t("assistantNewConversation")}
+              aria-label="New conversation"
             >
               <Plus className="h-4 w-4 me-2" />
-              {t("assistantNewConversation")}
+              New conversation
             </Button>
             {isTech && (
               <p className="text-sm font-medium text-muted-foreground">In-panel assistant</p>

@@ -31,9 +31,25 @@ const generatedDate = new Date(data.generatedAt).toLocaleDateString("en-US", {
   day: "numeric",
 });
 
-const listMrr = 12672;
-const actualMrr = 6319;
-const mrrGapPct = Math.round(((listMrr - actualMrr) / listMrr) * 100);
+const listMrr = parseFloat(summary.mrr.replace(/[$,]/g, "")) || 12672;
+const actualMrr = investigation
+  ? Math.round(
+      (investigation.affectedUsers ?? [])
+        .flatMap((u) => u.anomalies)
+        .filter((a) => a.interval === "month" || a.interval === "year")
+        .reduce((s, a) => s + (a.paid ?? 0) / (a.interval === "year" ? 12 : 1), 0) / 100,
+    ) || 6319
+  : 6319;
+// Recompute actual MRR from active subs in audit data
+const computedMrr = activeSubscriptions.reduce((s, sub) => {
+  const lastPaid =
+    sub.amount === 5400 ? 2700 : sub.amount === 54000 ? sub.amount / 12 : sub.amount;
+  if (sub.interval === "month") return s + lastPaid / 100;
+  if (sub.interval === "year") return s + lastPaid / 100 / 12;
+  return s;
+}, 0);
+const actualMrrDisplay = Math.round(computedMrr) || actualMrr;
+const mrrGapPct = Math.round(((listMrr - actualMrrDisplay) / listMrr) * 100);
 
 const highAnomalies = anomalies.filter((a) => a.severity === "high");
 const mediumAnomalies = anomalies.filter((a) => a.severity === "medium");
@@ -87,14 +103,18 @@ const okButWatchUsers = investigation
       legacyMonthly: (investigation.byType?.legacy_monthly_rate_on_new_price ?? []).length,
       legacyAnnual: (investigation.byType?.legacy_annual_rate ?? []).length,
     }
-  : { legacyMonthly: 198, legacyAnnual: 27 };
+  : { legacyMonthly: 0, legacyAnnual: 0 };
 
+const invCounts = investigation?.summary?.byAnomalyType ?? {};
+const annualMigrationUsers = investigation?.byType?.monthly_charge_on_annual_plan ?? [];
+
+const himovooProfile = investigation?.targetUser?.profile;
 const himovooInvestigation = {
   email: "himovoo@gmail.com",
-  name: "Movoo AI",
-  customerId: "cus_Twkwfed8mIl0VG",
-  subId: "sub_1SyrRMJdmBLlxqNnQgGsq1iF",
-  verdict: "NOT OK — accidental live comp via DevTest promo",
+  name: himovooProfile?.name ?? "Movoo AI",
+  customerId: himovooProfile?.customerId ?? "cus_Twkwfed8mIl0VG",
+  subId: himovooProfile?.subscriptions?.[0]?.id ?? "sub_1SyrRMJdmBLlxqNnQgGsq1iF",
+  verdict: investigation?.targetUser?.verdict ?? "NOT OK — accidental live comp via DevTest promo",
   timeline: [
     { date: "Feb 8, 2026", event: "DevTest promo code redeemed 2× in live mode (coupon since deleted)" },
     { date: "Feb 9, 2026", event: "Checkout completed at $0 — 100% discount ($247 off $247/yr)" },
@@ -108,6 +128,74 @@ const himovooInvestigation = {
     { email: "pchamani@nizek.com", status: "Canceled", note: "Also used DevTest promo — $0 for $27/mo, now canceled" },
   ],
 };
+
+function buildInsights() {
+  const items = [];
+  const dupUsers = investigation?.byType?.multiple_active_subs ?? duplicateSubs;
+  if (dupUsers.length > 0) {
+    const email = dupUsers[0]?.email ?? "unknown";
+    items.push({
+      severity: "critical",
+      title: `Double billing risk — ${email}`,
+      body: `${dupUsers.length} customer(s) with multiple active/past_due subscriptions. Risk of double charges at renewal.`,
+      action: "Cancel duplicate subscriptions immediately.",
+    });
+  }
+  const zombieDupes = (investigation?.affectedUsers ?? []).filter((u) =>
+    u.anomalies.some((a) => a.type === "multiple_active_subs" && a.subs?.some((s) => s.status === "past_due")),
+  );
+  if (zombieDupes.length > 0) {
+    items.push({
+      severity: "critical",
+      title: "Zombie legacy subs on migrated customers",
+      body: `${zombieDupes.map((u) => u.email).join(", ")} — active new sub plus past_due legacy sub still retrying.`,
+      action: "Cancel the old $27 subscriptions.",
+    });
+  }
+  if ((invCounts.zero_paid_active ?? 0) > 0) {
+    items.push({
+      severity: "critical",
+      title: "Free active annual — himovoo@gmail.com",
+      body: "DevTest promo code used in live mode — 100% discount at checkout. $540/yr plan active with $0 ever paid.",
+      action: "Cancel sub or convert to paid; deactivate DevTest promo permanently.",
+    });
+  }
+  if (okButWatchUsers.legacyMonthly > 0) {
+    items.push({
+      severity: "high",
+      title: `Price migration gap — ${okButWatchUsers.legacyMonthly} monthly subs`,
+      body: "Subscription objects show $54/mo price but latest invoices still charged $27. Upcoming renewals preview at $54.",
+      action: "Confirm grandfathering intent; monitor renewals for failed $54 charges.",
+    });
+  }
+  if (okButWatchUsers.legacyAnnual > 0) {
+    items.push({
+      severity: "high",
+      title: `Annual subs — ${okButWatchUsers.legacyAnnual} paying legacy rates`,
+      body: "Active annual subs on $540/yr price but last invoice at legacy amount. Review before renewal.",
+      action: "Review annual migrations before auto-charge.",
+    });
+  }
+  if (pastDue.length > 0) {
+    items.push({
+      severity: "high",
+      title: `${pastDue.length} past_due legacy $27/mo subs`,
+      body: `Driving ${summary.openInvoices} open invoices and ${summary.failedCharges} failed charge retries.`,
+      action: "Cancel zombies or attempt recovery — stop endless dunning.",
+    });
+  }
+  if (annualMigrationUsers.length > 0) {
+    items.push({
+      severity: "critical",
+      title: `${annualMigrationUsers.length} annual plan migration issues`,
+      body: "Monthly charge on annual plan with broken proration on upcoming invoices.",
+      action: "Fix or cancel before auto-charge.",
+    });
+  }
+  return items;
+}
+
+const insights = buildInsights();
 
 function renderNotOkTable(users) {
   if (!users.length) return "<p style='color:var(--muted)'>No investigation data — run stripe-payment-investigation.mjs first.</p>";
@@ -185,10 +273,10 @@ function renderInvestigationSection() {
           <h3 style="color:var(--red)">✗ Not OK — requires action</h3>
           <p style="color:var(--muted);font-size:.875rem;margin-bottom:1rem">${notOkUsers.length} customers with genuine billing problems (not migration grandfathering).</p>
           <div class="stat-pills">
-            <div class="pill"><strong>1</strong> free via DevTest promo</div>
-            <div class="pill"><strong>3</strong> duplicate subscriptions</div>
-            <div class="pill"><strong>3</strong> monthly charge on annual plan</div>
-            <div class="pill"><strong>1</strong> unexpected amount</div>
+            <div class="pill"><strong>${invCounts.zero_paid_active ?? 0}</strong> free via DevTest promo</div>
+            <div class="pill"><strong>${invCounts.multiple_active_subs ?? 0}</strong> duplicate subscriptions</div>
+            <div class="pill"><strong>${invCounts.monthly_charge_on_annual_plan ?? 0}</strong> monthly charge on annual plan</div>
+            <div class="pill"><strong>${invCounts.unexpected_monthly_amount ?? 0}</strong> unexpected amount</div>
           </div>
         </div>
       </div>
@@ -200,63 +288,35 @@ function renderInvestigationSection() {
       </div>
     </section>
 
-    <section>
-      <h2>Annual plan migration issues <span class="anomaly-count count-high">3</span></h2>
+    ${
+      annualMigrationUsers.length > 0
+        ? `<section>
+      <h2>Annual plan migration issues <span class="anomaly-count count-high">${annualMigrationUsers.length}</span></h2>
       <div class="card">
-        <p style="color:var(--muted);font-size:.9rem;margin-bottom:1rem">These users were migrated from monthly to annual but their last invoice was still a $27 monthly charge. Upcoming invoices show broken proration ($496–$1,035).</p>
+        <p style="color:var(--muted);font-size:.9rem;margin-bottom:1rem">These users were migrated from monthly to annual but their last invoice was still a $27 monthly charge.</p>
         <div class="card" style="padding:0;overflow:hidden;background:var(--surface2)">
           <table>
-            <thead><tr><th>Email</th><th>List price</th><th>Last paid</th><th>Upcoming preview</th></tr></thead>
+            <thead><tr><th>Email</th><th>List price</th><th>Last paid</th><th>Sub ID</th></tr></thead>
             <tbody>
-              <tr><td>3houd13.otb1313@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$496 proration</td></tr>
-              <tr><td>aljawhara.d@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$1,036 proration</td></tr>
-              <tr><td>samahalbayrak8@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$496 proration</td></tr>
+              ${annualMigrationUsers
+                .map(
+                  (u) => `<tr>
+                <td>${esc(u.email)}</td>
+                <td>${fmt(u.anomaly.listPrice)}</td>
+                <td>${fmt(u.anomaly.paid)}</td>
+                <td class="mono">${stripeLink("sub", u.anomaly.subId)}</td>
+              </tr>`,
+                )
+                .join("")}
             </tbody>
           </table>
         </div>
       </div>
-    </section>
+    </section>`
+        : ""
+    }
   `;
 }
-
-const insights = [
-  {
-    severity: "critical",
-    title: "Double billing risk — soso2009913@gmail.com",
-    body: "Two active $54/mo subscriptions on the same customer. At next renewal they could be charged $108/month.",
-    action: "Cancel one subscription immediately.",
-  },
-  {
-    severity: "critical",
-    title: "Zombie legacy subs on migrated customers",
-    body: "hetafalokam@gmail.com and marwakha2009@gmail.com each have an active $54 sub plus a past_due $27 legacy sub still retrying charges.",
-    action: "Cancel the old $27 subscriptions.",
-  },
-  {
-    severity: "critical",
-    title: "Free active annual — himovoo@gmail.com",
-    body: "DevTest promo code used in live mode — 100% discount at checkout. $540/yr plan active with $0 ever paid. Appears to be internal test account.",
-    action: "Cancel sub or convert to paid; deactivate DevTest promo permanently.",
-  },
-  {
-    severity: "high",
-    title: "Price migration gap — 198/208 monthly subs",
-    body: "Subscription objects show $54/mo price but latest invoices still charged $27. Upcoming renewals preview at $54.",
-    action: "Confirm grandfathering intent; monitor renewals for failed $54 charges.",
-  },
-  {
-    severity: "high",
-    title: "Annual subs — none paying full $540 yet",
-    body: "All 32 active annual subs are on the $540/yr price but paid legacy amounts ($247, $270, or prorated conversions). 11 have messy proration on upcoming invoices.",
-    action: "Review annual migrations before auto-charge.",
-  },
-  {
-    severity: "high",
-    title: "10 past_due legacy $27/mo subs",
-    body: "All past_due subscriptions are on the old price_1SyZyW ($27/mo). Driving 69 open invoices and 801 failed charge retries.",
-    action: "Cancel zombies or attempt recovery — stop endless dunning.",
-  },
-];
 
 function severityBadge(sev) {
   const map = {
@@ -410,7 +470,7 @@ const html = `<!DOCTYPE html>
       transition: height .3s;
     }
     .mrr-bar.list { background: linear-gradient(180deg, var(--accent2), var(--accent)); height: 120px; }
-    .mrr-bar.actual { background: linear-gradient(180deg, var(--amber), #d97706); height: ${Math.round((actualMrr / listMrr) * 120)}px; }
+    .mrr-bar.actual { background: linear-gradient(180deg, var(--amber), #d97706); height: ${Math.round((actualMrrDisplay / listMrr) * 120)}px; }
     .mrr-bar-label { font-size: .75rem; color: var(--muted); text-align: center; }
     .mrr-bar-amount { font-size: 1.1rem; font-weight: 700; }
     .gap-callout {
@@ -525,12 +585,12 @@ const html = `<!DOCTYPE html>
               <div class="mrr-bar-label">List-price MRR<br><span class="mono">if all paid new rates</span></div>
             </div>
             <div class="mrr-bar-col">
-              <div class="mrr-bar-amount">$${actualMrr.toLocaleString()}</div>
+              <div class="mrr-bar-amount">$${actualMrrDisplay.toLocaleString()}</div>
               <div class="mrr-bar actual"></div>
               <div class="mrr-bar-label">Actual MRR<br><span class="mono">based on last invoice paid</span></div>
             </div>
           </div>
-          <div class="gap-callout">${mrrGapPct}% gap — ~$${(listMrr - actualMrr).toLocaleString()}/mo until renewals hit new prices</div>
+          <div class="gap-callout">${mrrGapPct}% gap — ~$${(listMrr - actualMrrDisplay).toLocaleString()}/mo until renewals hit new prices</div>
         </div>
         <div class="card">
           <h2>Revenue &amp; charges</h2>

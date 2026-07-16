@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-16T08:27:57.735Z",
+  "generatedAt": "2026-07-16T09:31:05.548Z",
   "targetUser": {
     "email": "himovoo@gmail.com",
     "profile": {
@@ -64,87 +64,14 @@
   "summary": {
     "totalAffectedCustomers": 229,
     "byAnomalyType": {
-      "legacy_monthly_rate_on_new_price": 198,
-      "multiple_active_subs": 3,
+      "legacy_monthly_rate_on_new_price": 201,
       "legacy_annual_rate": 27,
-      "monthly_charge_on_annual_plan": 3,
+      "multiple_active_subs": 1,
       "unexpected_monthly_amount": 1,
       "zero_paid_active": 1
     }
   },
   "affectedUsers": [
-    {
-      "customerId": "cus_USPuVsGcj5Q47R",
-      "email": "hetafalokam@gmail.com",
-      "anomalies": [
-        {
-          "type": "legacy_monthly_rate_on_new_price",
-          "severity": "high",
-          "subId": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-          "status": "active",
-          "listPrice": 5400,
-          "paid": 2700,
-          "interval": "month",
-          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-          "created": "2026-07-10"
-        },
-        {
-          "type": "multiple_active_subs",
-          "severity": "critical",
-          "count": 2,
-          "subs": [
-            {
-              "id": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            },
-            {
-              "id": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-              "status": "past_due",
-              "price": 2700,
-              "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-            }
-          ]
-        }
-      ]
-    },
-    {
-      "customerId": "cus_UeDpXeLRCcQjgh",
-      "email": "marwakha2009@gmail.com",
-      "anomalies": [
-        {
-          "type": "legacy_monthly_rate_on_new_price",
-          "severity": "high",
-          "subId": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-          "status": "active",
-          "listPrice": 5400,
-          "paid": 2700,
-          "interval": "month",
-          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-          "created": "2026-07-07"
-        },
-        {
-          "type": "multiple_active_subs",
-          "severity": "critical",
-          "count": 2,
-          "subs": [
-            {
-              "id": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            },
-            {
-              "id": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-              "status": "past_due",
-              "price": 2700,
-              "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-            }
-          ]
-        }
-      ]
-    },
     {
       "customerId": "cus_URXniw2Ei7xmUb",
       "email": "soso2009913@gmail.com",
@@ -193,57 +120,6 @@
       ]
     },
     {
-      "customerId": "cus_UiX5bcz3vHCi6r",
-      "email": "3houd13.otb1313@gmail.com",
-      "anomalies": [
-        {
-          "type": "monthly_charge_on_annual_plan",
-          "severity": "critical",
-          "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-16"
-        }
-      ]
-    },
-    {
-      "customerId": "cus_UiHsNvNm1bSmB6",
-      "email": "aljawhara.d@gmail.com",
-      "anomalies": [
-        {
-          "type": "monthly_charge_on_annual_plan",
-          "severity": "critical",
-          "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-16"
-        }
-      ]
-    },
-    {
-      "customerId": "cus_UfiOPy6b5q3jqi",
-      "email": "samahalbayrak8@gmail.com",
-      "anomalies": [
-        {
-          "type": "monthly_charge_on_annual_plan",
-          "severity": "critical",
-          "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-09"
-        }
-      ]
-    },
-    {
       "customerId": "cus_Twkwfed8mIl0VG",
       "email": "himovoo@gmail.com",
       "anomalies": [
@@ -257,6 +133,23 @@
           "interval": "year",
           "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
           "created": "2026-02-09"
+        }
+      ]
+    },
+    {
+      "customerId": "cus_USPuVsGcj5Q47R",
+      "email": "hetafalokam@gmail.com",
+      "anomalies": [
+        {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1TrnduJdmBLlxqNnHTzEASnE",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-07-10"
         }
       ]
     },
@@ -336,6 +229,23 @@
           "type": "legacy_monthly_rate_on_new_price",
           "severity": "high",
           "subId": "sub_1TqckPJdmBLlxqNnNhgpZeVW",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-07-07"
+        }
+      ]
+    },
+    {
+      "customerId": "cus_UeDpXeLRCcQjgh",
+      "email": "marwakha2009@gmail.com",
+      "anomalies": [
+        {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
           "status": "active",
           "listPrice": 5400,
           "paid": 2700,
@@ -2845,6 +2755,23 @@
       ]
     },
     {
+      "customerId": "cus_UiX5bcz3vHCi6r",
+      "email": "3houd13.otb1313@gmail.com",
+      "anomalies": [
+        {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-16"
+        }
+      ]
+    },
+    {
       "customerId": "cus_UiUtwLBpPT9Pjz",
       "email": "alkhozamf@gmail.com",
       "anomalies": [
@@ -2892,6 +2819,40 @@
           "interval": "year",
           "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
           "created": "2026-06-16"
+        }
+      ]
+    },
+    {
+      "customerId": "cus_UiHsNvNm1bSmB6",
+      "email": "aljawhara.d@gmail.com",
+      "anomalies": [
+        {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-16"
+        }
+      ]
+    },
+    {
+      "customerId": "cus_UfiOPy6b5q3jqi",
+      "email": "samahalbayrak8@gmail.com",
+      "anomalies": [
+        {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-09"
         }
       ]
     },
@@ -4051,25 +4012,6 @@
             "interval": "month",
             "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
             "created": "2026-07-10"
-          },
-          {
-            "type": "multiple_active_subs",
-            "severity": "critical",
-            "count": 2,
-            "subs": [
-              {
-                "id": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              },
-              {
-                "id": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-                "status": "past_due",
-                "price": 2700,
-                "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-              }
-            ]
           }
         ],
         "anomaly": {
@@ -4238,25 +4180,6 @@
             "interval": "month",
             "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
             "created": "2026-07-07"
-          },
-          {
-            "type": "multiple_active_subs",
-            "severity": "critical",
-            "count": 2,
-            "subs": [
-              {
-                "id": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              },
-              {
-                "id": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-                "status": "past_due",
-                "price": 2700,
-                "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-              }
-            ]
           }
         ],
         "anomaly": {
@@ -8280,6 +8203,34 @@
         }
       },
       {
+        "customerId": "cus_UiX5bcz3vHCi6r",
+        "email": "3houd13.otb1313@gmail.com",
+        "anomalies": [
+          {
+            "type": "legacy_monthly_rate_on_new_price",
+            "severity": "high",
+            "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
+            "status": "active",
+            "listPrice": 5400,
+            "paid": 2700,
+            "interval": "month",
+            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+            "created": "2026-06-16"
+          }
+        ],
+        "anomaly": {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-16"
+        }
+      },
+      {
         "customerId": "cus_UiUtwLBpPT9Pjz",
         "email": "alkhozamf@gmail.com",
         "anomalies": [
@@ -8333,6 +8284,62 @@
           "interval": "month",
           "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
           "created": "2026-06-16"
+        }
+      },
+      {
+        "customerId": "cus_UiHsNvNm1bSmB6",
+        "email": "aljawhara.d@gmail.com",
+        "anomalies": [
+          {
+            "type": "legacy_monthly_rate_on_new_price",
+            "severity": "high",
+            "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
+            "status": "active",
+            "listPrice": 5400,
+            "paid": 2700,
+            "interval": "month",
+            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+            "created": "2026-06-16"
+          }
+        ],
+        "anomaly": {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-16"
+        }
+      },
+      {
+        "customerId": "cus_UfiOPy6b5q3jqi",
+        "email": "samahalbayrak8@gmail.com",
+        "anomalies": [
+          {
+            "type": "legacy_monthly_rate_on_new_price",
+            "severity": "high",
+            "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
+            "status": "active",
+            "listPrice": 5400,
+            "paid": 2700,
+            "interval": "month",
+            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+            "created": "2026-06-09"
+          }
+        ],
+        "anomaly": {
+          "type": "legacy_monthly_rate_on_new_price",
+          "severity": "high",
+          "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
+          "status": "active",
+          "listPrice": 5400,
+          "paid": 2700,
+          "interval": "month",
+          "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+          "created": "2026-06-09"
         }
       },
       {
@@ -9680,184 +9687,6 @@
         }
       }
     ],
-    "multiple_active_subs": [
-      {
-        "customerId": "cus_USPuVsGcj5Q47R",
-        "email": "hetafalokam@gmail.com",
-        "anomalies": [
-          {
-            "type": "legacy_monthly_rate_on_new_price",
-            "severity": "high",
-            "subId": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-            "status": "active",
-            "listPrice": 5400,
-            "paid": 2700,
-            "interval": "month",
-            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-            "created": "2026-07-10"
-          },
-          {
-            "type": "multiple_active_subs",
-            "severity": "critical",
-            "count": 2,
-            "subs": [
-              {
-                "id": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              },
-              {
-                "id": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-                "status": "past_due",
-                "price": 2700,
-                "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-              }
-            ]
-          }
-        ],
-        "anomaly": {
-          "type": "multiple_active_subs",
-          "severity": "critical",
-          "count": 2,
-          "subs": [
-            {
-              "id": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            },
-            {
-              "id": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-              "status": "past_due",
-              "price": 2700,
-              "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-            }
-          ]
-        }
-      },
-      {
-        "customerId": "cus_UeDpXeLRCcQjgh",
-        "email": "marwakha2009@gmail.com",
-        "anomalies": [
-          {
-            "type": "legacy_monthly_rate_on_new_price",
-            "severity": "high",
-            "subId": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-            "status": "active",
-            "listPrice": 5400,
-            "paid": 2700,
-            "interval": "month",
-            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-            "created": "2026-07-07"
-          },
-          {
-            "type": "multiple_active_subs",
-            "severity": "critical",
-            "count": 2,
-            "subs": [
-              {
-                "id": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              },
-              {
-                "id": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-                "status": "past_due",
-                "price": 2700,
-                "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-              }
-            ]
-          }
-        ],
-        "anomaly": {
-          "type": "multiple_active_subs",
-          "severity": "critical",
-          "count": 2,
-          "subs": [
-            {
-              "id": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            },
-            {
-              "id": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-              "status": "past_due",
-              "price": 2700,
-              "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-            }
-          ]
-        }
-      },
-      {
-        "customerId": "cus_URXniw2Ei7xmUb",
-        "email": "soso2009913@gmail.com",
-        "anomalies": [
-          {
-            "type": "legacy_monthly_rate_on_new_price",
-            "severity": "high",
-            "subId": "sub_1TopZGJdmBLlxqNn1lfbwehI",
-            "status": "active",
-            "listPrice": 5400,
-            "paid": 2700,
-            "interval": "month",
-            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-            "created": "2026-07-02"
-          },
-          {
-            "type": "legacy_monthly_rate_on_new_price",
-            "severity": "high",
-            "subId": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
-            "status": "active",
-            "listPrice": 5400,
-            "paid": 2700,
-            "interval": "month",
-            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
-            "created": "2026-05-02"
-          },
-          {
-            "type": "multiple_active_subs",
-            "severity": "critical",
-            "count": 2,
-            "subs": [
-              {
-                "id": "sub_1TopZGJdmBLlxqNn1lfbwehI",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              },
-              {
-                "id": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
-                "status": "active",
-                "price": 5400,
-                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-              }
-            ]
-          }
-        ],
-        "anomaly": {
-          "type": "multiple_active_subs",
-          "severity": "critical",
-          "count": 2,
-          "subs": [
-            {
-              "id": "sub_1TopZGJdmBLlxqNn1lfbwehI",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            },
-            {
-              "id": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
-              "status": "active",
-              "price": 5400,
-              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-            }
-          ]
-        }
-      }
-    ],
     "legacy_annual_rate": [
       {
         "customerId": "cus_Upvu6BpoSbu2JO",
@@ -10616,89 +10445,71 @@
         }
       }
     ],
-    "monthly_charge_on_annual_plan": [
+    "multiple_active_subs": [
       {
-        "customerId": "cus_UiX5bcz3vHCi6r",
-        "email": "3houd13.otb1313@gmail.com",
+        "customerId": "cus_URXniw2Ei7xmUb",
+        "email": "soso2009913@gmail.com",
         "anomalies": [
           {
-            "type": "monthly_charge_on_annual_plan",
-            "severity": "critical",
-            "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
+            "type": "legacy_monthly_rate_on_new_price",
+            "severity": "high",
+            "subId": "sub_1TopZGJdmBLlxqNn1lfbwehI",
             "status": "active",
-            "listPrice": 54000,
+            "listPrice": 5400,
             "paid": 2700,
-            "interval": "year",
-            "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-            "created": "2026-06-16"
+            "interval": "month",
+            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+            "created": "2026-07-02"
+          },
+          {
+            "type": "legacy_monthly_rate_on_new_price",
+            "severity": "high",
+            "subId": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
+            "status": "active",
+            "listPrice": 5400,
+            "paid": 2700,
+            "interval": "month",
+            "product": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+            "created": "2026-05-02"
+          },
+          {
+            "type": "multiple_active_subs",
+            "severity": "critical",
+            "count": 2,
+            "subs": [
+              {
+                "id": "sub_1TopZGJdmBLlxqNn1lfbwehI",
+                "status": "active",
+                "price": 5400,
+                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
+              },
+              {
+                "id": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
+                "status": "active",
+                "price": 5400,
+                "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
+              }
+            ]
           }
         ],
         "anomaly": {
-          "type": "monthly_charge_on_annual_plan",
+          "type": "multiple_active_subs",
           "severity": "critical",
-          "subId": "sub_1Tj622JdmBLlxqNnFS8pEti8",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-16"
-        }
-      },
-      {
-        "customerId": "cus_UiHsNvNm1bSmB6",
-        "email": "aljawhara.d@gmail.com",
-        "anomalies": [
-          {
-            "type": "monthly_charge_on_annual_plan",
-            "severity": "critical",
-            "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
-            "status": "active",
-            "listPrice": 54000,
-            "paid": 2700,
-            "interval": "year",
-            "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-            "created": "2026-06-16"
-          }
-        ],
-        "anomaly": {
-          "type": "monthly_charge_on_annual_plan",
-          "severity": "critical",
-          "subId": "sub_1TirKvJdmBLlxqNnjuUvKXx3",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-16"
-        }
-      },
-      {
-        "customerId": "cus_UfiOPy6b5q3jqi",
-        "email": "samahalbayrak8@gmail.com",
-        "anomalies": [
-          {
-            "type": "monthly_charge_on_annual_plan",
-            "severity": "critical",
-            "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
-            "status": "active",
-            "listPrice": 54000,
-            "paid": 2700,
-            "interval": "year",
-            "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-            "created": "2026-06-09"
-          }
-        ],
-        "anomaly": {
-          "type": "monthly_charge_on_annual_plan",
-          "severity": "critical",
-          "subId": "sub_1TgMzTJdmBLlxqNngDxWtKn1",
-          "status": "active",
-          "listPrice": 54000,
-          "paid": 2700,
-          "interval": "year",
-          "product": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-          "created": "2026-06-09"
+          "count": 2,
+          "subs": [
+            {
+              "id": "sub_1TopZGJdmBLlxqNn1lfbwehI",
+              "status": "active",
+              "price": 5400,
+              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
+            },
+            {
+              "id": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
+              "status": "active",
+              "price": 5400,
+              "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
+            }
+          ]
         }
       }
     ],

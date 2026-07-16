@@ -66,10 +66,17 @@ async function mapCourseToResult(
   return {
     id: course._id,
     title: title.text,
+    titleEn: course.name || undefined,
+    titleAr: course.name_ar || undefined,
     description: description.text,
+    descriptionEn: (course.short_description ?? course.description) || undefined,
+    descriptionAr:
+      (course.short_description_ar ?? course.description_ar) || undefined,
     slug: course.slug,
     imageUrl: course.thumbnail_image_url ?? course.banner_image_url,
     category: categoryLabel.text || undefined,
+    categoryEn: categoryEn || undefined,
+    categoryAr: categoryAr || undefined,
     durationMinutes: secondsToMinutes(course.duration),
     accessStatus,
     language,

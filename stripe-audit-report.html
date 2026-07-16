@@ -109,7 +109,7 @@
       transition: height .3s;
     }
     .mrr-bar.list { background: linear-gradient(180deg, var(--accent2), var(--accent)); height: 120px; }
-    .mrr-bar.actual { background: linear-gradient(180deg, var(--amber), #d97706); height: 60px; }
+    .mrr-bar.actual { background: linear-gradient(180deg, var(--amber), #d97706); height: 55px; }
     .mrr-bar-label { font-size: .75rem; color: var(--muted); text-align: center; }
     .mrr-bar-amount { font-size: 1.1rem; font-weight: 700; }
     .gap-callout {
@@ -201,11 +201,11 @@
           <div class="kpi-label">Subscriptions</div>
         </div>
         <div class="card">
-          <div class="kpi-value kpi-green">$22,256.51</div>
+          <div class="kpi-value kpi-green">$22,202.51</div>
           <div class="kpi-label">Net collected</div>
         </div>
         <div class="card">
-          <div class="kpi-value kpi-red">13</div>
+          <div class="kpi-value kpi-red">9</div>
           <div class="kpi-label">High-severity anomalies</div>
         </div>
       </div>
@@ -219,25 +219,25 @@
           <h3>List-price vs. actual collected MRR</h3>
           <div class="mrr-bar-wrap">
             <div class="mrr-bar-col">
-              <div class="mrr-bar-amount">$12,672</div>
+              <div class="mrr-bar-amount">$12,699</div>
               <div class="mrr-bar list"></div>
               <div class="mrr-bar-label">List-price MRR<br><span class="mono">if all paid new rates</span></div>
             </div>
             <div class="mrr-bar-col">
-              <div class="mrr-bar-amount">$6,319</div>
+              <div class="mrr-bar-amount">$5,806</div>
               <div class="mrr-bar actual"></div>
               <div class="mrr-bar-label">Actual MRR<br><span class="mono">based on last invoice paid</span></div>
             </div>
           </div>
-          <div class="gap-callout">50% gap — ~$6,353/mo until renewals hit new prices</div>
+          <div class="gap-callout">54% gap — ~$6,893/mo until renewals hit new prices</div>
         </div>
         <div class="card">
           <h2>Revenue &amp; charges</h2>
           <div class="stat-pills">
-            <div class="pill"><strong>$12,672.00</strong> list MRR</div>
-            <div class="pill"><strong>$152,064.00</strong> list ARR</div>
+            <div class="pill"><strong>$12,699.00</strong> list MRR</div>
+            <div class="pill"><strong>$152,388.00</strong> list ARR</div>
             <div class="pill"><strong>$22,540.41</strong> gross</div>
-            <div class="pill"><strong>$283.90</strong> refunded</div>
+            <div class="pill"><strong>$337.90</strong> refunded</div>
             <div class="pill"><strong>618</strong> paid charges</div>
             <div class="pill"><strong class="kpi-red">801</strong> failed (56%)</div>
             <div class="pill"><strong>69</strong> open invoices</div>
@@ -255,42 +255,35 @@
           <div class="insight-title">Double billing risk — soso2009913@gmail.com</div>
           <span class="badge badge-critical">Critical</span>
         </div>
-        <div class="insight-body">Two active $54/mo subscriptions on the same customer. At next renewal they could be charged $108/month.</div>
-        <div class="insight-action">→ Cancel one subscription immediately.</div>
-      </div><div class="insight-card critical">
-        <div class="insight-header">
-          <div class="insight-title">Zombie legacy subs on migrated customers</div>
-          <span class="badge badge-critical">Critical</span>
-        </div>
-        <div class="insight-body">hetafalokam@gmail.com and marwakha2009@gmail.com each have an active $54 sub plus a past_due $27 legacy sub still retrying charges.</div>
-        <div class="insight-action">→ Cancel the old $27 subscriptions.</div>
+        <div class="insight-body">1 customer(s) with multiple active/past_due subscriptions. Risk of double charges at renewal.</div>
+        <div class="insight-action">→ Cancel duplicate subscriptions immediately.</div>
       </div><div class="insight-card critical">
         <div class="insight-header">
           <div class="insight-title">Free active annual — himovoo@gmail.com</div>
           <span class="badge badge-critical">Critical</span>
         </div>
-        <div class="insight-body">DevTest promo code used in live mode — 100% discount at checkout. $540/yr plan active with $0 ever paid. Appears to be internal test account.</div>
+        <div class="insight-body">DevTest promo code used in live mode — 100% discount at checkout. $540/yr plan active with $0 ever paid.</div>
         <div class="insight-action">→ Cancel sub or convert to paid; deactivate DevTest promo permanently.</div>
       </div><div class="insight-card high">
         <div class="insight-header">
-          <div class="insight-title">Price migration gap — 198/208 monthly subs</div>
+          <div class="insight-title">Price migration gap — 201 monthly subs</div>
           <span class="badge badge-high">High</span>
         </div>
         <div class="insight-body">Subscription objects show $54/mo price but latest invoices still charged $27. Upcoming renewals preview at $54.</div>
         <div class="insight-action">→ Confirm grandfathering intent; monitor renewals for failed $54 charges.</div>
       </div><div class="insight-card high">
         <div class="insight-header">
-          <div class="insight-title">Annual subs — none paying full $540 yet</div>
+          <div class="insight-title">Annual subs — 27 paying legacy rates</div>
           <span class="badge badge-high">High</span>
         </div>
-        <div class="insight-body">All 32 active annual subs are on the $540/yr price but paid legacy amounts ($247, $270, or prorated conversions). 11 have messy proration on upcoming invoices.</div>
+        <div class="insight-body">Active annual subs on $540/yr price but last invoice at legacy amount. Review before renewal.</div>
         <div class="insight-action">→ Review annual migrations before auto-charge.</div>
       </div><div class="insight-card high">
         <div class="insight-header">
-          <div class="insight-title">10 past_due legacy $27/mo subs</div>
+          <div class="insight-title">8 past_due legacy $27/mo subs</div>
           <span class="badge badge-high">High</span>
         </div>
-        <div class="insight-body">All past_due subscriptions are on the old price_1SyZyW ($27/mo). Driving 69 open invoices and 801 failed charge retries.</div>
+        <div class="insight-body">Driving 69 open invoices and 801 failed charge retries.</div>
         <div class="insight-action">→ Cancel zombies or attempt recovery — stop endless dunning.</div>
       </div>
     </section>
@@ -306,7 +299,7 @@
           </div>
           <span class="badge badge-critical">NOT OK</span>
         </div>
-        <div class="verdict-box">NOT OK — accidental live comp via DevTest promo</div>
+        <div class="verdict-box">NOT OK — requires action</div>
         <p style="margin:1rem 0;font-size:.9rem;line-height:1.7">Used promotion code DevTest in live mode at checkout. This gave a 100% discount on the original $247/year plan. The account (Movoo AI, linked userId in metadata) appears to be an internal/test account. Only 1 of 2 DevTest redemptions is still active; pchamani@nizek.com also used it but is canceled.</p>
         <div class="timeline">
           <div class="timeline-item">
@@ -343,17 +336,17 @@
           <h3 style="color:var(--green)">✓ Expected (migration grandfathering)</h3>
           <p style="color:var(--muted);font-size:.875rem;margin-bottom:1rem">These look intentional — price ID updated but current billing period still at legacy rate. Upcoming invoices preview at new price.</p>
           <div class="stat-pills">
-            <div class="pill"><strong>198</strong> monthly subs paying $27 on $54 plan</div>
+            <div class="pill"><strong>201</strong> monthly subs paying $27 on $54 plan</div>
             <div class="pill"><strong>27</strong> annual subs paying legacy rate on $540 plan</div>
           </div>
         </div>
         <div class="card not-ok-card">
           <h3 style="color:var(--red)">✗ Not OK — requires action</h3>
-          <p style="color:var(--muted);font-size:.875rem;margin-bottom:1rem">8 customers with genuine billing problems (not migration grandfathering).</p>
+          <p style="color:var(--muted);font-size:.875rem;margin-bottom:1rem">3 customers with genuine billing problems (not migration grandfathering).</p>
           <div class="stat-pills">
             <div class="pill"><strong>1</strong> free via DevTest promo</div>
-            <div class="pill"><strong>3</strong> duplicate subscriptions</div>
-            <div class="pill"><strong>3</strong> monthly charge on annual plan</div>
+            <div class="pill"><strong>1</strong> duplicate subscriptions</div>
+            <div class="pill"><strong>0</strong> monthly charge on annual plan</div>
             <div class="pill"><strong>1</strong> unexpected amount</div>
           </div>
         </div>
@@ -371,34 +364,9 @@
       <td style="font-size:.85rem;color:var(--muted)">$0 paid on active $540/yr plan — 100% promo code used in live mode</td>
     </tr><tr>
       <td><span class="badge badge-critical">Critical</span></td>
-      <td><strong>hetafalokam@gmail.com</strong></td>
-      <td>Duplicate subscriptions</td>
-      <td style="font-size:.85rem;color:var(--muted)">2 active/past_due subs — double billing risk</td>
-    </tr><tr>
-      <td><span class="badge badge-critical">Critical</span></td>
-      <td><strong>marwakha2009@gmail.com</strong></td>
-      <td>Duplicate subscriptions</td>
-      <td style="font-size:.85rem;color:var(--muted)">2 active/past_due subs — double billing risk</td>
-    </tr><tr>
-      <td><span class="badge badge-critical">Critical</span></td>
       <td><strong>soso2009913@gmail.com</strong></td>
       <td>Duplicate subscriptions</td>
       <td style="font-size:.85rem;color:var(--muted)">2 active/past_due subs — double billing risk</td>
-    </tr><tr>
-      <td><span class="badge badge-critical">Critical</span></td>
-      <td><strong>3houd13.otb1313@gmail.com</strong></td>
-      <td>Monthly charge on annual plan</td>
-      <td style="font-size:.85rem;color:var(--muted)">Paid $27 on $540/yr plan — migration proration issue</td>
-    </tr><tr>
-      <td><span class="badge badge-critical">Critical</span></td>
-      <td><strong>aljawhara.d@gmail.com</strong></td>
-      <td>Monthly charge on annual plan</td>
-      <td style="font-size:.85rem;color:var(--muted)">Paid $27 on $540/yr plan — migration proration issue</td>
-    </tr><tr>
-      <td><span class="badge badge-critical">Critical</span></td>
-      <td><strong>samahalbayrak8@gmail.com</strong></td>
-      <td>Monthly charge on annual plan</td>
-      <td style="font-size:.85rem;color:var(--muted)">Paid $27 on $540/yr plan — migration proration issue</td>
     </tr><tr>
       <td><span class="badge badge-high">High</span></td>
       <td><strong>irahelsaleh@gmail.com</strong></td>
@@ -409,22 +377,7 @@
       </div>
     </section>
 
-    <section>
-      <h2>Annual plan migration issues <span class="anomaly-count count-high">3</span></h2>
-      <div class="card">
-        <p style="color:var(--muted);font-size:.9rem;margin-bottom:1rem">These users were migrated from monthly to annual but their last invoice was still a $27 monthly charge. Upcoming invoices show broken proration ($496–$1,035).</p>
-        <div class="card" style="padding:0;overflow:hidden;background:var(--surface2)">
-          <table>
-            <thead><tr><th>Email</th><th>List price</th><th>Last paid</th><th>Upcoming preview</th></tr></thead>
-            <tbody>
-              <tr><td>3houd13.otb1313@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$496 proration</td></tr>
-              <tr><td>aljawhara.d@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$1,036 proration</td></tr>
-              <tr><td>samahalbayrak8@gmail.com</td><td>$540/yr</td><td>$27 (monthly line)</td><td class="kpi-amber">~$496 proration</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </section>
+    
   
 
     <!-- Charts -->
@@ -440,11 +393,11 @@
       </div><div class="bar-row">
         <div class="bar-label">Canceled</div>
         <div class="bar-track"><div class="bar-fill" style="width:42%;background:#94a3b8"></div></div>
-        <div class="bar-value">181</div>
+        <div class="bar-value">183</div>
       </div><div class="bar-row">
         <div class="bar-label">Past due</div>
         <div class="bar-track"><div class="bar-fill" style="width:2%;background:#ef4444"></div></div>
-        <div class="bar-value">10</div>
+        <div class="bar-value">8</div>
       </div>
         </div>
         <div class="card">
@@ -452,11 +405,11 @@
           <div class="bar-row">
         <div class="bar-label">Monthly $54</div>
         <div class="bar-track"><div class="bar-fill" style="width:100%;background:#635bff"></div></div>
-        <div class="bar-value">208</div>
+        <div class="bar-value">211</div>
       </div><div class="bar-row">
         <div class="bar-label">Annual $540</div>
-        <div class="bar-track"><div class="bar-fill" style="width:15%;background:#06b6d4"></div></div>
-        <div class="bar-value">32</div>
+        <div class="bar-track"><div class="bar-fill" style="width:14%;background:#06b6d4"></div></div>
+        <div class="bar-value">29</div>
       </div>
         </div>
         <div class="card">
@@ -500,7 +453,7 @@
 
     <!-- Duplicate subs -->
     <section>
-      <h2>Duplicate subscriptions <span class="anomaly-count count-high">3</span></h2>
+      <h2>Duplicate subscriptions <span class="anomaly-count count-high">1</span></h2>
       <div class="card" style="padding:0; overflow:hidden">
         <table>
           <thead><tr>
@@ -508,20 +461,6 @@
           </tr></thead>
           <tbody>
             <tr>
-              <td>
-                <div>hetafalokam@gmail.com</div>
-                <div class="mono"><a href="https://dashboard.stripe.com/customers/cus_USPuVsGcj5Q47R" target="_blank" rel="noopener">cus_USPuVsGcj5Q47R</a></div>
-              </td>
-              <td><div style="margin-bottom:.4rem"><a href="https://dashboard.stripe.com/subscriptions/sub_1TrnduJdmBLlxqNnHTzEASnE" target="_blank" rel="noopener">sub_1TrnduJdmBLlxqNnHTzEASnE</a> <span class="badge badge-active">active</span> <span class="mono">price_1Tl9fsJdmBLlxqNnzQJ5go8j</span></div><div style="margin-bottom:.4rem"><a href="https://dashboard.stripe.com/subscriptions/sub_1TTVBNJdmBLlxqNngELnOj1C" target="_blank" rel="noopener">sub_1TTVBNJdmBLlxqNngELnOj1C</a> <span class="badge badge-high">past_due</span> <span class="mono">price_1SyZyWJdmBLlxqNnNHRTPfMa</span></div></td>
-              <td><span class="badge badge-critical">Active new + zombie legacy</span></td>
-            </tr><tr>
-              <td>
-                <div>marwakha2009@gmail.com</div>
-                <div class="mono"><a href="https://dashboard.stripe.com/customers/cus_UeDpXeLRCcQjgh" target="_blank" rel="noopener">cus_UeDpXeLRCcQjgh</a></div>
-              </td>
-              <td><div style="margin-bottom:.4rem"><a href="https://dashboard.stripe.com/subscriptions/sub_1Tqb0QJdmBLlxqNn5Hz5dhgb" target="_blank" rel="noopener">sub_1Tqb0QJdmBLlxqNn5Hz5dhgb</a> <span class="badge badge-active">active</span> <span class="mono">price_1Tl9fsJdmBLlxqNnzQJ5go8j</span></div><div style="margin-bottom:.4rem"><a href="https://dashboard.stripe.com/subscriptions/sub_1TevQJJdmBLlxqNnAVnM85mW" target="_blank" rel="noopener">sub_1TevQJJdmBLlxqNnAVnM85mW</a> <span class="badge badge-high">past_due</span> <span class="mono">price_1SyZyWJdmBLlxqNnNHRTPfMa</span></div></td>
-              <td><span class="badge badge-critical">Active new + zombie legacy</span></td>
-            </tr><tr>
               <td>
                 <div>soso2009913@gmail.com</div>
                 <div class="mono"><a href="https://dashboard.stripe.com/customers/cus_URXniw2Ei7xmUb" target="_blank" rel="noopener">cus_URXniw2Ei7xmUb</a></div>
@@ -536,7 +475,7 @@
 
     <!-- Past due -->
     <section>
-      <h2>Past-due subscriptions <span class="anomaly-count count-high">10</span></h2>
+      <h2>Past-due subscriptions <span class="anomaly-count count-high">8</span></h2>
       <div class="card" style="padding:0; overflow:hidden">
         <table>
           <thead><tr>
@@ -580,12 +519,6 @@
               <td>2026-08-06</td>
               <td class="mono"><a href="https://dashboard.stripe.com/subscriptions/sub_1TfSQ8JdmBLlxqNnvzQib6g8" target="_blank" rel="noopener">sub_1TfSQ8JdmBLlxqNnvzQib6g8</a></td>
             </tr><tr>
-              <td>Marwa Khaled</td>
-              <td>marwakha2009@gmail.com</td>
-              <td>$27.00/month</td>
-              <td>2026-08-05</td>
-              <td class="mono"><a href="https://dashboard.stripe.com/subscriptions/sub_1TevQJJdmBLlxqNnAVnM85mW" target="_blank" rel="noopener">sub_1TevQJJdmBLlxqNnAVnM85mW</a></td>
-            </tr><tr>
               <td>Waffa Zabarmawi</td>
               <td>wa24-10-faa@hotmail.com</td>
               <td>$27.00/month</td>
@@ -597,12 +530,6 @@
               <td>$27.00/month</td>
               <td>2026-08-07</td>
               <td class="mono"><a href="https://dashboard.stripe.com/subscriptions/sub_1TUUoHJdmBLlxqNnn7vad7rP" target="_blank" rel="noopener">sub_1TUUoHJdmBLlxqNnn7vad7rP</a></td>
-            </tr><tr>
-              <td>Hetaf</td>
-              <td>hetafalokam@gmail.com</td>
-              <td>$27.00/month</td>
-              <td>2026-08-04</td>
-              <td class="mono"><a href="https://dashboard.stripe.com/subscriptions/sub_1TTVBNJdmBLlxqNngELnOj1C" target="_blank" rel="noopener">sub_1TTVBNJdmBLlxqNngELnOj1C</a></td>
             </tr>
           </tbody>
         </table>
@@ -803,7 +730,7 @@
       <h2>All anomalies</h2>
       <div class="grid grid-3" style="margin-bottom:1.25rem">
         <div class="card" style="text-align:center">
-          <div class="kpi-value kpi-red">13</div>
+          <div class="kpi-value kpi-red">9</div>
           <div class="kpi-label">High</div>
         </div>
         <div class="card" style="text-align:center">
@@ -811,7 +738,7 @@
           <div class="kpi-label">Medium</div>
         </div>
         <div class="card" style="text-align:center">
-          <div class="kpi-value">86</div>
+          <div class="kpi-value">83</div>
           <div class="kpi-label">Total</div>
         </div>
       </div>
@@ -820,14 +747,6 @@
           <thead><tr><th>Severity</th><th>Category</th><th>Details</th></tr></thead>
           <tbody>
             <tr>
-                <td><span class="badge badge-high">High</span></td>
-                <td class="mono">duplicate_active_subs</td>
-                <td style="font-size:.85rem">hetafalokam@gmail.com</td>
-              </tr><tr>
-                <td><span class="badge badge-high">High</span></td>
-                <td class="mono">duplicate_active_subs</td>
-                <td style="font-size:.85rem">marwakha2009@gmail.com</td>
-              </tr><tr>
                 <td><span class="badge badge-high">High</span></td>
                 <td class="mono">duplicate_active_subs</td>
                 <td style="font-size:.85rem">soso2009913@gmail.com</td>
@@ -858,19 +777,11 @@
               </tr><tr>
                 <td><span class="badge badge-high">High</span></td>
                 <td class="mono">payment_problem</td>
-                <td style="font-size:.85rem">marwakha2009@gmail.com</td>
-              </tr><tr>
-                <td><span class="badge badge-high">High</span></td>
-                <td class="mono">payment_problem</td>
                 <td style="font-size:.85rem">wa24-10-faa@hotmail.com</td>
               </tr><tr>
                 <td><span class="badge badge-high">High</span></td>
                 <td class="mono">payment_problem</td>
                 <td style="font-size:.85rem">jorywook259@gmail.com</td>
-              </tr><tr>
-                <td><span class="badge badge-high">High</span></td>
-                <td class="mono">payment_problem</td>
-                <td style="font-size:.85rem">hetafalokam@gmail.com</td>
               </tr><tr>
                 <td><span class="badge badge-medium">Medium</span></td>
                 <td class="mono">duplicate_prices</td>
@@ -979,6 +890,22 @@
                 <td><span class="badge badge-medium">Medium</span></td>
                 <td class="mono">open_invoice</td>
                 <td style="font-size:.85rem">in_1TiCflJdmBLlxqNnvzLXszec</td>
+              </tr><tr>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td class="mono">open_invoice</td>
+                <td style="font-size:.85rem">in_1ThPNmJdmBLlxqNnb8onyW98</td>
+              </tr><tr>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td class="mono">open_invoice</td>
+                <td style="font-size:.85rem">in_1TgKv1JdmBLlxqNnouoWr4o7</td>
+              </tr><tr>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td class="mono">open_invoice</td>
+                <td style="font-size:.85rem">in_1TgKbvJdmBLlxqNn9mI7qv9E</td>
+              </tr><tr>
+                <td><span class="badge badge-medium">Medium</span></td>
+                <td class="mono">open_invoice</td>
+                <td style="font-size:.85rem">in_1Tg8SuJdmBLlxqNng3sWMyn7</td>
               </tr>
           </tbody>
         </table>

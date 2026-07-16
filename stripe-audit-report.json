@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-16T08:06:13.079Z",
+  "generatedAt": "2026-07-16T09:30:32.648Z",
   "summary": {
     "customers": 657,
     "subscriptions": 431,
@@ -9,27 +9,27 @@
     "products": 7,
     "subsByStatus": {
       "active": 240,
-      "canceled": 181,
-      "past_due": 10
+      "canceled": 183,
+      "past_due": 8
     },
     "subsByInterval": {
-      "month": 208,
-      "year": 32,
+      "month": 211,
+      "year": 29,
       "other": 0,
       "one_time": 0
     },
     "activeSubsByPrice": {
-      "price_1Tl9fsJdmBLlxqNnzQJ5go8j": 208,
-      "price_1Tl9kqJdmBLlxqNnm9uu8qvw": 32
+      "price_1Tl9fsJdmBLlxqNnzQJ5go8j": 211,
+      "price_1Tl9kqJdmBLlxqNnm9uu8qvw": 29
     },
-    "mrr": "$12,672.00",
-    "arr": "$152,064.00",
+    "mrr": "$12,699.00",
+    "arr": "$152,388.00",
     "totalCollected": "$22,540.41",
-    "totalRefunded": "$283.90",
-    "netCollected": "$22,256.51",
+    "totalRefunded": "$337.90",
+    "netCollected": "$22,202.51",
     "paidCharges": 618,
     "failedCharges": 801,
-    "refundedCharges": 11,
+    "refundedCharges": 13,
     "disputedCharges": 0,
     "openInvoices": 69,
     "uncollectibleInvoices": 0
@@ -370,44 +370,6 @@
       "severity": "high",
       "category": "duplicate_active_subs",
       "message": "Customer has 2 active/past_due subs",
-      "customerId": "cus_USPuVsGcj5Q47R",
-      "email": "hetafalokam@gmail.com",
-      "subscriptions": [
-        {
-          "id": "sub_1TrnduJdmBLlxqNnHTzEASnE",
-          "status": "active",
-          "price": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-        },
-        {
-          "id": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-          "status": "past_due",
-          "price": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-        }
-      ]
-    },
-    {
-      "severity": "high",
-      "category": "duplicate_active_subs",
-      "message": "Customer has 2 active/past_due subs",
-      "customerId": "cus_UeDpXeLRCcQjgh",
-      "email": "marwakha2009@gmail.com",
-      "subscriptions": [
-        {
-          "id": "sub_1Tqb0QJdmBLlxqNn5Hz5dhgb",
-          "status": "active",
-          "price": "price_1Tl9fsJdmBLlxqNnzQJ5go8j"
-        },
-        {
-          "id": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-          "status": "past_due",
-          "price": "price_1SyZyWJdmBLlxqNnNHRTPfMa"
-        }
-      ]
-    },
-    {
-      "severity": "high",
-      "category": "duplicate_active_subs",
-      "message": "Customer has 2 active/past_due subs",
       "customerId": "cus_URXniw2Ei7xmUb",
       "email": "soso2009913@gmail.com",
       "subscriptions": [
@@ -565,29 +527,6 @@
       "severity": "high",
       "category": "payment_problem",
       "message": "Subscription in past_due status",
-      "subId": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-      "status": "past_due",
-      "customerId": "cus_UeDpXeLRCcQjgh",
-      "email": "marwakha2009@gmail.com",
-      "name": "Marwa Khaled",
-      "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa",
-      "productName": "Subscription",
-      "amount": 2700,
-      "currency": "usd",
-      "interval": "month",
-      "qty": 1,
-      "periodStart": "2026-07-05",
-      "periodEnd": "2026-08-05",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
-      "created": "2026-06-05",
-      "discount": null,
-      "metadata": {}
-    },
-    {
-      "severity": "high",
-      "category": "payment_problem",
-      "message": "Subscription in past_due status",
       "subId": "sub_1Te5BjJdmBLlxqNnx61DB04b",
       "status": "past_due",
       "customerId": "cus_UdLrvh3ZLvM7dq",
@@ -601,8 +540,8 @@
       "qty": 1,
       "periodStart": "2026-07-03",
       "periodEnd": "2026-08-03",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
       "created": "2026-06-03",
       "discount": null,
       "metadata": {}
@@ -624,32 +563,9 @@
       "qty": 1,
       "periodStart": "2026-07-07",
       "periodEnd": "2026-08-07",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
       "created": "2026-05-07",
-      "discount": null,
-      "metadata": {}
-    },
-    {
-      "severity": "high",
-      "category": "payment_problem",
-      "message": "Subscription in past_due status",
-      "subId": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-      "status": "past_due",
-      "customerId": "cus_USPuVsGcj5Q47R",
-      "email": "hetafalokam@gmail.com",
-      "name": "Hetaf",
-      "priceId": "price_1SyZyWJdmBLlxqNnNHRTPfMa",
-      "productName": "Subscription",
-      "amount": 2700,
-      "currency": "usd",
-      "interval": "month",
-      "qty": 1,
-      "periodStart": "2026-07-04",
-      "periodEnd": "2026-08-04",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
-      "created": "2026-05-04",
       "discount": null,
       "metadata": {}
     },
@@ -1351,13 +1267,36 @@
       "customerId": "cus_TyGC7Urt4jTene",
       "amount": "$27.00",
       "dueDate": "—"
+    },
+    {
+      "severity": "low",
+      "category": "cancel_pending",
+      "message": "Active but cancel_at_period_end=true",
+      "subId": "sub_1TSejJJdmBLlxqNno6H1hi4Q",
+      "status": "active",
+      "customerId": "cus_URXniw2Ei7xmUb",
+      "email": "soso2009913@gmail.com",
+      "name": "S0s0 Abd Alah",
+      "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+      "productName": "Monthly",
+      "amount": 5400,
+      "currency": "usd",
+      "interval": "month",
+      "qty": 1,
+      "periodStart": "2026-07-02",
+      "periodEnd": "2026-08-02",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
+      "created": "2026-05-02",
+      "discount": null,
+      "metadata": {}
     }
   ],
   "anomalyCounts": {
-    "high": 13,
+    "high": 9,
     "medium": 73,
-    "low": 0,
-    "total": 86
+    "low": 1,
+    "total": 83
   },
   "activeSubscriptions": [
     {
@@ -4666,14 +4605,14 @@
       "customerId": "cus_UiX5bcz3vHCi6r",
       "email": "3houd13.otb1313@gmail.com",
       "name": "عهود العصيمي",
-      "priceId": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-      "productName": "Annual",
-      "amount": 54000,
+      "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+      "productName": "Monthly",
+      "amount": 5400,
       "currency": "usd",
-      "interval": "year",
+      "interval": "month",
       "qty": 1,
       "periodStart": "2026-06-16",
-      "periodEnd": "2027-06-16",
+      "periodEnd": "2026-07-16",
       "cancelAtPeriodEnd": false,
       "canceledAt": "2026-07-16",
       "created": "2026-06-16",
@@ -4746,14 +4685,14 @@
       "customerId": "cus_UiHsNvNm1bSmB6",
       "email": "aljawhara.d@gmail.com",
       "name": "Aljawhara Alburkani",
-      "priceId": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-      "productName": "Annual",
-      "amount": 54000,
+      "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+      "productName": "Monthly",
+      "amount": 5400,
       "currency": "usd",
-      "interval": "year",
+      "interval": "month",
       "qty": 1,
-      "periodStart": "2026-06-16",
-      "periodEnd": "2027-06-16",
+      "periodStart": "2026-07-16",
+      "periodEnd": "2026-08-16",
       "cancelAtPeriodEnd": false,
       "canceledAt": "—",
       "created": "2026-06-16",
@@ -4766,16 +4705,16 @@
       "customerId": "cus_UfiOPy6b5q3jqi",
       "email": "samahalbayrak8@gmail.com",
       "name": "samah albayrak",
-      "priceId": "price_1Tl9kqJdmBLlxqNnm9uu8qvw",
-      "productName": "Annual",
-      "amount": 54000,
+      "priceId": "price_1Tl9fsJdmBLlxqNnzQJ5go8j",
+      "productName": "Monthly",
+      "amount": 5400,
       "currency": "usd",
-      "interval": "year",
+      "interval": "month",
       "qty": 1,
-      "periodStart": "2026-06-09",
-      "periodEnd": "2027-06-09",
+      "periodStart": "2026-07-09",
+      "periodEnd": "2026-08-09",
       "cancelAtPeriodEnd": false,
-      "canceledAt": "2026-07-08",
+      "canceledAt": "2026-07-16",
       "created": "2026-06-09",
       "discount": null,
       "metadata": {}
@@ -5534,8 +5473,8 @@
       "qty": 1,
       "periodStart": "2026-07-02",
       "periodEnd": "2026-08-02",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
       "created": "2026-05-02",
       "discount": null,
       "metadata": {}
@@ -6924,7 +6863,7 @@
     },
     {
       "subId": "sub_1TevQJJdmBLlxqNnAVnM85mW",
-      "status": "past_due",
+      "status": "canceled",
       "customerId": "cus_UeDpXeLRCcQjgh",
       "email": "marwakha2009@gmail.com",
       "name": "Marwa Khaled",
@@ -6937,7 +6876,7 @@
       "periodStart": "2026-07-05",
       "periodEnd": "2026-08-05",
       "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "canceledAt": "2026-07-16",
       "created": "2026-06-05",
       "discount": null,
       "metadata": {}
@@ -6976,8 +6915,8 @@
       "qty": 1,
       "periodStart": "2026-07-03",
       "periodEnd": "2026-08-03",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
       "created": "2026-06-03",
       "discount": null,
       "metadata": {}
@@ -7616,8 +7555,8 @@
       "qty": 1,
       "periodStart": "2026-07-07",
       "periodEnd": "2026-08-07",
-      "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "cancelAtPeriodEnd": true,
+      "canceledAt": "2026-07-16",
       "created": "2026-05-07",
       "discount": null,
       "metadata": {}
@@ -7684,7 +7623,7 @@
     },
     {
       "subId": "sub_1TTVBNJdmBLlxqNngELnOj1C",
-      "status": "past_due",
+      "status": "canceled",
       "customerId": "cus_USPuVsGcj5Q47R",
       "email": "hetafalokam@gmail.com",
       "name": "Hetaf",
@@ -7697,7 +7636,7 @@
       "periodStart": "2026-07-04",
       "periodEnd": "2026-08-04",
       "cancelAtPeriodEnd": false,
-      "canceledAt": "—",
+      "canceledAt": "2026-07-16",
       "created": "2026-05-04",
       "discount": null,
       "metadata": {}

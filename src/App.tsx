@@ -254,12 +254,22 @@ const RootRedirect = () => {
 
 const LanguageDirectionEffect = () => {
   const { language, isRTL } = useLanguage();
+  const location = useLocation();
+  // Assistant test keeps page chrome LTR; only the chat widget flips with ?lang=ar.
+  const chatOnlyLanguage =
+    location.pathname === "/assistant-test" ||
+    location.pathname.startsWith("/assistant-test/");
 
   useEffect(() => {
     const html = document.documentElement;
+    if (chatOnlyLanguage) {
+      html.setAttribute("lang", "en");
+      html.setAttribute("dir", "ltr");
+      return;
+    }
     html.setAttribute("lang", language);
     html.setAttribute("dir", isRTL ? "rtl" : "ltr");
-  }, [language, isRTL]);
+  }, [language, isRTL, chatOnlyLanguage]);
 
   return null;
 };

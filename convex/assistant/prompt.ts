@@ -95,8 +95,23 @@ export function buildAssistantSystemPrompt(args: {
   customInstructions: string;
   userContext: string;
   userMemory: string | null;
+  preferredLanguage?: "en" | "ar";
 }): string {
   const sections = [args.customInstructions.trim(), ASSISTANT_FIXED_INSTRUCTIONS];
+
+  if (args.preferredLanguage === "ar") {
+    sections.push(
+      "UI language preference: Arabic (ar).\n" +
+        "Respond in Arabic unless the user writes in another language.\n" +
+        "When calling searchCourses, always pass language: \"ar\" so course cards show Arabic titles and descriptions.",
+    );
+  } else if (args.preferredLanguage === "en") {
+    sections.push(
+      "UI language preference: English (en).\n" +
+        "Respond in English unless the user writes in another language.\n" +
+        "When calling searchCourses, always pass language: \"en\" so course cards show English titles and descriptions.",
+    );
+  }
 
   const userContext = args.userContext.trim();
   if (userContext.length > 0) {

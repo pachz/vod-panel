@@ -2,12 +2,14 @@ import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
 import { v } from "convex/values";
 import { rehamDivaAgent } from "./agent";
+import { assistantLanguageValidator } from "./validators";
 
 export const streamAssistantResponse = internalAction({
   args: {
     threadId: v.string(),
     promptMessageId: v.string(),
     userId: v.id("users"),
+    language: v.optional(assistantLanguageValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -15,6 +17,7 @@ export const streamAssistantResponse = internalAction({
     const system = await ctx.runQuery(internal.assistant.promptRuntime.getSystemInstructions, {
       userId: args.userId,
       nowMs,
+      language: args.language,
     });
 
     const result = await rehamDivaAgent.streamText(
