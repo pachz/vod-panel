@@ -212,6 +212,11 @@ export const upsertSubscription = internalMutation({
         patch.stripePriceId = existing.renewalStripePriceId;
         if (existing.renewalPlanId && !preserveMigratedPlan) {
           patch.planId = existing.renewalPlanId;
+          const renewalPlan = await ctx.db.get(existing.renewalPlanId);
+          if (renewalPlan) {
+            patch.interval = renewalPlan.billingInterval;
+            patch.intervalCount = 1;
+          }
         }
         patch.renewalStripePriceId = undefined;
         patch.renewalPlanId = undefined;

@@ -383,18 +383,11 @@ type EligibleRenewalPrice = {
   isArchived: boolean;
 };
 
-function billingIntervalFromSubscription(
-  sub: Doc<"subscriptions">,
-): "month" | "year" {
-  return sub.interval === "year" ? "year" : "month";
-}
-
 async function buildEligibleRenewalPrices(
   ctx: { db: import("./_generated/server").QueryCtx["db"] },
   sub: Doc<"subscriptions">,
 ): Promise<EligibleRenewalPrice[]> {
   const currentPriceId = sub.stripePriceId ?? undefined;
-  const billingInterval = billingIntervalFromSubscription(sub);
   const byPriceId = new Map<string, EligibleRenewalPrice>();
 
   const addPrice = (option: Omit<EligibleRenewalPrice, "isCurrent">) => {
@@ -477,9 +470,6 @@ async function buildEligibleRenewalPrices(
     if (plan.deletedAt !== undefined || !plan.isActive) {
       continue;
     }
-    if (plan.billingInterval !== billingInterval) {
-      continue;
-    }
     addPrice({
       stripePriceId: plan.stripePriceId,
       planId: plan._id,
@@ -494,16 +484,15 @@ async function buildEligibleRenewalPrices(
   const paymentSettings = await ctx.db.query("paymentSettings").order("desc").first();
   if (paymentSettings) {
     const productName = paymentSettings.productName?.trim() || "Legacy plan";
-    if (billingInterval === "month") {
-      addPrice({
-        stripePriceId: paymentSettings.selectedPriceId,
-        planName: `${productName} (Monthly)`,
-        priceAmount: paymentSettings.priceAmount,
-        priceCurrency: paymentSettings.priceCurrency,
-        billingInterval: "month",
-        isArchived: false,
-      });
-    } else if (paymentSettings.selectedYearlyPriceId) {
+    addPrice({
+      stripePriceId: paymentSettings.selectedPriceId,
+      planName: `${productName} (Monthly)`,
+      priceAmount: paymentSettings.priceAmount,
+      priceCurrency: paymentSettings.priceCurrency,
+      billingInterval: "month",
+      isArchived: false,
+    });
+    if (paymentSettings.selectedYearlyPriceId) {
       addPrice({
         stripePriceId: paymentSettings.selectedYearlyPriceId,
         planName: `${productName} (Yearly)`,
@@ -522,6 +511,9 @@ async function buildEligibleRenewalPrices(
     }
     if (a.isArchived !== b.isArchived) {
       return a.isArchived ? 1 : -1;
+    }
+    if (a.billingInterval !== b.billingInterval) {
+      return a.billingInterval === "month" ? -1 : 1;
     }
     return a.planName.localeCompare(b.planName);
   });
