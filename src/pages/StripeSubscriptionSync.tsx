@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { useAction, useMutation, useQuery } from "convex/react";
@@ -48,51 +48,14 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { formatPrice } from "@/pages/Payments/utils";
-
-type ComparisonRow = {
-  stripeSubscriptionId: string;
-  stripeCustomerId: string;
-  stripeCustomerEmail: string | null;
-  stripeStatus: string;
-  stripePriceId: string | null;
-  stripeCurrentPeriodStart: number;
-  stripeCurrentPeriodEnd: number;
-  stripeCancelAtPeriodEnd: boolean;
-  localSubscriptionDocId: Id<"subscriptions"> | null;
-  localUserId: Id<"users"> | null;
-  localUserName: string | null;
-  localUserEmail: string | null;
-  localStatus: string | null;
-  localCurrentPeriodStart: number | null;
-  localCurrentPeriodEnd: number | null;
-  localCancelAtPeriodEnd: boolean | null;
-  localStripePriceId: string | null;
-  localRenewalStripePriceId: string | null;
-  localPlanId: Id<"subscriptionPlans"> | null;
-  localPlanName: string | null;
-  legacyMigrationStatus: "migrated" | null;
-  stripePriceLinkedToPlan: boolean;
-  needsPackageAssignment: boolean;
-  mappedUserId: Id<"users"> | null;
-  mappedUserName: string | null;
-  mappedUserEmail: string | null;
-  inSync: boolean;
-  syncNeeded: boolean;
-  canSync: boolean;
-  syncReasons: string[];
-  expectedDifferences: string[];
-};
-
-type StatusFilter =
-  | "all"
-  | "active"
-  | "canceled"
-  | "past_due"
-  | "unpaid"
-  | "incomplete"
-  | "trialing";
-
-type ViewFilter = "all" | "needs_sync" | "needs_package" | "in_sync";
+import {
+  clearPersistedSyncPageState,
+  readPersistedSyncPageState,
+  writePersistedSyncPageState,
+  type ComparisonRow,
+  type StatusFilter,
+  type ViewFilter,
+} from "@/pages/StripeSubscriptions/syncPageState";
 
 const STATUS_OPTIONS: Array<{ value: StatusFilter; label: string }> = [
   { value: "all", label: "All Stripe statuses" },
@@ -331,14 +294,23 @@ function ComparisonRowActions({
 }
 
 const StripeSubscriptionSync = () => {
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
-  const [viewFilter, setViewFilter] = useState<ViewFilter>("all");
-  const [rows, setRows] = useState<ComparisonRow[]>([]);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const persistedState = useMemo(() => readPersistedSyncPageState(), []);
+  const rowRefreshCountRef = useRef(0);
+
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(
+    persistedState?.statusFilter ?? "all",
+  );
+  const [viewFilter, setViewFilter] = useState<ViewFilter>(
+    persistedState?.viewFilter ?? "all",
+  );
+  const [rows, setRows] = useState<ComparisonRow[]>(persistedState?.rows ?? []);
+  const [hasMore, setHasMore] = useState(persistedState?.hasMore ?? false);
+  const [nextCursor, setNextCursor] = useState<string | null>(
+    persistedState?.nextCursor ?? null,
+  );
   const [loading, setLoading] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [loadedOnce, setLoadedOnce] = useState(false);
+  const [loadedOnce, setLoadedOnce] = useState(persistedState?.loadedOnce ?? false);
   const [refreshingRowIds, setRefreshingRowIds] = useState<Set<string>>(new Set());
 
   const listComparison = useAction(api.subscriptionsAdminStripe.listStripeSubscriptionComparison);
@@ -347,6 +319,9 @@ const StripeSubscriptionSync = () => {
   const fetchPage = useCallback(
     async (options: { append: boolean; startingAfter?: string | null }) => {
       const isAppend = options.append;
+      if (!isAppend && rowRefreshCountRef.current > 0) {
+        return;
+      }
       if (isAppend) {
         setLoadingMore(true);
       } else {
@@ -376,12 +351,29 @@ const StripeSubscriptionSync = () => {
     [listComparison, statusFilter],
   );
 
+  useEffect(() => {
+    if (!loadedOnce || rows.length === 0) {
+      return;
+    }
+    writePersistedSyncPageState({
+      rows,
+      hasMore,
+      nextCursor,
+      statusFilter,
+      viewFilter,
+      loadedOnce,
+    });
+  }, [rows, hasMore, nextCursor, statusFilter, viewFilter, loadedOnce]);
+
   const handleRefresh = () => {
+    clearPersistedSyncPageState();
     void fetchPage({ append: false });
   };
 
   const refreshRow = useCallback(
     async (subscriptionId: string) => {
+      const scrollY = window.scrollY;
+      rowRefreshCountRef.current += 1;
       setRefreshingRowIds((prev) => new Set(prev).add(subscriptionId));
       try {
         const updatedRow = await getComparisonRow({ subscriptionId });
@@ -395,10 +387,14 @@ const StripeSubscriptionSync = () => {
           error instanceof Error ? error.message : "Failed to refresh subscription row";
         toast.error(message);
       } finally {
+        rowRefreshCountRef.current -= 1;
         setRefreshingRowIds((prev) => {
           const next = new Set(prev);
           next.delete(subscriptionId);
           return next;
+        });
+        requestAnimationFrame(() => {
+          window.scrollTo({ top: scrollY });
         });
       }
     },
@@ -475,6 +471,9 @@ const StripeSubscriptionSync = () => {
               setStatusFilter(value as StatusFilter);
               setLoadedOnce(false);
               setRows([]);
+              setHasMore(false);
+              setNextCursor(null);
+              clearPersistedSyncPageState();
             }}
           >
             <SelectTrigger className="w-full sm:w-[220px]">
