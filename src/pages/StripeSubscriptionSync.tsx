@@ -309,47 +309,56 @@ const StripeSubscriptionSync = () => {
     persistedState?.nextCursor ?? null,
   );
   const [loading, setLoading] = useState(false);
-  const [loadingMore, setLoadingMore] = useState(false);
   const [loadedOnce, setLoadedOnce] = useState(persistedState?.loadedOnce ?? false);
   const [refreshingRowIds, setRefreshingRowIds] = useState<Set<string>>(new Set());
 
   const listComparison = useAction(api.subscriptionsAdminStripe.listStripeSubscriptionComparison);
   const getComparisonRow = useAction(api.subscriptionsAdminStripe.getStripeSubscriptionComparisonRow);
 
-  const fetchPage = useCallback(
-    async (options: { append: boolean; startingAfter?: string | null }) => {
-      const isAppend = options.append;
-      if (!isAppend && rowRefreshCountRef.current > 0) {
-        return;
-      }
-      if (isAppend) {
-        setLoadingMore(true);
-      } else {
-        setLoading(true);
-      }
+  const loadAllFromStripe = useCallback(async () => {
+    if (rowRefreshCountRef.current > 0) {
+      return;
+    }
 
-      try {
+    setLoading(true);
+    setRows([]);
+    setHasMore(false);
+    setNextCursor(null);
+
+    try {
+      let cursor: string | undefined;
+      let accumulatedRows: ComparisonRow[] = [];
+      let hasMorePages = true;
+
+      while (hasMorePages) {
         const result = await listComparison({
           status: statusFilter,
           limit: 50,
-          startingAfter: options.startingAfter ?? undefined,
+          startingAfter: cursor,
         });
 
-        setRows((prev) => (isAppend ? [...prev, ...result.items] : result.items));
-        setHasMore(result.hasMore);
-        setNextCursor(result.nextStartingAfter);
+        accumulatedRows = [...accumulatedRows, ...result.items];
+        setRows(accumulatedRows);
         setLoadedOnce(true);
-      } catch (error: unknown) {
-        const message =
-          error instanceof Error ? error.message : "Failed to load Stripe subscriptions";
-        toast.error(message);
-      } finally {
-        setLoading(false);
-        setLoadingMore(false);
+
+        hasMorePages = result.hasMore;
+        cursor = result.nextStartingAfter ?? undefined;
+
+        if (hasMorePages && !cursor) {
+          break;
+        }
       }
-    },
-    [listComparison, statusFilter],
-  );
+
+      setHasMore(false);
+      setNextCursor(null);
+    } catch (error: unknown) {
+      const message =
+        error instanceof Error ? error.message : "Failed to load Stripe subscriptions";
+      toast.error(message);
+    } finally {
+      setLoading(false);
+    }
+  }, [listComparison, statusFilter]);
 
   useEffect(() => {
     if (!loadedOnce || rows.length === 0) {
@@ -367,7 +376,7 @@ const StripeSubscriptionSync = () => {
 
   const handleRefresh = () => {
     clearPersistedSyncPageState();
-    void fetchPage({ append: false });
+    void loadAllFromStripe();
   };
 
   const refreshRow = useCallback(
@@ -400,12 +409,6 @@ const StripeSubscriptionSync = () => {
     },
     [getComparisonRow],
   );
-
-  const handleLoadMore = () => {
-    if (nextCursor) {
-      void fetchPage({ append: true, startingAfter: nextCursor });
-    }
-  };
 
   const filteredRows = useMemo(() => {
     if (viewFilter === "needs_sync") {
@@ -457,11 +460,18 @@ const StripeSubscriptionSync = () => {
         </Button>
       </div>
 
+      {loading && rows.length > 0 && (
+        <div className="flex items-center gap-2 rounded-lg border border-border/60 bg-muted/40 px-4 py-2 text-sm text-muted-foreground">
+          <Loader2 className="h-4 w-4 animate-spin" />
+          Loading from Stripe… {rows.length} subscription{rows.length === 1 ? "" : "s"} loaded so far
+        </div>
+      )}
+
       <Card className="card-elevated">
         <CardHeader>
           <CardTitle>Filters</CardTitle>
           <CardDescription>
-            Load a page from Stripe, then narrow to rows that need attention.
+            Load all subscriptions from Stripe, then narrow to rows that need attention.
           </CardDescription>
         </CardHeader>
         <CardContent className="flex flex-col gap-3 sm:flex-row sm:items-center">
@@ -521,8 +531,8 @@ const StripeSubscriptionSync = () => {
       {!loadedOnce && !loading ? (
         <Card className="card-elevated">
           <CardContent className="py-12 text-center text-muted-foreground">
-            Click &ldquo;Load from Stripe&rdquo; to fetch subscriptions and compare them with your
-            database.
+            Click &ldquo;Load from Stripe&rdquo; to fetch all subscriptions and compare them with
+            your database.
           </CardContent>
         </Card>
       ) : loading && rows.length === 0 ? (
@@ -696,15 +706,6 @@ const StripeSubscriptionSync = () => {
                 </Table>
               </div>
             </TooltipProvider>
-
-            {hasMore && viewFilter === "all" && (
-              <div className="mt-4 flex justify-center">
-                <Button variant="secondary" disabled={loadingMore} onClick={handleLoadMore}>
-                  {loadingMore && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                  Load more from Stripe
-                </Button>
-              </div>
-            )}
           </CardContent>
         </Card>
       )}
