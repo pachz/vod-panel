@@ -10,7 +10,7 @@ import {
 } from "./promptData";
 
 const SETTINGS_KEY = "global" as const;
-const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 8000;
+const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 
 async function getSettingsDoc(ctx: QueryCtx | MutationCtx) {
   return await ctx.db
@@ -69,7 +69,7 @@ export const updateAssistantSettings = mutation({
 
     if (customInstructions.length > MAX_CUSTOM_INSTRUCTIONS_LENGTH) {
       throw new Error(
-        `Custom instructions must be at most ${MAX_CUSTOM_INSTRUCTIONS_LENGTH} characters`,
+        `Custom instructions are too long (${customInstructions.length.toLocaleString()} characters). Please shorten them to ${MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()} characters or fewer.`,
       );
     }
 

@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+
+const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 
 const AssistantSettings = () => {
   const settings = useQuery(api.assistant.settings.getAssistantSettings);
@@ -28,7 +31,24 @@ const AssistantSettings = () => {
     );
   }
 
+  const characterCount = customInstructions.length;
+  const trimmedLength = customInstructions.trim().length;
+  const isOverLimit = characterCount > MAX_CUSTOM_INSTRUCTIONS_LENGTH;
+  const overflowCount = characterCount - MAX_CUSTOM_INSTRUCTIONS_LENGTH;
+
   const handleSave = async () => {
+    if (trimmedLength === 0) {
+      toast.error("Custom instructions cannot be empty.");
+      return;
+    }
+
+    if (isOverLimit) {
+      toast.error(
+        `Custom instructions are too long by ${overflowCount.toLocaleString()} characters. Please shorten them to ${MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+      return;
+    }
+
     setIsSaving(true);
     try {
       await updateSettings({ customInstructions });
@@ -64,22 +84,47 @@ const AssistantSettings = () => {
           <CardTitle>Editable prompt</CardTitle>
           <CardDescription>
             Brand voice, tone, and high-level behavior. User context and private memory are injected
-            automatically at runtime.
+            automatically at runtime. Maximum {MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()}{" "}
+            characters.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="assistant-custom-prompt">Custom instructions</Label>
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="assistant-custom-prompt">Custom instructions</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  isOverLimit ? "font-medium text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {characterCount.toLocaleString()} / {MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()}
+              </p>
+            </div>
             <Textarea
               id="assistant-custom-prompt"
               value={customInstructions}
               onChange={(event) => setCustomInstructions(event.target.value)}
               rows={16}
-              className="min-h-[320px] font-mono text-sm"
+              aria-invalid={isOverLimit}
+              className={cn(
+                "min-h-[320px] font-mono text-sm",
+                isOverLimit && "border-destructive focus-visible:ring-destructive",
+              )}
             />
+            {isOverLimit ? (
+              <p className="text-sm text-destructive" role="alert">
+                Too long by {overflowCount.toLocaleString()} characters. Shorten the prompt to{" "}
+                {MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()} characters or fewer to save.
+              </p>
+            ) : null}
           </div>
           <div className="flex flex-wrap gap-2">
-            <Button type="button" onClick={() => void handleSave()} disabled={isSaving}>
+            <Button
+              type="button"
+              onClick={() => void handleSave()}
+              disabled={isSaving || isOverLimit || trimmedLength === 0}
+            >
               {isSaving ? "Saving..." : "Save changes"}
             </Button>
             <Button type="button" variant="outline" onClick={handleReset}>
