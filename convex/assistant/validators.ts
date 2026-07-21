@@ -44,6 +44,25 @@ export const subscriptionToolResultValidator = v.object({
   hasBillingAccount: v.boolean(),
 });
 
+export const activeSubscriptionPlanValidator = v.object({
+  id: v.string(),
+  nameEn: v.string(),
+  nameAr: v.string(),
+  billingInterval: v.union(v.literal("month"), v.literal("year")),
+  priceAmount: v.number(),
+  priceCurrency: v.string(),
+  compareAtPriceAmount: v.optional(v.number()),
+  priceSubtitleEn: v.optional(v.string()),
+  priceSubtitleAr: v.optional(v.string()),
+  courseCount: v.optional(v.number()),
+  lessonCount: v.optional(v.number()),
+  hours: v.optional(v.number()),
+  featureTitlesEn: v.array(v.string()),
+  featureTitlesAr: v.array(v.string()),
+  isCurrentPlan: v.boolean(),
+  isAtCapacity: v.boolean(),
+});
+
 export const billingPortalResultValidator = v.object({
   url: v.string(),
 });

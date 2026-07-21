@@ -357,6 +357,14 @@ const translations = {
     "assistantSubscriptionStatusCanceled": "Canceled",
     "assistantSubscriptionStatusPaused": "Paused",
     "assistantSubscriptionStatusNone": "No subscription",
+    "assistantPlanCurrent": "Current plan",
+    "assistantPlanAtCapacity": "Unavailable",
+    "assistantPlanBilledMonthly": "Monthly",
+    "assistantPlanBilledYearly": "Yearly",
+    "assistantPlanCourses": "courses",
+    "assistantPlanLessons": "lessons",
+    "assistantPlanHours": "hours",
+    "assistantViewPlans": "View plans",
 
     // Login
     "loginTitle": "Log in to Reham Diva",
@@ -767,6 +775,14 @@ const translations = {
     "assistantSubscriptionStatusCanceled": "ملغى",
     "assistantSubscriptionStatusPaused": "موقوف",
     "assistantSubscriptionStatusNone": "لا يوجد اشتراك",
+    "assistantPlanCurrent": "خطتك الحالية",
+    "assistantPlanAtCapacity": "غير متاحة",
+    "assistantPlanBilledMonthly": "شهري",
+    "assistantPlanBilledYearly": "سنوي",
+    "assistantPlanCourses": "دورات",
+    "assistantPlanLessons": "دروس",
+    "assistantPlanHours": "ساعات",
+    "assistantViewPlans": "عرض الخطط",
 
     // Login
     "loginTitle": "تسجيل الدخول إلى رهام ديفا",

@@ -41,8 +41,28 @@ export type BillingPortalResult = {
   url: string;
 };
 
+export type ActiveSubscriptionPlan = {
+  id: string;
+  nameEn: string;
+  nameAr: string;
+  billingInterval: "month" | "year";
+  priceAmount: number;
+  priceCurrency: string;
+  compareAtPriceAmount?: number;
+  priceSubtitleEn?: string;
+  priceSubtitleAr?: string;
+  courseCount?: number;
+  lessonCount?: number;
+  hours?: number;
+  featureTitlesEn: string[];
+  featureTitlesAr: string[];
+  isCurrentPlan: boolean;
+  isAtCapacity: boolean;
+};
+
 export type ParsedToolResults = {
   courses: CourseSearchResult[];
+  plans: ActiveSubscriptionPlan[];
   subscription: SubscriptionToolResult | null;
   billingPortalUrl: string | null;
 };

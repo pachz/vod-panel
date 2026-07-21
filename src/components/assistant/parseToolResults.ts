@@ -1,5 +1,6 @@
 import type { UIMessage } from "@convex-dev/agent/react";
 import type {
+  ActiveSubscriptionPlan,
   BillingPortalResult,
   CourseSearchResult,
   ParsedToolResults,
@@ -14,6 +15,27 @@ function isCourseSearchResult(value: unknown): value is CourseSearchResult {
 
 function isCourseSearchResultArray(value: unknown): value is CourseSearchResult[] {
   return Array.isArray(value) && value.every(isCourseSearchResult);
+}
+
+function isActiveSubscriptionPlan(value: unknown): value is ActiveSubscriptionPlan {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.id === "string" &&
+    typeof record.nameEn === "string" &&
+    typeof record.nameAr === "string" &&
+    (record.billingInterval === "month" || record.billingInterval === "year") &&
+    typeof record.priceAmount === "number" &&
+    typeof record.priceCurrency === "string" &&
+    Array.isArray(record.featureTitlesEn) &&
+    Array.isArray(record.featureTitlesAr) &&
+    typeof record.isCurrentPlan === "boolean" &&
+    typeof record.isAtCapacity === "boolean"
+  );
+}
+
+function isActiveSubscriptionPlanArray(value: unknown): value is ActiveSubscriptionPlan[] {
+  return Array.isArray(value) && value.every(isActiveSubscriptionPlan);
 }
 
 function isSubscriptionToolResult(value: unknown): value is SubscriptionToolResult {
@@ -49,6 +71,14 @@ function extractFromPart(part: unknown, results: ParsedToolResults) {
     return;
   }
 
+  if (
+    toolName === "listActiveSubscriptionPlans" &&
+    isActiveSubscriptionPlanArray(output)
+  ) {
+    results.plans.push(...output);
+    return;
+  }
+
   if (toolName === "getMySubscription" && isSubscriptionToolResult(output)) {
     results.subscription = output;
     return;
@@ -64,6 +94,7 @@ function extractFromPart(part: unknown, results: ParsedToolResults) {
 export function parseToolResultsFromMessage(message: UIMessage): ParsedToolResults {
   const results: ParsedToolResults = {
     courses: [],
+    plans: [],
     subscription: null,
     billingPortalUrl: null,
   };

@@ -1,6 +1,7 @@
 import { useSmoothText, type UIMessage } from "@convex-dev/agent/react";
 import { cn } from "@/lib/utils";
 import { CourseRecommendationCard } from "./CourseRecommendationCard";
+import { SubscriptionPlanCard } from "./SubscriptionPlanCard";
 import { SubscriptionSummaryCard } from "./SubscriptionSummaryCard";
 import { BillingPortalButton } from "./BillingPortalButton";
 import { parseToolResultsFromMessage } from "./parseToolResults";
@@ -36,6 +37,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
   const hasStructuredCards = Boolean(
     toolResults?.courses.length ||
+      toolResults?.plans.length ||
       toolResults?.subscription ||
       toolResults?.billingPortalUrl,
   );
@@ -62,6 +64,13 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
               <div className="grid gap-3">
                 {toolResults.courses.map((course) => (
                   <CourseRecommendationCard key={course.id} course={course} />
+                ))}
+              </div>
+            ) : null}
+            {toolResults?.plans.length ? (
+              <div className="grid gap-3">
+                {toolResults.plans.map((plan) => (
+                  <SubscriptionPlanCard key={plan.id} plan={plan} />
                 ))}
               </div>
             ) : null}

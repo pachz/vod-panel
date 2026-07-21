@@ -5,6 +5,7 @@ import { components, internal } from "../_generated/api";
 import { resolveAssistantUserId } from "./auth";
 import { ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS } from "./prompt";
 import type {
+  activeSubscriptionPlanValidator,
   billingPortalResultValidator,
   conversationTitleUpdateResultValidator,
   courseSearchResultValidator,
@@ -15,6 +16,7 @@ import type { Infer } from "convex/values";
 
 type CourseSearchResult = Infer<typeof courseSearchResultValidator>;
 type SubscriptionToolResult = Infer<typeof subscriptionToolResultValidator>;
+type ActiveSubscriptionPlan = Infer<typeof activeSubscriptionPlanValidator>;
 type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
@@ -73,6 +75,21 @@ export const rehamDivaAgent = new Agent(components.agent, {
           userId,
           nowMs: Date.now(),
         });
+      },
+    }),
+    listActiveSubscriptionPlans: createTool({
+      description:
+        "List currently offered active subscription plans (packages), including prices, billing interval, and key features. Use when the user asks what plans are available, about pricing, or how packages compare. Only returns public active plans.",
+      inputSchema: z.object({}),
+      execute: async (ctx): Promise<Array<ActiveSubscriptionPlan>> => {
+        const userId = await resolveAssistantUserId(ctx);
+        return await ctx.runQuery(
+          internal.assistant.subscription.listActiveSubscriptionPlansInternal,
+          {
+            userId: userId ?? undefined,
+            nowMs: Date.now(),
+          },
+        );
       },
     }),
     createBillingPortalSession: createTool({
