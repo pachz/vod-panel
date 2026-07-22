@@ -6,7 +6,7 @@ import { useQuery } from "convex/react";
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/hooks/use-language";
@@ -202,61 +202,77 @@ const UserPersonalTests = () => {
               <p className="text-muted-foreground">{t("noPersonalTestsAvailable")}</p>
             </div>
           ) : (
-            <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
+            <div className="space-y-4">
               {sortedTests.map((test) => {
                 const title = language === "ar" ? test.name_ar : test.name;
                 const description =
                   language === "ar" ? test.description_ar : test.description;
 
                 return (
-                  <Card
-                    key={test._id}
-                    className="flex flex-col overflow-hidden shadow-md"
-                  >
-                    <div className="relative h-48 w-full overflow-hidden bg-muted">
-                      {test.thumbnail_image_url ? (
-                        <img
-                          src={test.thumbnail_image_url}
-                          alt={title}
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-muted text-muted-foreground">
-                          <ClipboardList className="h-10 w-10 opacity-40" />
-                        </div>
+                  <Card key={test._id} className="overflow-hidden">
+                    <div
+                      dir="ltr"
+                      className={cn(
+                        "flex flex-col sm:flex-row",
+                        isRTL && "sm:flex-row-reverse",
                       )}
-                    </div>
-                    <CardHeader className="space-y-2 pb-2">
-                      <CardTitle className="text-lg font-bold leading-snug">
-                        {title}
-                      </CardTitle>
-                    </CardHeader>
-                    <CardContent className="flex-1 space-y-4 pb-4">
-                      {description && (
-                        <p className="text-sm text-muted-foreground line-clamp-3">
-                          {description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                        <span className="flex h-6 w-6 items-center justify-center rounded-full border border-muted-foreground/30">
-                          <HelpCircle className="h-3.5 w-3.5" />
-                        </span>
-                        <span>
-                          {test.questionCount}{" "}
-                          {test.questionCount === 1 ? t("question") : t("questions")}
-                        </span>
+                    >
+                      <div className="relative h-36 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-44">
+                        {test.thumbnail_image_url ? (
+                          <img
+                            src={test.thumbnail_image_url}
+                            alt={title}
+                            className="h-full w-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex h-full w-full items-center justify-center bg-gradient-to-br from-primary/10 via-primary/5 to-muted text-muted-foreground">
+                            <ClipboardList className="h-10 w-10 opacity-40" />
+                          </div>
+                        )}
                       </div>
-                    </CardContent>
-                    <CardFooter className="pt-0">
-                      <Button
-                        variant="cta"
-                        className="w-full"
-                        onClick={() => handleOpenTest(test._id)}
+                      <div
+                        className="flex min-w-0 flex-1 flex-col"
+                        dir={isRTL ? "rtl" : "ltr"}
                       >
-                        {t("startPersonalTest")}
-                      </Button>
-                    </CardFooter>
+                        <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
+                          <div className={cn("space-y-1", isRTL ? "text-right" : "text-left")}>
+                            <CardTitle className="text-lg">{title}</CardTitle>
+                            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                              <span className="flex h-6 w-6 items-center justify-center rounded-full border border-muted-foreground/30">
+                                <HelpCircle className="h-3.5 w-3.5" />
+                              </span>
+                              <span>
+                                {test.questionCount}{" "}
+                                {test.questionCount === 1
+                                  ? t("question")
+                                  : t("questions")}
+                              </span>
+                            </div>
+                          </div>
+                          <Button
+                            variant="cta"
+                            size="sm"
+                            className="shrink-0"
+                            onClick={() => handleOpenTest(test._id)}
+                          >
+                            {t("startPersonalTest")}
+                          </Button>
+                        </CardHeader>
+                        {description && (
+                          <CardContent className="pt-0">
+                            <p
+                              className={cn(
+                                "text-sm text-muted-foreground line-clamp-3",
+                                isRTL ? "text-right" : "text-left",
+                              )}
+                            >
+                              {description}
+                            </p>
+                          </CardContent>
+                        )}
+                      </div>
+                    </div>
                   </Card>
                 );
               })}
@@ -299,8 +315,10 @@ const UserPersonalTests = () => {
                   return (
                     <Card key={attempt.attemptId} className="overflow-hidden">
                       <div
+                        dir="ltr"
                         className={cn(
                           "flex flex-col sm:flex-row",
+                          isRTL && "sm:flex-row-reverse",
                         )}
                       >
                         <div className="relative h-36 w-full shrink-0 overflow-hidden bg-muted sm:h-auto sm:w-44">
@@ -317,9 +335,12 @@ const UserPersonalTests = () => {
                             </div>
                           )}
                         </div>
-                        <div className="flex min-w-0 flex-1 flex-col">
+                        <div
+                          className="flex min-w-0 flex-1 flex-col"
+                          dir={isRTL ? "rtl" : "ltr"}
+                        >
                           <CardHeader className="gap-3 sm:flex-row sm:items-start sm:justify-between">
-                            <div className="space-y-1">
+                            <div className={cn("space-y-1", isRTL ? "text-right" : "text-left")}>
                               <CardTitle className="text-lg">{title}</CardTitle>
                               <p className="text-sm text-muted-foreground">
                                 {t("completedOn")}{" "}
@@ -338,11 +359,21 @@ const UserPersonalTests = () => {
                           </CardHeader>
                           <CardContent className="pt-0">
                             {attempt.recommendedCourses.length === 0 ? (
-                              <p className="text-sm text-muted-foreground">
+                              <p
+                                className={cn(
+                                  "text-sm text-muted-foreground",
+                                  isRTL ? "text-right" : "text-left",
+                                )}
+                              >
                                 {t("noCourseRecommendations")}
                               </p>
                             ) : (
-                              <p className="text-sm text-muted-foreground">
+                              <p
+                                className={cn(
+                                  "text-sm text-muted-foreground",
+                                  isRTL ? "text-right" : "text-left",
+                                )}
+                              >
                                 {attempt.recommendedCourseCount}{" "}
                                 {attempt.recommendedCourseCount === 1
                                   ? t("recommendedCourseSingular")
