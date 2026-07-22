@@ -184,7 +184,7 @@ export const generateKnowledgeFileUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -200,7 +200,7 @@ export const createKnowledgeFile = mutation({
     fileId: v.id("assistantKnowledgeFiles"),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Authentication required");
@@ -246,7 +246,7 @@ export const listKnowledgeFiles = query({
   args: {},
   returns: v.array(knowledgeFileListItemValidator),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const files = await ctx.db
       .query("assistantKnowledgeFiles")
@@ -264,7 +264,7 @@ export const getKnowledgeFileSheets = query({
   },
   returns: v.array(knowledgeSheetValidator),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const file = await ctx.db.get(args.fileId);
     if (!file) {
@@ -301,7 +301,7 @@ export const setKnowledgeFileActive = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const file = await ctx.db.get(args.fileId);
     if (!file) {
@@ -331,7 +331,7 @@ export const deleteKnowledgeFile = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const file = await ctx.db.get(args.fileId);
     if (!file) {
@@ -368,7 +368,7 @@ export const retryKnowledgeFileProcessing = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const file = await ctx.db.get(args.fileId);
     if (!file) {
@@ -1003,7 +1003,7 @@ export const searchKnowledgeRows = query({
     continueCursor: v.string(),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const q = args.query.trim();
     if (q.length === 0) {

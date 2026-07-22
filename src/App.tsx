@@ -316,12 +316,14 @@ const App = () => (
               />
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
             </Route>
+            <Route element={<GodOrTechRoute />}>
+              <Route path="/assistant-test" element={<AssistantTest />} />
+              <Route path="/assistant-settings" element={<AssistantSettings />} />
+            </Route>
             <Route element={<TechRoute />}>
               <Route path="/blogs" element={<Blogs />} />
               <Route path="/blogs/:id" element={<BlogDetail />} />
               <Route path="/blog-categories" element={<BlogCategories />} />
-              <Route path="/assistant-test" element={<AssistantTest />} />
-              <Route path="/assistant-settings" element={<AssistantSettings />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
               <Route path="/stripe-subscriptions" element={<StripeSubscriptions />} />
               <Route path="/stripe-subscriptions/sync" element={<StripeSubscriptionSync />} />

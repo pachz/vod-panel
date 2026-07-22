@@ -15,7 +15,7 @@ import { cn } from "@/lib/utils";
 const AssistantTest = () => {
   const { language } = useLanguage();
   const currentUser = useQuery(api.user.getCurrentUser);
-  const isTech = currentUser?.isTech ?? false;
+  const canManageAssistant = (currentUser?.isGod ?? false) || (currentUser?.isTech ?? false);
   const [searchParams, setSearchParams] = useSearchParams();
   const [threadId, setThreadId] = useState<string | null>(searchParams.get("thread"));
   const createThread = useMutation(api.assistant.threads.createAssistantThread);
@@ -64,7 +64,7 @@ const AssistantTest = () => {
     <div
       className={cn(
         "mx-auto flex h-[calc(100vh-8rem)] flex-col gap-4",
-        isTech ? "max-w-[90rem]" : "max-w-6xl",
+        canManageAssistant ? "max-w-[90rem]" : "max-w-6xl",
       )}
       dir="ltr"
     >
@@ -72,7 +72,7 @@ const AssistantTest = () => {
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Reham Diva Assistant</h1>
           <p className="max-w-2xl text-muted-foreground">
-            {isTech
+            {canManageAssistant
               ? "Compare the in-panel assistant with the live SiteGPT chatbot side by side."
               : "Discover femininity courses and self-love, and become the feminine woman you deserve to be."}
           </p>
@@ -121,7 +121,7 @@ const AssistantTest = () => {
         <div
           className={cn(
             "flex min-h-0 flex-1 gap-4",
-            isTech ? "flex-col xl:flex-row" : "flex-col",
+            canManageAssistant ? "flex-col xl:flex-row" : "flex-col",
           )}
         >
           <div className="flex min-h-0 flex-1 flex-col gap-2">
@@ -136,7 +136,7 @@ const AssistantTest = () => {
               <Plus className="h-4 w-4 me-2" />
               New conversation
             </Button>
-            {isTech && (
+            {canManageAssistant && (
               <p className="text-sm font-medium text-muted-foreground">In-panel assistant</p>
             )}
             <div className="flex min-h-0 flex-1 flex-col rounded-3xl border border-border/50 bg-card/50 p-4 shadow-card backdrop-blur sm:p-6">
@@ -144,7 +144,7 @@ const AssistantTest = () => {
             </div>
           </div>
 
-          {isTech && (
+          {canManageAssistant && (
             <div className="flex min-h-0 flex-1 flex-col xl:min-w-0">
               <SiteGPTComparePanel />
             </div>

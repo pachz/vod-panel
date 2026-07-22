@@ -11,10 +11,11 @@ type AccessStatus = "included" | "locked" | "unknown";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-export async function requireAssistantTech(
+/** Admin (isGod) or tech staff may use the in-panel assistant. */
+export async function requireAssistantAccess(
   ctx: QueryCtx | MutationCtx,
 ): Promise<Id<"users">> {
-  await requireUser(ctx, { requireTech: true });
+  await requireUser(ctx, { requireGodOrTech: true });
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("Authentication required");
@@ -26,7 +27,7 @@ export async function authorizeThreadAccess(
   ctx: QueryCtx | MutationCtx,
   threadId: string,
 ): Promise<Id<"users">> {
-  const userId = await requireAssistantTech(ctx);
+  const userId = await requireAssistantAccess(ctx);
 
   const { userId: threadUserId } = await getThreadMetadata(ctx, components.agent, {
     threadId,

@@ -9,7 +9,7 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components } from "../_generated/api";
 import { internalMutation, mutation, query } from "../_generated/server";
-import { authorizeThreadAccess, requireAssistantTech } from "./lib";
+import { authorizeThreadAccess, requireAssistantAccess } from "./lib";
 import { assistantLanguageValidator, conversationTitleUpdateResultValidator } from "./validators";
 import { rehamDivaAgent } from "./agent";
 import {
@@ -26,7 +26,7 @@ export const listThreads = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    const userId = await requireAssistantTech(ctx);
+    const userId = await requireAssistantAccess(ctx);
 
     return await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
       userId,
@@ -42,7 +42,7 @@ export const createAssistantThread = mutation({
   },
   returns: v.string(),
   handler: async (ctx, args) => {
-    const userId = await requireAssistantTech(ctx);
+    const userId = await requireAssistantAccess(ctx);
 
     const threadId = await createThread(ctx, components.agent, {
       userId,

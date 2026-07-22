@@ -124,7 +124,7 @@ export const getAssistantSettings = query({
     updatedAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const settings = await getSettingsDoc(ctx);
     const overrides = normalizeToolOverrides(settings?.toolOverrides);
@@ -184,7 +184,7 @@ export const updateAssistantSettings = mutation({
     updatedAt: v.number(),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Authentication required");
@@ -234,7 +234,7 @@ export const updateAssistantToolKnowledge = mutation({
     tool: toolKnowledgeItemValidator,
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const userId = await getAuthUserId(ctx);
     if (!userId) {
       throw new Error("Authentication required");

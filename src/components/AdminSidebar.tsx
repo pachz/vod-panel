@@ -60,10 +60,13 @@ const techMenuItems: MenuItem[] = [
   { title: "Blogs", url: "/blogs", icon: Newspaper },
   { title: "Blog Categories", url: "/blog-categories", icon: Tags },
   { title: "Browse Blogs", url: "/articles", icon: PanelsTopLeft },
-  { title: "Assistant", url: "/assistant-test", icon: Bot },
-  { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
   { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
+];
+
+const assistantMenuItems: MenuItem[] = [
+  { title: "Assistant", url: "/assistant-test", icon: Bot },
+  { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
 ];
 
 const takeTestsMenuItem: MenuItem = {
@@ -103,6 +106,7 @@ export function AdminSidebar() {
         url: "/personal-tests",
         icon: ClipboardList,
       });
+      items.push(...assistantMenuItems);
     }
     if (isTech) {
       items.push(...techMenuItems);
