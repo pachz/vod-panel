@@ -172,7 +172,7 @@ const UserPersonalTests = () => {
         </p>
       </div>
 
-      <Tabs value={activeTab} onValueChange={handleTabChange}>
+      <Tabs value={activeTab} onValueChange={handleTabChange} dir={isRTL ? "rtl" : "ltr"}>
         <TabsList className="mx-auto grid w-full max-w-md grid-cols-2">
           <TabsTrigger value="available">{t("availableTestsTab")}</TabsTrigger>
           <TabsTrigger value="results">{t("myResultsTab")}</TabsTrigger>
