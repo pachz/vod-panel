@@ -3,7 +3,7 @@ import { v } from "convex/values";
 import { paginationOptsValidator } from "convex/server";
 import { internal } from "./_generated/api";
 
-/** Tags we set on each audience member (others are left inactive). */
+/** Fixed tags we set on each audience member (others are left inactive). */
 export const MAILCHIMP_MANAGED_TAGS = [
   "role-admin",
   "role-user",
@@ -12,6 +12,13 @@ export const MAILCHIMP_MANAGED_TAGS = [
   "payment-success",
   "subscription-active",
 ] as const;
+
+/** Tag for active all-access / pre-packages subscriptions (no planId). */
+export const PLAN_LEGACY_TAG = "plan-legacy";
+
+export function planTagFromSlug(slug: string): string {
+  return `plan-${slug}`;
+}
 
 export const buildMailchimpSyncPayload = internalQuery({
   args: {
@@ -29,6 +36,10 @@ export const buildMailchimpSyncPayload = internalQuery({
       hasGoogle: v.boolean(),
       hasSuccessfulPayment: v.boolean(),
       hasActiveSubscription: v.boolean(),
+      /** Active plan tag when subscribed, e.g. plan-starter or plan-legacy. */
+      activePlanTag: v.union(v.string(), v.null()),
+      /** All plan-* tags we manage (activate one, deactivate the rest). */
+      managedPlanTags: v.array(v.string()),
     }),
   ),
   handler: async (ctx, args) => {
@@ -69,6 +80,28 @@ export const buildMailchimpSyncPayload = internalQuery({
       (subscription.status === "active" || subscription.status === "trialing") &&
       subscription.currentPeriodEnd >= args.nowMs;
 
+    // Include soft-deleted plans so we can deactivate their tags after renames/removals.
+    // eslint-disable-next-line @convex-dev/no-query-collect -- plans are a small bounded set
+    const plans = await ctx.db.query("subscriptionPlans").collect();
+
+    let activePlanTag: string | null = null;
+    if (hasActiveSubscription && subscription) {
+      if (subscription.planId) {
+        const plan = await ctx.db.get(subscription.planId);
+        activePlanTag = plan ? planTagFromSlug(plan.slug) : PLAN_LEGACY_TAG;
+      } else {
+        activePlanTag = PLAN_LEGACY_TAG;
+      }
+    }
+
+    const managedPlanTags = [
+      ...new Set([
+        PLAN_LEGACY_TAG,
+        ...plans.map((p) => planTagFromSlug(p.slug)),
+        ...(activePlanTag ? [activePlanTag] : []),
+      ]),
+    ];
+
     const name = (user.name ?? "").trim();
     const firstName = name.split(/\s+/)[0] ?? "";
 
@@ -81,6 +114,8 @@ export const buildMailchimpSyncPayload = internalQuery({
       hasGoogle,
       hasSuccessfulPayment,
       hasActiveSubscription,
+      activePlanTag,
+      managedPlanTags,
     };
   },
 });

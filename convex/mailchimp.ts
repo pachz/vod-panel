@@ -54,8 +54,10 @@ function buildTagBodies(payload: {
   hasGoogle: boolean;
   hasSuccessfulPayment: boolean;
   hasActiveSubscription: boolean;
+  activePlanTag: string | null;
+  managedPlanTags: string[];
 }): { name: string; status: "active" | "inactive" }[] {
-  return MAILCHIMP_MANAGED_TAGS.map((name) => {
+  const fixed = MAILCHIMP_MANAGED_TAGS.map((name) => {
     let active = false;
     if (name === "role-admin") {
       active = payload.roleIsAdmin;
@@ -72,7 +74,24 @@ function buildTagBodies(payload: {
     }
     return { name, status: active ? ("active" as const) : ("inactive" as const) };
   });
+
+  const planTags = payload.managedPlanTags.map((name) => ({
+    name,
+    status: (payload.activePlanTag === name ? "active" : "inactive") as "active" | "inactive",
+  }));
+
+  return [...fixed, ...planTags];
 }
+
+function allManagedTagsInactive(
+  managedPlanTags: string[],
+): { name: string; status: "inactive" }[] {
+  return [
+    ...MAILCHIMP_MANAGED_TAGS.map((name) => ({ name, status: "inactive" as const })),
+    ...managedPlanTags.map((name) => ({ name, status: "inactive" as const })),
+  ];
+}
+
 
 /** Single POST to set all managed tags (Mailchimp creates tags as needed). */
 async function postMemberTags(
@@ -154,10 +173,7 @@ async function executeSyncUserToMailchimp(
         };
       }
 
-      const desiredAllInactive = MAILCHIMP_MANAGED_TAGS.map((name) => ({
-        name,
-        status: "inactive" as const,
-      }));
+      const desiredAllInactive = allManagedTagsInactive(payload.managedPlanTags);
       const tagResult = await postMemberTags(config, tagsPath, desiredAllInactive);
       if (!tagResult.ok) {
         console.error("mailchimp: clear tags failed", tagResult.status, tagResult.text);
@@ -212,6 +228,8 @@ async function executeSyncUserToMailchimp(
       hasGoogle: payload.hasGoogle,
       hasSuccessfulPayment: payload.hasSuccessfulPayment,
       hasActiveSubscription: payload.hasActiveSubscription,
+      activePlanTag: payload.activePlanTag,
+      managedPlanTags: payload.managedPlanTags,
     });
 
     const tagResult = await postMemberTags(config, tagsPath, tagBodies);
