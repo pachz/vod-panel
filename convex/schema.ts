@@ -457,6 +457,19 @@ export default defineSchema({
   assistantSettings: defineTable({
     key: v.literal("global"),
     customInstructions: v.string(),
+    /**
+     * Per-tool knowledge overrides: enable/disable and description add-ons.
+     * Keys are assistant tool ids (e.g. searchCourses). Missing keys = enabled with no addon.
+     */
+    toolOverrides: v.optional(
+      v.record(
+        v.string(),
+        v.object({
+          enabled: v.boolean(),
+          descriptionAddon: v.string(),
+        }),
+      ),
+    ),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),
@@ -467,6 +480,112 @@ export default defineSchema({
     memory: v.string(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  /**
+   * Spreadsheet knowledge base for the assistant (Excel/CSV).
+   * At most one file should be isActive at a time (enforced in mutations).
+   */
+  assistantKnowledgeFiles: defineTable({
+    fileName: v.string(),
+    storageId: v.id("_storage"),
+    contentType: v.string(),
+    sizeBytes: v.number(),
+    status: v.union(
+      v.literal("pending"),
+      v.literal("processing"),
+      v.literal("ready"),
+      v.literal("failed"),
+      v.literal("deleting"),
+    ),
+    /** Human-readable stage while status === "processing". */
+    processingStage: v.optional(
+      v.union(
+        v.literal("queued"),
+        v.literal("parsing"),
+        v.literal("describing"),
+        v.literal("indexing"),
+        v.literal("saving"),
+      ),
+    ),
+    /** 0–100 progress while uploading/processing (client + server). */
+    processingProgress: v.optional(v.number()),
+    description: v.optional(v.string()),
+    /** Languages detected in the workbook (en / ar). */
+    languages: v.optional(v.array(v.string())),
+    /** When the assistant should call the knowledge search tool. */
+    whenToUse: v.optional(v.string()),
+    /** How to phrase queries / which fields matter. */
+    howToSearch: v.optional(v.string()),
+    /** Example queries for the model. */
+    exampleQueries: v.optional(v.array(v.string())),
+    /** Runtime tool description for searchKnowledgeBase (AI-generated). */
+    toolDescription: v.optional(v.string()),
+    isActive: v.boolean(),
+    errorMessage: v.optional(v.string()),
+    sheetCount: v.optional(v.number()),
+    rowCount: v.optional(v.number()),
+    uploadedBy: v.id("users"),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_createdAt", ["createdAt"])
+    .index("by_isActive", ["isActive"])
+    .index("by_status", ["status"]),
+
+  assistantKnowledgeSheets: defineTable({
+    fileId: v.id("assistantKnowledgeFiles"),
+    name: v.string(),
+    headers: v.array(v.string()),
+    purpose: v.optional(v.string()),
+    searchMode: v.union(
+      v.literal("semantic"),
+      v.literal("structured"),
+      v.literal("hybrid"),
+    ),
+    /** Dominant languages in this sheet. */
+    languages: v.optional(v.array(v.string())),
+    /** Useful keywords / entities for search. */
+    keywords: v.optional(v.array(v.string())),
+    /** Sheet-specific search tips for the assistant. */
+    searchHints: v.optional(v.string()),
+    rowCount: v.number(),
+    sheetIndex: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_fileId", ["fileId"])
+    .index("by_fileId_and_sheetIndex", ["fileId", "sheetIndex"]),
+
+  assistantKnowledgeRows: defineTable({
+    fileId: v.id("assistantKnowledgeFiles"),
+    sheetId: v.id("assistantKnowledgeSheets"),
+    rowIndex: v.number(),
+    /**
+     * Cells as pairs (not a record): Convex object keys must be ASCII-only,
+     * but headers/values are often Arabic or English.
+     */
+    data: v.array(
+      v.object({
+        header: v.string(),
+        value: v.string(),
+      }),
+    ),
+    /** Flattened bilingual text for full-text search (AI-enriched when possible). */
+    searchableText: v.string(),
+    /** Embedding of searchableText (text-embedding-3-small, 1536 dims). */
+    embedding: v.optional(v.array(v.float64())),
+  })
+    .index("by_fileId", ["fileId"])
+    .index("by_sheetId", ["sheetId"])
+    .index("by_sheetId_and_rowIndex", ["sheetId", "rowIndex"])
+    .searchIndex("search_text", {
+      searchField: "searchableText",
+      filterFields: ["fileId", "sheetId"],
+    })
+    .vectorIndex("by_embedding", {
+      vectorField: "embedding",
+      dimensions: 1536,
+      filterFields: ["fileId", "sheetId"],
+    }),
 
   /** Blog categories (separate from course categories). Tech-only for now. */
   blogCategories: defineTable({

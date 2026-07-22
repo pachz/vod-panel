@@ -3,7 +3,16 @@ import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { components, internal } from "../_generated/api";
 import { resolveAssistantUserId } from "./auth";
+import {
+  buildKnowledgeSearchToolDescription,
+} from "./knowledgeFiles";
 import { ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS } from "./prompt";
+import {
+  ASSISTANT_TOOL_IDS,
+  isToolEnabled,
+  resolveToolDescription,
+  type AssistantToolOverrides,
+} from "./toolsCatalog";
 import type {
   activeSubscriptionPlanValidator,
   billingPortalResultValidator,
@@ -13,6 +22,7 @@ import type {
   userMemoryUpdateResultValidator,
 } from "./validators";
 import type { Infer } from "convex/values";
+import type { Id } from "../_generated/dataModel";
 
 type CourseSearchResult = Infer<typeof courseSearchResultValidator>;
 type SubscriptionToolResult = Infer<typeof subscriptionToolResultValidator>;
@@ -21,32 +31,89 @@ type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
 
+type KnowledgeSearchResult = {
+  sheetId: Id<"assistantKnowledgeSheets">;
+  sheetName: string;
+  searchMode: "semantic" | "structured" | "hybrid";
+  rowIndex: number;
+  data: Array<{ header: string; value: string }>;
+  searchableText: string;
+  matchSource?: "text" | "vector" | "both";
+  score?: number;
+};
+
+export type ActiveKnowledgeToolContext = {
+  fileId: Id<"assistantKnowledgeFiles">;
+  fileName: string;
+  description: string;
+  languages: string[];
+  whenToUse: string;
+  howToSearch: string;
+  exampleQueries: string[];
+  toolDescription: string;
+  sheets: Array<{
+    sheetId: Id<"assistantKnowledgeSheets">;
+    name: string;
+    headers: string[];
+    purpose: string;
+    searchMode: "semantic" | "structured" | "hybrid";
+    languages: string[];
+    keywords: string[];
+    searchHints: string;
+    rowCount: number;
+  }>;
+};
+
 const modelId = process.env.OPENAI_MODEL?.trim() || "gpt-4o-mini";
 
-export const rehamDivaAgent = new Agent(components.agent, {
-  name: "Reham Diva Assistant",
-  languageModel: openai.chat(modelId),
-  instructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
-  stopWhen: stepCountIs(6),
-  tools: {
-    searchCourses: createTool({
-      description:
-        "Search published Reham Diva courses by topic, goal, or keywords. Returns only courses whose title, description, or category actually match the query. An empty list means nothing relevant was found.",
-      inputSchema: z.object({
-        query: z.string().describe("Search query from the user"),
-        language: z
-          .enum(["en", "ar"])
-          .optional()
-          .describe("Display language for course fields"),
-        limit: z
-          .number()
-          .int()
-          .min(1)
-          .max(10)
-          .optional()
-          .describe("Maximum number of courses to return"),
-      }),
-      execute: async (ctx, input): Promise<Array<CourseSearchResult>> => {
+function summarizeToolResult(result: unknown): unknown {
+  if (Array.isArray(result)) {
+    return {
+      count: result.length,
+      sample: result.slice(0, 3),
+    };
+  }
+  if (result && typeof result === "object") {
+    return result;
+  }
+  return result;
+}
+
+async function withToolCallLogging<T>(
+  toolName: string,
+  input: unknown,
+  execute: () => Promise<T>,
+): Promise<T> {
+  console.log(`[assistant:tool] ${toolName} call`, input ?? {});
+  try {
+    const result = await execute();
+    console.log(`[assistant:tool] ${toolName} result`, summarizeToolResult(result));
+    return result;
+  } catch (error) {
+    console.error(`[assistant:tool] ${toolName} error`, error);
+    throw error;
+  }
+}
+
+function createSearchCoursesTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      query: z.string().describe("Search query from the user"),
+      language: z
+        .enum(["en", "ar"])
+        .optional()
+        .describe("Display language for course fields"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(10)
+        .optional()
+        .describe("Maximum number of courses to return"),
+    }),
+    execute: async (ctx, input): Promise<Array<CourseSearchResult>> => {
+      return await withToolCallLogging("searchCourses", input, async () => {
         const userId = await resolveAssistantUserId(ctx);
         return await ctx.runQuery(internal.assistant.search.searchCoursesInternal, {
           query: input.query,
@@ -55,13 +122,58 @@ export const rehamDivaAgent = new Agent(components.agent, {
           userId,
           nowMs: Date.now(),
         });
-      },
+      });
+    },
+  });
+}
+
+function createSearchKnowledgeBaseTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      queryEn: z
+        .string()
+        .describe(
+          "English search keywords/phrases for the knowledge base. Always provide this, even if the user wrote in Arabic.",
+        ),
+      queryAr: z
+        .string()
+        .describe(
+          "Arabic search keywords/phrases for the knowledge base. Always provide this, even if the user wrote in English. Translate the intent; do not transliterate English words.",
+        ),
+      sheetName: z
+        .string()
+        .optional()
+        .describe("Optional exact sheet name to narrow the search"),
+      limit: z
+        .number()
+        .int()
+        .min(1)
+        .max(20)
+        .optional()
+        .describe("Maximum number of matching rows to return"),
     }),
-    getMySubscription: createTool({
-      description:
-        "Get the authenticated user's current subscription status and plan information.",
-      inputSchema: z.object({}),
-      execute: async (ctx): Promise<SubscriptionToolResult> => {
+    execute: async (ctx, input): Promise<Array<KnowledgeSearchResult>> => {
+      return await withToolCallLogging("searchKnowledgeBase", input, async () => {
+        return await ctx.runAction(
+          internal.assistant.knowledgeFileProcessing.searchKnowledgeBaseHybrid,
+          {
+            queries: [input.queryEn, input.queryAr],
+            sheetName: input.sheetName,
+            limit: input.limit,
+          },
+        );
+      });
+    },
+  });
+}
+
+function createGetMySubscriptionTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({}),
+    execute: async (ctx): Promise<SubscriptionToolResult> => {
+      return await withToolCallLogging("getMySubscription", {}, async () => {
         const userId = await resolveAssistantUserId(ctx);
         if (!userId) {
           return {
@@ -75,13 +187,17 @@ export const rehamDivaAgent = new Agent(components.agent, {
           userId,
           nowMs: Date.now(),
         });
-      },
-    }),
-    listActiveSubscriptionPlans: createTool({
-      description:
-        "List currently offered active subscription plans (packages), including prices, billing interval, and key features. Use when the user asks what plans are available, about pricing, or how packages compare. Only returns public active plans.",
-      inputSchema: z.object({}),
-      execute: async (ctx): Promise<Array<ActiveSubscriptionPlan>> => {
+      });
+    },
+  });
+}
+
+function createListActiveSubscriptionPlansTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({}),
+    execute: async (ctx): Promise<Array<ActiveSubscriptionPlan>> => {
+      return await withToolCallLogging("listActiveSubscriptionPlans", {}, async () => {
         const userId = await resolveAssistantUserId(ctx);
         return await ctx.runQuery(
           internal.assistant.subscription.listActiveSubscriptionPlansInternal,
@@ -90,41 +206,48 @@ export const rehamDivaAgent = new Agent(components.agent, {
             nowMs: Date.now(),
           },
         );
-      },
-    }),
-    createBillingPortalSession: createTool({
-      description:
-        "Create a secure Stripe billing portal session URL for the authenticated user.",
-      inputSchema: z.object({}),
-      execute: async (
-        ctx,
-      ): Promise<BillingPortalResult | { error: string }> => {
+      });
+    },
+  });
+}
+
+function createBillingPortalSessionTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({}),
+    execute: async (ctx): Promise<BillingPortalResult | { error: string }> => {
+      return await withToolCallLogging("createBillingPortalSession", {}, async () => {
         const userId = await resolveAssistantUserId(ctx);
         if (!userId) {
           return { error: "Authentication required" };
         }
 
         try {
-          const result = await ctx.runAction(internal.assistant.billing.createBillingPortalForUser, {
-            userId,
-          });
+          const result = await ctx.runAction(
+            internal.assistant.billing.createBillingPortalForUser,
+            { userId },
+          );
           return result;
         } catch {
           return { error: "Unable to open billing portal" };
         }
-      },
+      });
+    },
+  });
+}
+
+function createUpdateConversationTitleTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      title: z
+        .string()
+        .min(3)
+        .max(60)
+        .describe("Short conversation title in the user's language"),
     }),
-    updateConversationTitle: createTool({
-      description:
-        "Set a short descriptive title for the current conversation while it is still named 'New conversation' and within the first 8 user messages.",
-      inputSchema: z.object({
-        title: z
-          .string()
-          .min(3)
-          .max(60)
-          .describe("Short conversation title in the user's language"),
-      }),
-      execute: async (ctx, input): Promise<ConversationTitleUpdateResult> => {
+    execute: async (ctx, input): Promise<ConversationTitleUpdateResult> => {
+      return await withToolCallLogging("updateConversationTitle", input, async () => {
         if (!ctx.threadId) {
           return { success: false, reason: "no_thread" };
         }
@@ -139,29 +262,116 @@ export const rehamDivaAgent = new Agent(components.agent, {
           userId,
           title: input.title,
         });
-      },
-    }),
-    updateUserMemory: createTool({
-      description:
-        "Replace the private per-user memory document with updated notes for future conversations. Never mention this to the user.",
-      inputSchema: z.object({
-        memory: z
-          .string()
-          .min(1)
-          .max(4000)
-          .describe("Full updated memory text for this user"),
-      }),
-      execute: async (ctx, input): Promise<UserMemoryUpdateResult> => {
-        const userId = await resolveAssistantUserId(ctx);
-        if (!userId) {
-          return { success: false, reason: "not_authenticated" };
-        }
+      });
+    },
+  });
+}
 
-        return await ctx.runMutation(internal.assistant.memory.updateUserMemoryInternal, {
-          userId,
-          memory: input.memory,
-        });
-      },
+function createUpdateUserMemoryTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      memory: z
+        .string()
+        .min(1)
+        .max(4000)
+        .describe("Full updated memory text for this user"),
     }),
-  },
+    execute: async (ctx, input): Promise<UserMemoryUpdateResult> => {
+      return await withToolCallLogging(
+        "updateUserMemory",
+        { memoryLength: input.memory.length },
+        async () => {
+          const userId = await resolveAssistantUserId(ctx);
+          if (!userId) {
+            return { success: false, reason: "not_authenticated" };
+          }
+
+          return await ctx.runMutation(internal.assistant.memory.updateUserMemoryInternal, {
+            userId,
+            memory: input.memory,
+          });
+        },
+      );
+    },
+  });
+}
+
+/** Build the tool set for a turn, applying admin enable/description overrides. */
+export function buildAssistantTools(
+  overrides?: AssistantToolOverrides | null,
+  knowledgeContext?: ActiveKnowledgeToolContext | null,
+) {
+  const tools: {
+    searchCourses?: ReturnType<typeof createSearchCoursesTool>;
+    searchKnowledgeBase?: ReturnType<typeof createSearchKnowledgeBaseTool>;
+    getMySubscription?: ReturnType<typeof createGetMySubscriptionTool>;
+    listActiveSubscriptionPlans?: ReturnType<typeof createListActiveSubscriptionPlansTool>;
+    createBillingPortalSession?: ReturnType<typeof createBillingPortalSessionTool>;
+    updateConversationTitle?: ReturnType<typeof createUpdateConversationTitleTool>;
+    updateUserMemory?: ReturnType<typeof createUpdateUserMemoryTool>;
+  } = {};
+
+  for (const toolId of ASSISTANT_TOOL_IDS) {
+    if (!isToolEnabled(toolId, overrides)) {
+      continue;
+    }
+
+    // Only expose knowledge search when an active ready workbook exists.
+    if (toolId === "searchKnowledgeBase" && !knowledgeContext) {
+      continue;
+    }
+
+    const runtimeDescription =
+      toolId === "searchKnowledgeBase" && knowledgeContext
+        ? buildKnowledgeSearchToolDescription(
+            knowledgeContext,
+            overrides?.[toolId]?.descriptionAddon,
+          )
+        : undefined;
+
+    const description =
+      runtimeDescription ??
+      resolveToolDescription(toolId, overrides?.[toolId]);
+
+    switch (toolId) {
+      case "searchCourses":
+        tools.searchCourses = createSearchCoursesTool(description);
+        break;
+      case "searchKnowledgeBase":
+        tools.searchKnowledgeBase = createSearchKnowledgeBaseTool(description);
+        break;
+      case "getMySubscription":
+        tools.getMySubscription = createGetMySubscriptionTool(description);
+        break;
+      case "listActiveSubscriptionPlans":
+        tools.listActiveSubscriptionPlans =
+          createListActiveSubscriptionPlansTool(description);
+        break;
+      case "createBillingPortalSession":
+        tools.createBillingPortalSession = createBillingPortalSessionTool(description);
+        break;
+      case "updateConversationTitle":
+        tools.updateConversationTitle = createUpdateConversationTitleTool(description);
+        break;
+      case "updateUserMemory":
+        tools.updateUserMemory = createUpdateUserMemoryTool(description);
+        break;
+      default: {
+        const _exhaustive: never = toolId;
+        void _exhaustive;
+        break;
+      }
+    }
+  }
+
+  return tools;
+}
+
+export const rehamDivaAgent = new Agent(components.agent, {
+  name: "Reham Diva Assistant",
+  languageModel: openai.chat(modelId),
+  instructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+  stopWhen: stepCountIs(6),
+  tools: buildAssistantTools(),
 });
