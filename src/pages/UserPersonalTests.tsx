@@ -182,7 +182,7 @@ const UserPersonalTests = () => {
           <div className="relative mx-auto max-w-md">
             <Search
               className={cn(
-                "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+                "pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
                 isRTL ? "right-3" : "left-3",
               )}
             />
@@ -190,7 +190,8 @@ const UserPersonalTests = () => {
               value={searchInput}
               onChange={(e) => setSearchInput(e.target.value)}
               placeholder={t("searchPersonalTests")}
-              className={cn(isRTL ? "pr-9" : "pl-9")}
+              dir={isRTL ? "rtl" : "ltr"}
+              className={cn(isRTL ? "pr-9 text-right" : "pl-9 text-left")}
             />
           </div>
 
@@ -284,7 +285,7 @@ const UserPersonalTests = () => {
           <div className="relative mx-auto max-w-md">
             <Search
               className={cn(
-                "absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
+                "pointer-events-none absolute top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground",
                 isRTL ? "right-3" : "left-3",
               )}
             />
@@ -292,7 +293,8 @@ const UserPersonalTests = () => {
               value={resultsSearchInput}
               onChange={(e) => setResultsSearchInput(e.target.value)}
               placeholder={t("searchMyResults")}
-              className={cn(isRTL ? "pr-9" : "pl-9")}
+              dir={isRTL ? "rtl" : "ltr"}
+              className={cn(isRTL ? "pr-9 text-right" : "pl-9 text-left")}
             />
           </div>
 
