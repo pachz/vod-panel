@@ -286,7 +286,7 @@ export const listPersonalTests = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { search, status, limit = 12, cursor }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const numItems = Math.min(Math.max(limit, 1), 100);
 
@@ -403,7 +403,7 @@ export const getPersonalTest = query({
     v.null(),
   ),
   handler: async (ctx, { testId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const test = await ctx.db.get("personalTests", testId);
     if (!test || test.deletedAt !== undefined) {
@@ -480,7 +480,7 @@ export const createPersonalTest = mutation({
   },
   returns: v.id("personalTests"),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const data = validateCreateInput(args);
     const now = Date.now();
 
@@ -522,7 +522,7 @@ export const updatePersonalTest = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, args.testId);
     const data = validateUpdateInput({
       name: args.name,
@@ -556,7 +556,7 @@ export const setPersonalTestEnabled = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { testId, enabled }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, testId);
 
     if (!test.publishedSnapshot) {
@@ -578,7 +578,7 @@ export const publishPersonalTest = mutation({
   args: { testId: v.id("personalTests") },
   returns: v.null(),
   handler: async (ctx, { testId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, testId);
     await validatePublishable(ctx, testId);
 
@@ -607,7 +607,7 @@ export const deletePersonalTest = mutation({
   args: { testId: v.id("personalTests") },
   returns: v.null(),
   handler: async (ctx, { testId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     await getTestOrThrow(ctx, testId);
 
     const questions = await ctx.db
@@ -651,7 +651,7 @@ export const savePersonalTestQuestion = mutation({
   },
   returns: v.id("personalTestQuestions"),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, args.testId);
     const data = validateQuestionInput({
       title: args.title,
@@ -747,7 +747,7 @@ export const deletePersonalTestQuestion = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { testId, questionId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, testId);
     const question = await ctx.db.get("personalTestQuestions", questionId);
     if (!question || question.testId !== testId) {
@@ -788,7 +788,7 @@ export const reorderPersonalTestQuestions = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { testId, questionIds }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, testId);
     await markUnpublishedChanges(ctx, test);
 
@@ -903,7 +903,7 @@ export const previewPersonalTestResults = query({
     courses: v.array(previewCourseResultValidator),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
     const test = await getTestOrThrow(ctx, args.testId);
     const { courses } = await computeRecommendedCourses(
       ctx,
@@ -921,7 +921,7 @@ export const listPublishedPersonalTests = query({
   },
   returns: v.array(publishedTestListItemValidator),
   handler: async (ctx, { search }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
 
     if (search && search.trim().length > 0) {
       const results = await ctx.db
@@ -975,7 +975,7 @@ export const generatePersonalTestImageUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -989,7 +989,7 @@ export const updatePersonalTestThumbnail = mutation({
     thumbnailImageUrl: v.string(),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const test = await getTestOrThrow(ctx, args.testId);
 
     const url = await ctx.storage.getUrl(args.thumbnailStorageId);
@@ -1028,7 +1028,7 @@ export const getPublishedPersonalTest = query({
     v.null(),
   ),
   handler: async (ctx, { testId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
 
     const test = await ctx.db.get("personalTests", testId);
     if (
@@ -1093,7 +1093,7 @@ export const computePersonalTestResults = query({
     ),
   }),
   handler: async (ctx, { testId, selectedAnswerIds }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
     const test = await getTestOrThrow(ctx, testId);
     return await computeRecommendedCourses(
       ctx,

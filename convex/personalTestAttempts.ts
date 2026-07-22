@@ -118,11 +118,11 @@ async function getTestForAttempt(
   }
 
   if (isPreview) {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     return test;
   }
 
-  await requireUser(ctx, { requireTech: true });
+  await requireUser(ctx);
   if (test.status !== "published") {
     throw new ConvexError({
       code: "INVALID_INPUT",
@@ -279,9 +279,6 @@ export const completePersonalTestAttempt = mutation({
   handler: async (ctx, args) => {
     const userId = await getUserIdOrThrow(ctx);
     let attempt = await getOwnedAttemptOrThrow(ctx, args.attemptId, userId);
-    if (!(attempt.isPreview ?? false)) {
-      await requireUser(ctx, { requireTech: true });
-    }
     attempt = await expireAttemptIfNeeded(ctx, attempt);
     assertAttemptInProgress(attempt);
 
@@ -342,9 +339,6 @@ export const abandonPersonalTestAttempt = mutation({
   handler: async (ctx, { attemptId, durationSeconds }) => {
     const userId = await getUserIdOrThrow(ctx);
     let attempt = await getOwnedAttemptOrThrow(ctx, attemptId, userId);
-    if (!(attempt.isPreview ?? false)) {
-      await requireUser(ctx, { requireTech: true });
-    }
     attempt = await expireAttemptIfNeeded(ctx, attempt);
 
     if (attempt.status !== "in_progress") {
@@ -440,7 +434,7 @@ export const listPersonalTestAttempts = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { testId, search, status, limit = 20, cursor }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const test = await ctx.db.get("personalTests", testId);
     if (!test || test.deletedAt !== undefined) {
@@ -585,7 +579,7 @@ export const listMyCompletedPersonalTestAttempts = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { search, limit = 10, cursor }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
     const userId = await getUserIdOrThrow(ctx);
     const numItems = Math.min(Math.max(limit ?? 10, 1), 50);
     return await loadMyCompletedPersonalTestAttempts(ctx, userId, {
@@ -602,7 +596,7 @@ export const getMyPersonalTestAttemptResults = query({
   },
   returns: v.union(myAttemptResultsValidator, v.null()),
   handler: async (ctx, { attemptId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx);
     const userId = await getUserIdOrThrow(ctx);
     return await loadMyPersonalTestAttemptResults(ctx, userId, attemptId);
   },

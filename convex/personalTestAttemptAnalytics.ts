@@ -154,7 +154,7 @@ export const getPersonalTestAttemptAnalytics = query({
   },
   returns: analyticsResultValidator,
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const test = await ctx.db.get("personalTests", args.testId);
     if (!test || test.deletedAt !== undefined) {
@@ -342,7 +342,7 @@ export const listPersonalTestSubmissions = query({
     questionCount: v.number(),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     await assertTestExists(ctx, args.testId);
     assertValidSubmissionDateRange(args.startDate, args.endDate);
 
@@ -384,7 +384,7 @@ export const exportPersonalTestSubmissions = query({
   },
   returns: v.array(submissionRowValidator),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     await assertTestExists(ctx, args.testId);
     assertValidSubmissionDateRange(args.startDate, args.endDate);
 
@@ -400,7 +400,7 @@ export const getPersonalTestSubmission = query({
   },
   returns: v.union(submissionDetailValidator, v.null()),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     await assertTestExists(ctx, args.testId);
     return await loadPersonalTestSubmissionById(ctx, args.testId, args.attemptId);
   },

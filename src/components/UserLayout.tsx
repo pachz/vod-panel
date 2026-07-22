@@ -1,8 +1,6 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
-import { useQuery } from "convex/react";
 import { Menu } from "lucide-react";
-import { api } from "../../convex/_generated/api";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfile } from "@/components/UserProfile";
@@ -22,20 +20,14 @@ const UserLayout = () => {
   const location = useLocation();
   const { t, isRTL, localizedSiteUrl, localizedPath } = useLanguage();
   const [navOpen, setNavOpen] = useState(false);
-  const currentUser = useQuery(api.user.getCurrentUser);
-  const isTech = currentUser?.isTech ?? false;
-
   const menuItems = useMemo(() => {
-    const items = [
+    return [
       { key: "home", label: t("home"), path: "/user-dashboard" },
       { key: "courses", label: t("courses"), path: "/courses/card" },
-      ...(isTech
-        ? [{ key: "personalTests", label: t("personalTests"), path: "/my-tests" }]
-        : []),
+      { key: "personalTests", label: t("takeTests"), path: "/my-tests" },
       { key: "subscription", label: t("subscription"), path: "/payments" },
     ];
-    return items;
-  }, [isTech, t]);
+  }, [t]);
 
   const isActive = (path: string) => {
     if (path === "/user-dashboard") {

@@ -303,9 +303,7 @@ const App = () => (
             </Route>
             <Route path="/subscription-plans" element={<SubscriptionPlans />} />
             <Route path="/subscription-plans/:id" element={<SubscriptionPlanEditor />} />
-            <Route element={<TechRoute />}>
-              <Route path="/assistant-test" element={<AssistantTest />} />
-              <Route path="/assistant-settings" element={<AssistantSettings />} />
+            <Route element={<GodOrTechRoute />}>
               <Route path="/personal-tests" element={<PersonalTests />} />
               <Route path="/personal-tests/:id" element={<PersonalTestDetail />} />
               <Route
@@ -313,6 +311,10 @@ const App = () => (
                 element={<PersonalTestSubmissionResults />}
               />
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
+            </Route>
+            <Route element={<TechRoute />}>
+              <Route path="/assistant-test" element={<AssistantTest />} />
+              <Route path="/assistant-settings" element={<AssistantSettings />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
               <Route path="/stripe-subscriptions" element={<StripeSubscriptions />} />
               <Route path="/stripe-subscriptions/sync" element={<StripeSubscriptionSync />} />
@@ -325,11 +327,9 @@ const App = () => (
           <Route path="/courses/card" element={<CourseCards />} />
           <Route path="/courses/preview/:id" element={<CoursePreview />} />
           <Route path="/payments" element={<Payments />} />
-          <Route element={<TechRoute />}>
-            <Route path="/my-tests" element={<UserPersonalTests />} />
-            <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
-            <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
-          </Route>
+          <Route path="/my-tests" element={<UserPersonalTests />} />
+          <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
+          <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
         </Route>
         {/* Root redirect */}
         <Route path="/" element={<RootRedirect />} />

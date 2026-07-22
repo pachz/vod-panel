@@ -58,7 +58,6 @@ const techMenuItems: MenuItem[] = [
   { title: "Assistant", url: "/assistant-test", icon: Bot },
   { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
   { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },
-  { title: "Personal Tests", url: "/personal-tests", icon: ClipboardList },
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
 ];
 
@@ -70,6 +69,7 @@ const takeTestsMenuItem: MenuItem = {
 
 const memberMenuItems: MenuItem[] = [
   { title: "Courses", url: "/courses/card", icon: PanelsTopLeft },
+  { title: "Take Tests", url: "/my-tests", icon: ListChecks },
   { title: "Subscription", url: "/payments", icon: CreditCard },
 ];
 
@@ -93,12 +93,20 @@ export function AdminSidebar() {
     }
     if (isAdmin || isTech) {
       items.push(subscriptionPlansMenuItem);
+      items.push({
+        title: "Personal Tests",
+        url: "/personal-tests",
+        icon: ClipboardList,
+      });
     }
     if (isTech) {
       items.push(...techMenuItems);
-      items.push(takeTestsMenuItem);
     }
-    return items.length > 0 ? items : memberMenuItems;
+    if (items.length > 0) {
+      items.push(takeTestsMenuItem);
+      return items;
+    }
+    return memberMenuItems;
   }, [isAdmin, isTech, isLoadingUser]);
 
   const panelLabel = isLoadingUser
