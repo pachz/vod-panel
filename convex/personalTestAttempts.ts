@@ -408,13 +408,38 @@ export const getMyInProgressAttempt = query({
   },
 });
 
+function matchesAttemptUserSearch(
+  user: Doc<"users"> | null | undefined,
+  search: string | undefined,
+) {
+  if (!search) {
+    return true;
+  }
+
+  const query = search.trim().toLowerCase();
+  if (!query) {
+    return true;
+  }
+
+  const name = user?.name?.toLowerCase() ?? "";
+  const email = user?.email?.toLowerCase() ?? "";
+  return name.includes(query) || email.includes(query);
+}
+
 export const listPersonalTestAttempts = query({
   args: {
     testId: v.id("personalTests"),
+    search: v.optional(v.string()),
+    status: v.optional(attemptStatusValidator),
     limit: v.optional(v.number()),
+    cursor: v.optional(v.string()),
   },
-  returns: v.array(attemptListItemValidator),
-  handler: async (ctx, { testId, limit = 50 }) => {
+  returns: v.object({
+    page: v.array(attemptListItemValidator),
+    isDone: v.boolean(),
+    continueCursor: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, { testId, search, status, limit = 20, cursor }) => {
     await requireUser(ctx, { requireTech: true });
 
     const test = await ctx.db.get("personalTests", testId);
@@ -426,43 +451,113 @@ export const listPersonalTestAttempts = query({
     }
 
     const numItems = Math.min(Math.max(limit, 1), 100);
-    const attempts = await ctx.db
-      .query("personalTestAttempts")
-      .withIndex("by_testId", (q) => q.eq("testId", testId))
-      .order("desc")
-      .take(numItems);
-
     const userCache = new Map<Id<"users">, Doc<"users"> | null>();
-    const results = [];
+    const results: Array<{
+      _id: Id<"personalTestAttempts">;
+      _creationTime: number;
+      testId: Id<"personalTests">;
+      userId: Id<"users">;
+      userName?: string;
+      userEmail?: string;
+      status: Doc<"personalTestAttempts">["status"];
+      startedAt: number;
+      completedAt?: number;
+      durationSeconds?: number;
+      selectedAnswerCount: number;
+      recommendedCourseCount: number;
+      isPreview: boolean;
+    }> = [];
 
-    for (const attempt of attempts) {
-      if (attempt.isPreview ?? false) {
-        continue;
+    let skipping = Boolean(cursor);
+    let dbCursor: string | null = null;
+    let exhausted = false;
+
+    while (results.length < numItems && !exhausted) {
+      let batch: {
+        page: Doc<"personalTestAttempts">[];
+        isDone: boolean;
+        continueCursor: string;
+      };
+
+      if (status !== undefined) {
+        batch = await ctx.db
+          .query("personalTestAttempts")
+          .withIndex("by_testId_status", (q) =>
+            q.eq("testId", testId).eq("status", status),
+          )
+          .order("desc")
+          .paginate({ numItems: 50, cursor: dbCursor });
+      } else {
+        batch = await ctx.db
+          .query("personalTestAttempts")
+          .withIndex("by_testId", (q) => q.eq("testId", testId))
+          .order("desc")
+          .paginate({ numItems: 50, cursor: dbCursor });
       }
 
-      if (!userCache.has(attempt.userId)) {
-        userCache.set(attempt.userId, await ctx.db.get("users", attempt.userId));
-      }
-      const user = userCache.get(attempt.userId);
+      for (const attempt of batch.page) {
+        if (skipping) {
+          if (attempt._id === cursor) {
+            skipping = false;
+          }
+          continue;
+        }
 
-      results.push({
-        _id: attempt._id,
-        _creationTime: attempt._creationTime,
-        testId: attempt.testId,
-        userId: attempt.userId,
-        userName: user?.name,
-        userEmail: user?.email,
-        status: attempt.status,
-        startedAt: attempt.startedAt,
-        completedAt: attempt.completedAt,
-        durationSeconds: attempt.durationSeconds,
-        selectedAnswerCount: attempt.selectedAnswerIds?.length ?? 0,
-        recommendedCourseCount: attempt.recommendedCourseIds?.length ?? 0,
-        isPreview: attempt.isPreview ?? false,
-      });
+        if (attempt.isPreview ?? false) {
+          continue;
+        }
+
+        if (!userCache.has(attempt.userId)) {
+          userCache.set(
+            attempt.userId,
+            await ctx.db.get("users", attempt.userId),
+          );
+        }
+        const user = userCache.get(attempt.userId);
+        if (!matchesAttemptUserSearch(user, search)) {
+          continue;
+        }
+
+        results.push({
+          _id: attempt._id,
+          _creationTime: attempt._creationTime,
+          testId: attempt.testId,
+          userId: attempt.userId,
+          userName: user?.name,
+          userEmail: user?.email,
+          status: attempt.status,
+          startedAt: attempt.startedAt,
+          completedAt: attempt.completedAt,
+          durationSeconds: attempt.durationSeconds,
+          selectedAnswerCount: attempt.selectedAnswerIds?.length ?? 0,
+          recommendedCourseCount: attempt.recommendedCourseIds?.length ?? 0,
+          isPreview: attempt.isPreview ?? false,
+        });
+
+        if (results.length >= numItems) {
+          break;
+        }
+      }
+
+      if (results.length >= numItems) {
+        break;
+      }
+
+      if (batch.isDone) {
+        exhausted = true;
+      } else {
+        dbCursor = batch.continueCursor;
+      }
     }
 
-    return results;
+    return {
+      page: results,
+      isDone: exhausted,
+      continueCursor:
+        !exhausted && results.length > 0
+          ? results[results.length - 1]!._id
+          : null,
+    };
   },
 });
 

@@ -67,6 +67,7 @@ import {
 } from "../../shared/validation/personalTestAnalytics";
 import { PersonalTestAnalyticsPanel } from "@/components/PersonalTests/PersonalTestAnalyticsPanel";
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
+import { TableFilters, type TableFilter } from "@/components/TableFilters";
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -101,14 +102,31 @@ function formatAttemptDate(timestamp: number) {
 
 const RECOMMENDED_COURSES_PREVIEW_COUNT = 5;
 
-const attemptStatusLabel: Record<
-  "in_progress" | "completed" | "abandoned" | "expired",
-  string
-> = {
+type AttemptStatus = "in_progress" | "completed" | "abandoned" | "expired";
+
+const attemptStatusLabel: Record<AttemptStatus, string> = {
   in_progress: "In progress",
   completed: "Completed",
   abandoned: "Abandoned",
   expired: "Expired",
+};
+
+const ATTEMPTS_PAGE_SIZE = 20;
+
+type AttemptListItem = {
+  _id: Id<"personalTestAttempts">;
+  _creationTime: number;
+  testId: Id<"personalTests">;
+  userId: Id<"users">;
+  userName?: string;
+  userEmail?: string;
+  status: AttemptStatus;
+  startedAt: number;
+  completedAt?: number;
+  durationSeconds?: number;
+  selectedAnswerCount: number;
+  recommendedCourseCount: number;
+  isPreview: boolean;
 };
 
 type QuestionRow = {
@@ -230,10 +248,48 @@ const PersonalTestDetail = () => {
   const [analyticsEndDate, setAnalyticsEndDate] = useState(() =>
     defaultAnalyticsEndDate(),
   );
-  const attempts = useQuery(
-    api.personalTestAttempts.listPersonalTestAttempts,
-    activeTab === "attempts" ? { testId } : "skip",
+  const [attemptSearchInput, setAttemptSearchInput] = useState("");
+  const [attemptSearch, setAttemptSearch] = useState<string | undefined>();
+  const [attemptStatusFilter, setAttemptStatusFilter] = useState<
+    AttemptStatus | undefined
+  >();
+  const attemptSearchTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
+    null,
   );
+  const [isLoadingMoreAttempts, setIsLoadingMoreAttempts] = useState(false);
+  const [paginatedAttempts, setPaginatedAttempts] = useState<AttemptListItem[]>(
+    [],
+  );
+  const [attemptCursor, setAttemptCursor] = useState<string | null>(null);
+  const [attemptContinueCursor, setAttemptContinueCursor] = useState<
+    string | null
+  >(null);
+  const [attemptsDone, setAttemptsDone] = useState(false);
+  const [attemptCursorScope, setAttemptCursorScope] = useState<string | null>(
+    null,
+  );
+
+  const attemptFilterKey = useMemo(
+    () => `${attemptStatusFilter ?? ""}|${attemptSearch ?? ""}`,
+    [attemptStatusFilter, attemptSearch],
+  );
+
+  const attemptsPage = useQuery(
+    api.personalTestAttempts.listPersonalTestAttempts,
+    activeTab === "attempts"
+      ? {
+          testId,
+          search: attemptSearch,
+          status: attemptStatusFilter,
+          limit: ATTEMPTS_PAGE_SIZE,
+          cursor:
+            attemptCursor !== null && attemptCursorScope === attemptFilterKey
+              ? attemptCursor
+              : undefined,
+        }
+      : "skip",
+  );
+
   const [name, setName] = useState("");
   const [nameAr, setNameAr] = useState("");
   const [displayOrder, setDisplayOrder] = useState("50");
@@ -316,6 +372,99 @@ const PersonalTestDetail = () => {
   useEffect(() => {
     setShowAllRecommendedCourses(false);
   }, [testId, recommendedCourses.length]);
+
+  useEffect(() => {
+    setAttemptCursor(null);
+    setAttemptContinueCursor(null);
+    setAttemptsDone(false);
+    setPaginatedAttempts([]);
+    setAttemptCursorScope(null);
+  }, [attemptFilterKey]);
+
+  useEffect(() => {
+    if (!attemptsPage) return;
+
+    setAttemptContinueCursor(attemptsPage.continueCursor);
+    setAttemptsDone(attemptsPage.isDone);
+    setAttemptCursorScope(attemptFilterKey);
+
+    setPaginatedAttempts((prev) => {
+      if (attemptCursor === null || attemptCursorScope !== attemptFilterKey) {
+        return attemptsPage.page;
+      }
+      const existingIds = new Set(prev.map((attempt) => attempt._id));
+      const newItems = attemptsPage.page.filter(
+        (attempt) => !existingIds.has(attempt._id),
+      );
+      return [...prev, ...newItems];
+    });
+    setIsLoadingMoreAttempts(false);
+  }, [attemptsPage, attemptCursor, attemptCursorScope, attemptFilterKey]);
+
+  useEffect(() => {
+    return () => {
+      if (attemptSearchTimeoutRef.current) {
+        clearTimeout(attemptSearchTimeoutRef.current);
+      }
+    };
+  }, []);
+
+  const handleAttemptSearchChange = useCallback((value: string) => {
+    setAttemptSearchInput(value);
+    if (attemptSearchTimeoutRef.current) {
+      clearTimeout(attemptSearchTimeoutRef.current);
+    }
+    attemptSearchTimeoutRef.current = setTimeout(() => {
+      const trimmed = value.trim();
+      setAttemptSearch(trimmed.length > 0 ? trimmed : undefined);
+    }, 300);
+  }, []);
+
+  const handleAttemptStatusFilterChange = useCallback(
+    (value: string | undefined) => {
+      setAttemptStatusFilter(
+        value === "in_progress" ||
+          value === "completed" ||
+          value === "abandoned" ||
+          value === "expired"
+          ? value
+          : undefined,
+      );
+    },
+    [],
+  );
+
+  const handleClearAttemptFilters = useCallback(() => {
+    setAttemptSearchInput("");
+    setAttemptSearch(undefined);
+    setAttemptStatusFilter(undefined);
+  }, []);
+
+  const handleLoadMoreAttempts = () => {
+    if (attemptContinueCursor && !attemptsDone && !isLoadingMoreAttempts) {
+      setIsLoadingMoreAttempts(true);
+      setAttemptCursor(attemptContinueCursor);
+    }
+  };
+
+  const attemptFilters = useMemo<TableFilter[]>(
+    () => [
+      {
+        key: "status",
+        label: "Status",
+        value: attemptStatusFilter,
+        placeholder: "All statuses",
+        options: [
+          { label: "In progress", value: "in_progress" },
+          { label: "Completed", value: "completed" },
+          { label: "Abandoned", value: "abandoned" },
+          { label: "Expired", value: "expired" },
+        ],
+        onChange: handleAttemptStatusFilterChange,
+      },
+    ],
+    [attemptStatusFilter, handleAttemptStatusFilterChange],
+  );
 
   const visibleRecommendedCourses = showAllRecommendedCourses
     ? recommendedCourses
@@ -952,13 +1101,25 @@ const PersonalTestDetail = () => {
           </div>
         </TabsContent>
 
-        <TabsContent value="attempts" className="mt-6">
+        <TabsContent value="attempts" className="mt-6 space-y-4">
+          <div className="rounded-lg border bg-card px-4 py-3">
+            <TableFilters
+              filters={attemptFilters}
+              onClearAll={handleClearAttemptFilters}
+              searchValue={attemptSearchInput}
+              onSearchChange={handleAttemptSearchChange}
+              searchPlaceholder="Search by user name or email…"
+            />
+          </div>
+
           <div className="rounded-xl border bg-card">
-            {attempts === undefined ? (
+            {attemptsPage === undefined && paginatedAttempts.length === 0 ? (
               <p className="p-6 text-muted-foreground">Loading attempts…</p>
-            ) : attempts.length === 0 ? (
+            ) : paginatedAttempts.length === 0 ? (
               <p className="p-6 text-muted-foreground">
-                No attempts recorded yet. Preview the test or wait for users to take it.
+                {attemptSearch || attemptStatusFilter
+                  ? "No attempts match your filters."
+                  : "No attempts recorded yet. Preview the test or wait for users to take it."}
               </p>
             ) : (
               <Table>
@@ -974,7 +1135,7 @@ const PersonalTestDetail = () => {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {attempts.map((attempt) => (
+                  {paginatedAttempts.map((attempt) => (
                     <TableRow key={attempt._id}>
                       <TableCell>
                         <div>
@@ -1037,6 +1198,18 @@ const PersonalTestDetail = () => {
               </Table>
             )}
           </div>
+
+          {!attemptsDone && paginatedAttempts.length > 0 && (
+            <div className="flex justify-center">
+              <Button
+                variant="outline"
+                onClick={handleLoadMoreAttempts}
+                disabled={isLoadingMoreAttempts}
+              >
+                {isLoadingMoreAttempts ? "Loading…" : "Load more"}
+              </Button>
+            </div>
+          )}
         </TabsContent>
 
         <TabsContent value="analytics" className="mt-6">
