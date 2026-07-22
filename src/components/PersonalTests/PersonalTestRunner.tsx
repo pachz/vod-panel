@@ -503,6 +503,7 @@ export function PersonalTestRunner({
                     ],
                   }));
                 }}
+                dir={isRTL ? "rtl" : "ltr"}
                 className="gap-3"
               >
                 {currentQuestion!.answers.map((answer) => {
