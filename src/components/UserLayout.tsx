@@ -85,53 +85,63 @@ const UserLayout = () => {
       <div className="absolute inset-0 bg-gradient-to-br from-primary/5 via-cta/5 to-transparent dark:from-primary/5 dark:via-primary/10 dark:to-transparent" />
       <div className="relative z-10 flex min-h-screen w-full flex-col">
         <header className="sticky top-0 z-20 flex h-14 min-h-14 shrink-0 items-center gap-2 border-b border-border/40 dark:border-transparent bg-background/80 px-3 backdrop-blur sm:gap-3 sm:px-4 md:gap-4 md:px-6">
-          {/* Mobile nav: hamburger + sheet */}
-          <div className="md:hidden">
-            <Sheet open={navOpen} onOpenChange={setNavOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-9 w-9 shrink-0" aria-label={t("menu") || "Menu"}>
-                  <Menu className="h-5 w-5" />
+          {/* Start: logo + menu */}
+          <div className="flex min-w-0 items-center gap-3 sm:gap-4 md:gap-5">
+            <a
+              href={localizedSiteUrl()}
+              className="shrink-0 cursor-pointer transition-opacity hover:opacity-80"
+            >
+              <img
+                src="/RehamDivaLogo.png"
+                alt="Reham Diva"
+                className="h-9 w-9 rounded-xl object-cover sm:h-10 sm:w-10"
+              />
+            </a>
+
+            {/* Mobile nav: hamburger + sheet */}
+            <div className="md:hidden">
+              <Sheet open={navOpen} onOpenChange={setNavOpen}>
+                <SheetTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-9 w-9 shrink-0"
+                    aria-label={t("menu") || "Menu"}
+                  >
+                    <Menu className="h-5 w-5" />
+                  </Button>
+                </SheetTrigger>
+                <SheetContent side={isRTL ? "right" : "left"} className="w-[min(85vw,280px)]">
+                  <SheetHeader>
+                    <SheetTitle className="sr-only">{t("menu") || "Menu"}</SheetTitle>
+                  </SheetHeader>
+                  <div className="mt-6">{navContent}</div>
+                </SheetContent>
+              </Sheet>
+            </div>
+
+            {/* Desktop nav */}
+            <nav className="hidden items-center gap-1 border-s border-border/50 ps-3 sm:ps-4 md:flex md:gap-2 md:ps-5">
+              {menuItems.map((item) => (
+                <Button
+                  key={item.key}
+                  variant={isActive(item.path) ? "default" : "ghost"}
+                  onClick={() => handleNavigate(item.path)}
+                  className={cn(
+                    "h-9",
+                    isActive(item.path) && "bg-pink-500 text-white hover:bg-pink-600",
+                  )}
+                >
+                  {item.label}
                 </Button>
-              </SheetTrigger>
-              <SheetContent side={isRTL ? "right" : "left"} className="w-[min(85vw,280px)]">
-                <SheetHeader>
-                  <SheetTitle className="sr-only">{t("menu") || "Menu"}</SheetTitle>
-                </SheetHeader>
-                <div className="mt-6">{navContent}</div>
-              </SheetContent>
-            </Sheet>
+              ))}
+            </nav>
           </div>
 
-          {/* Logo */}
-          <a
-            href={localizedSiteUrl()}
-            className="shrink-0 cursor-pointer transition-opacity hover:opacity-80 flex flex-1 justify-start"
-          >
-            <img
-              src="/RehamDivaLogo.png"
-              alt="Reham Diva"
-              className="h-9 w-9 rounded-xl object-cover sm:h-10 sm:w-10"
-            />
-          </a>
+          {/* Gap */}
+          <div className="flex-1" />
 
-          {/* Desktop nav */}
-          <nav className="hidden items-center gap-4 md:flex md:gap-6 md:flex-1">
-            {menuItems.map((item) => (
-              <Button
-                key={item.key}
-                variant={isActive(item.path) ? "default" : "ghost"}
-                onClick={() => handleNavigate(item.path)}
-                className={cn(
-                  "h-9",
-                  isActive(item.path) && "bg-pink-500 text-white hover:bg-pink-600"
-                )}
-              >
-                {item.label}
-              </Button>
-            ))}
-          </nav>
-
-          {/* Right: theme, language, avatar - never wrap, popup won't affect layout */}
+          {/* End: theme, language, avatar */}
           <div className="flex shrink-0 items-center gap-1.5 sm:gap-2 md:gap-4">
             <ThemeToggle />
             <LanguageToggle />
