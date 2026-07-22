@@ -1,6 +1,7 @@
 import { useMemo, useState } from "react";
 import { Outlet, useNavigate, useLocation } from "react-router-dom";
 import { Menu } from "lucide-react";
+import { useQuery } from "convex/react";
 import { LanguageToggle } from "@/components/LanguageToggle";
 import { ThemeToggle } from "@/components/ThemeToggle";
 import { UserProfile } from "@/components/UserProfile";
@@ -14,20 +15,28 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { api } from "../../convex/_generated/api";
 
 const UserLayout = () => {
   const navigate = useNavigate();
   const location = useLocation();
   const { t, isRTL, localizedSiteUrl, localizedPath } = useLanguage();
   const [navOpen, setNavOpen] = useState(false);
+  const currentUser = useQuery(api.user.getCurrentUser);
+  const isTech = currentUser?.isTech ?? false;
+
   const menuItems = useMemo(() => {
-    return [
+    const items = [
       { key: "home", label: t("home"), path: "/user-dashboard" },
       { key: "courses", label: t("courses"), path: "/courses/card" },
       { key: "personalTests", label: t("takeTests"), path: "/my-tests" },
       { key: "subscription", label: t("subscription"), path: "/payments" },
     ];
-  }, [t]);
+    if (isTech) {
+      items.splice(3, 0, { key: "blogs", label: t("blogs"), path: "/articles" });
+    }
+    return items;
+  }, [t, isTech]);
 
   const isActive = (path: string) => {
     if (path === "/user-dashboard") {
@@ -41,6 +50,9 @@ const UserLayout = () => {
     }
     if (path === "/my-tests") {
       return location.pathname.startsWith("/my-tests");
+    }
+    if (path === "/articles") {
+      return location.pathname.startsWith("/articles");
     }
     return location.pathname.startsWith(path);
   };

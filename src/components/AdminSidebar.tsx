@@ -14,6 +14,8 @@ import {
   Layers,
   Bot,
   Settings2,
+  Newspaper,
+  Tags,
 } from "lucide-react";
 import { Link, matchPath, useLocation } from "react-router-dom";
 import { useQuery } from "convex/react";
@@ -55,6 +57,9 @@ const adminMenuItems: MenuItem[] = [
 ];
 
 const techMenuItems: MenuItem[] = [
+  { title: "Blogs", url: "/blogs", icon: Newspaper },
+  { title: "Blog Categories", url: "/blog-categories", icon: Tags },
+  { title: "Browse Blogs", url: "/articles", icon: PanelsTopLeft },
   { title: "Assistant", url: "/assistant-test", icon: Bot },
   { title: "Assistant settings", url: "/assistant-settings", icon: Settings2 },
   { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },

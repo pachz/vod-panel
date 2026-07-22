@@ -7,6 +7,7 @@ import LoginPage from "./LoginPage";
 import Dashboard from "@/pages/Dashboard";
 import UserDashboard from "@/pages/UserDashboard";
 import Categories from "@/pages/Categories";
+import BlogCategories from "@/pages/BlogCategories";
 import Courses from "@/pages/Courses";
 import CourseCards from "@/pages/CourseCards";
 import CourseDetail from "@/pages/CourseDetail";
@@ -25,6 +26,9 @@ import PersonalTestSubmissionResults from "@/pages/PersonalTestSubmissionResults
 import UserPersonalTests from "@/pages/UserPersonalTests";
 import UserPersonalTestTake from "@/pages/UserPersonalTestTake";
 import UserPersonalTestResults from "@/pages/UserPersonalTestResults";
+import Blogs from "@/pages/Blogs";
+import BlogDetail from "@/pages/BlogDetail";
+import UserBlogs from "@/pages/UserBlogs";
 import Payments from "@/pages/Payments";
 import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
@@ -313,6 +317,9 @@ const App = () => (
               <Route path="/personal-tests/:id/preview" element={<PersonalTestPreview />} />
             </Route>
             <Route element={<TechRoute />}>
+              <Route path="/blogs" element={<Blogs />} />
+              <Route path="/blogs/:id" element={<BlogDetail />} />
+              <Route path="/blog-categories" element={<BlogCategories />} />
               <Route path="/assistant-test" element={<AssistantTest />} />
               <Route path="/assistant-settings" element={<AssistantSettings />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
@@ -330,6 +337,9 @@ const App = () => (
           <Route path="/my-tests" element={<UserPersonalTests />} />
           <Route path="/my-tests/results/:attemptId" element={<UserPersonalTestResults />} />
           <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
+          <Route element={<TechRoute />}>
+            <Route path="/articles" element={<UserBlogs />} />
+          </Route>
         </Route>
         {/* Root redirect */}
         <Route path="/" element={<RootRedirect />} />

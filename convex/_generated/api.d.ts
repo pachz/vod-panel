@@ -29,6 +29,8 @@ import type * as assistant_threads from "../assistant/threads.js";
 import type * as assistant_titles from "../assistant/titles.js";
 import type * as assistant_validators from "../assistant/validators.js";
 import type * as auth from "../auth.js";
+import type * as blog from "../blog.js";
+import type * as blogCategory from "../blogCategory.js";
 import type * as category from "../category.js";
 import type * as chapter from "../chapter.js";
 import type * as coach from "../coach.js";
@@ -98,6 +100,8 @@ declare const fullApi: ApiFromModules<{
   "assistant/titles": typeof assistant_titles;
   "assistant/validators": typeof assistant_validators;
   auth: typeof auth;
+  blog: typeof blog;
+  blogCategory: typeof blogCategory;
   category: typeof category;
   chapter: typeof chapter;
   coach: typeof coach;

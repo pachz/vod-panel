@@ -467,4 +467,61 @@ export default defineSchema({
     memory: v.string(),
     updatedAt: v.number(),
   }).index("by_user", ["userId"]),
+
+  /** Blog categories (separate from course categories). Tech-only for now. */
+  blogCategories: defineTable({
+    name: v.string(),
+    name_ar: v.string(),
+    slug: v.string(),
+    /** Hex color for category pills, e.g. "#E91E8C". */
+    color: v.string(),
+    blog_count: v.number(),
+    createdAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("name", ["name", "deletedAt"])
+    .index("slug", ["slug"])
+    .index("by_deletedAt", ["deletedAt"]),
+
+  blogs: defineTable({
+    title: v.string(),
+    title_ar: v.string(),
+    /** Combined title + title_ar for full-text search. */
+    title_search: v.optional(v.string()),
+    /** Short excerpt / summary. */
+    simple_content: v.string(),
+    simple_content_ar: v.string(),
+    /** Full rich content (Markdown). */
+    body: v.string(),
+    body_ar: v.string(),
+    category_id: v.id("blogCategories"),
+    /** Author coach. */
+    author_id: v.id("coaches"),
+    image_url: v.optional(v.string()),
+    thumbnail_image_url: v.optional(v.string()),
+    /** Displayed as "N min read". */
+    reading_time_minutes: v.number(),
+    status: v.union(v.literal("draft"), v.literal("published")),
+    /** JSON snapshot of content when last published. */
+    publishedSnapshot: v.optional(v.string()),
+    /** True when draft edits differ from the published snapshot. */
+    hasUnpublishedChanges: v.optional(v.boolean()),
+    publishedAt: v.optional(v.number()),
+    createdAt: v.number(),
+    updatedAt: v.number(),
+    deletedAt: v.optional(v.number()),
+  })
+    .index("by_deletedAt", ["deletedAt"])
+    .index("by_deletedAt_status", ["deletedAt", "status"])
+    .index("by_deletedAt_category", ["deletedAt", "category_id"])
+    .index("by_deletedAt_category_status", [
+      "deletedAt",
+      "category_id",
+      "status",
+    ])
+    .index("by_author", ["author_id", "deletedAt"])
+    .searchIndex("search_title", {
+      searchField: "title_search",
+      filterFields: ["deletedAt", "category_id", "status"],
+    }),
 });
