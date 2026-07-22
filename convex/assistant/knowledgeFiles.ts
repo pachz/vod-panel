@@ -1,5 +1,5 @@
 import { getAuthUserId } from "@convex-dev/auth/server";
-import { paginationOptsValidator } from "convex/server";
+import { paginationOptsValidator, paginationResultValidator } from "convex/server";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import type { Doc, Id } from "../_generated/dataModel";
@@ -75,14 +75,23 @@ const knowledgeSheetValidator = v.object({
   sheetIndex: v.number(),
 });
 
+const knowledgeRowCellValidator = v.object({
+  header: v.string(),
+  value: v.string(),
+});
+
+const knowledgeRowListItemValidator = v.object({
+  _id: v.id("assistantKnowledgeRows"),
+  sheetId: v.id("assistantKnowledgeSheets"),
+  rowIndex: v.number(),
+  data: v.array(knowledgeRowCellValidator),
+  searchableText: v.string(),
+  hasEmbedding: v.boolean(),
+});
+
 const parsedRowValidator = v.object({
   rowIndex: v.number(),
-  data: v.array(
-    v.object({
-      header: v.string(),
-      value: v.string(),
-    }),
-  ),
+  data: v.array(knowledgeRowCellValidator),
   searchableText: v.string(),
   embedding: v.optional(v.array(v.float64())),
 });
@@ -291,6 +300,43 @@ export const getKnowledgeFileSheets = query({
         rowCount: sheet.rowCount,
         sheetIndex: sheet.sheetIndex,
       }));
+  },
+});
+
+export const listKnowledgeSheetRows = query({
+  args: {
+    sheetId: v.id("assistantKnowledgeSheets"),
+    paginationOpts: paginationOptsValidator,
+  },
+  returns: paginationResultValidator(knowledgeRowListItemValidator),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+
+    const sheet = await ctx.db.get(args.sheetId);
+    if (!sheet) {
+      return {
+        page: [],
+        isDone: true,
+        continueCursor: "",
+      };
+    }
+
+    const result = await ctx.db
+      .query("assistantKnowledgeRows")
+      .withIndex("by_sheetId_and_rowIndex", (q) => q.eq("sheetId", args.sheetId))
+      .paginate(args.paginationOpts);
+
+    return {
+      ...result,
+      page: result.page.map((row) => ({
+        _id: row._id,
+        sheetId: row.sheetId,
+        rowIndex: row.rowIndex,
+        data: row.data,
+        searchableText: row.searchableText,
+        hasEmbedding: Boolean(row.embedding && row.embedding.length > 0),
+      })),
+    };
   },
 });
 

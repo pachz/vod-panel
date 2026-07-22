@@ -2,10 +2,11 @@ import { useRef, useState } from "react";
 import type { DragEvent, KeyboardEvent } from "react";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { FileSpreadsheet, Loader2, RotateCcw, Trash2, Upload } from "lucide-react";
+import { Eye, FileSpreadsheet, Loader2, RotateCcw, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { api } from "../../../convex/_generated/api";
 import type { Id } from "../../../convex/_generated/dataModel";
+import { KnowledgeFileBrowserDialog } from "@/components/assistant/KnowledgeFileBrowserDialog";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -155,53 +156,6 @@ function FileProgressBar({ file }: { file: KnowledgeFile }) {
   );
 }
 
-function KnowledgeFileSheets({ fileId }: { fileId: Id<"assistantKnowledgeFiles"> }) {
-  const sheets = useQuery(api.assistant.knowledgeFiles.getKnowledgeFileSheets, { fileId });
-
-  if (sheets === undefined) {
-    return <p className="text-xs text-muted-foreground">Loading sheets…</p>;
-  }
-  if (sheets.length === 0) {
-    return null;
-  }
-
-  return (
-    <ul className="mt-3 space-y-2 border-t pt-3">
-      {sheets.map((sheet) => (
-        <li key={sheet._id} className="rounded-md bg-muted/40 px-3 py-2 text-sm">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <span className="font-medium">{sheet.name}</span>
-            <div className="flex flex-wrap gap-1.5">
-              <Badge variant="outline" className="font-normal capitalize">
-                {sheet.searchMode}
-              </Badge>
-              {(sheet.languages ?? []).map((lang) => (
-                <Badge key={lang} variant="secondary" className="font-normal uppercase">
-                  {lang}
-                </Badge>
-              ))}
-            </div>
-          </div>
-          {sheet.purpose && (
-            <p className="mt-1 text-xs text-muted-foreground">{sheet.purpose}</p>
-          )}
-          {sheet.searchHints && (
-            <p className="mt-1 text-xs text-muted-foreground">Search: {sheet.searchHints}</p>
-          )}
-          {(sheet.keywords?.length ?? 0) > 0 && (
-            <p className="mt-1 text-xs text-muted-foreground">
-              Keywords: {sheet.keywords!.join(", ")}
-            </p>
-          )}
-          <p className="mt-1 text-xs text-muted-foreground">
-            {sheet.rowCount.toLocaleString()} rows · {sheet.headers.join(", ")}
-          </p>
-        </li>
-      ))}
-    </ul>
-  );
-}
-
 export function KnowledgeFilesSection() {
   const files = useQuery(api.assistant.knowledgeFiles.listKnowledgeFiles);
   const generateUploadUrl = useMutation(api.assistant.knowledgeFiles.generateKnowledgeFileUploadUrl);
@@ -216,9 +170,10 @@ export function KnowledgeFilesSection() {
   const [togglingId, setTogglingId] = useState<Id<"assistantKnowledgeFiles"> | null>(null);
   const [deletingId, setDeletingId] = useState<Id<"assistantKnowledgeFiles"> | null>(null);
   const [retryingId, setRetryingId] = useState<Id<"assistantKnowledgeFiles"> | null>(null);
-  const [expandedId, setExpandedId] = useState<Id<"assistantKnowledgeFiles"> | null>(null);
+  const [browsingFileId, setBrowsingFileId] = useState<Id<"assistantKnowledgeFiles"> | null>(null);
 
   const isUploading = localUpload !== null;
+  const browsingFile = files?.find((file) => file._id === browsingFileId) ?? null;
 
   const handleSelectFile = async (file: File) => {
     if (isUploading) return;
@@ -302,8 +257,8 @@ export function KnowledgeFilesSection() {
     try {
       await deleteFile({ fileId: file._id });
       toast.success("Deleting file…");
-      if (expandedId === file._id) {
-        setExpandedId(null);
+      if (browsingFileId === file._id) {
+        setBrowsingFileId(null);
       }
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to delete file");
@@ -329,8 +284,9 @@ export function KnowledgeFilesSection() {
       <div className="space-y-1">
         <h3 className="text-base font-medium">Files</h3>
         <p className="text-sm text-muted-foreground">
-          Upload Excel or CSV workbooks. We parse each sheet, extract rows into a searchable index,
-          and use AI to label sheet purpose and search mode. Only one file can be active.
+          Upload Excel or CSV workbooks. We parse each sheet, drop empty rows/columns, let AI
+          rename columns and label sheet purpose/search mode, then index rows for search. Only one
+          file can be active.
         </p>
       </div>
 
@@ -414,12 +370,12 @@ export function KnowledgeFilesSection() {
               file.status === "processing" ||
               file.status === "deleting";
             const canActivate = file.status === "ready";
-            const isExpanded = expandedId === file._id;
+            const canBrowse = file.status === "ready";
 
             return (
               <li key={file._id} className="rounded-lg border px-4 py-3">
                 <div className="flex flex-wrap items-start justify-between gap-3">
-                  <div className="min-w-0 flex-1 space-y-1">
+                  <div className="min-w-0 flex-1 space-y-2">
                     <div className="flex flex-wrap items-center gap-2">
                       <FileSpreadsheet className="h-4 w-4 shrink-0 text-muted-foreground" />
                       <span className="truncate font-medium">{file.fileName}</span>
@@ -428,22 +384,29 @@ export function KnowledgeFilesSection() {
                     <p className="text-xs text-muted-foreground">
                       {formatFileSize(file.sizeBytes)} ·{" "}
                       {new Date(file.createdAt).toLocaleString()}
+                      {file.status === "ready" && (
+                        <>
+                          {" "}
+                          · {(file.sheetCount ?? 0).toLocaleString()} sheets ·{" "}
+                          {(file.rowCount ?? 0).toLocaleString()} rows
+                        </>
+                      )}
                     </p>
                     {file.description && file.status === "ready" && (
-                      <p className="text-sm text-muted-foreground">{file.description}</p>
+                      <p className="line-clamp-2 text-sm text-muted-foreground">{file.description}</p>
                     )}
                     {file.status === "ready" && (
-                      <div className="space-y-1 text-xs text-muted-foreground">
-                        {(file.languages?.length ?? 0) > 0 && (
-                          <p>
-                            Languages:{" "}
-                            <span className="uppercase">{file.languages!.join(", ")}</span>
-                          </p>
-                        )}
-                        {file.whenToUse && <p>When to use: {file.whenToUse}</p>}
-                        {file.howToSearch && <p>How to search: {file.howToSearch}</p>}
+                      <div className="flex flex-wrap gap-1.5">
+                        {(file.languages ?? []).map((lang) => (
+                          <Badge key={lang} variant="secondary" className="font-normal uppercase">
+                            {lang}
+                          </Badge>
+                        ))}
                         {(file.exampleQueries?.length ?? 0) > 0 && (
-                          <p>Examples: {file.exampleQueries!.join(" · ")}</p>
+                          <Badge variant="outline" className="font-normal">
+                            {file.exampleQueries!.length} example
+                            {file.exampleQueries!.length === 1 ? "" : "s"}
+                          </Badge>
                         )}
                       </div>
                     )}
@@ -465,16 +428,15 @@ export function KnowledgeFilesSection() {
                         onCheckedChange={(checked) => void handleToggleActive(file, checked)}
                       />
                     </div>
-                    {file.status === "ready" && (
+                    {canBrowse && (
                       <Button
                         type="button"
                         size="sm"
                         variant="outline"
-                        onClick={() =>
-                          setExpandedId((current) => (current === file._id ? null : file._id))
-                        }
+                        onClick={() => setBrowsingFileId(file._id)}
                       >
-                        {isExpanded ? "Hide sheets" : "Sheets"}
+                        <Eye className="mr-1.5 h-3.5 w-3.5" />
+                        View data
                       </Button>
                     )}
                     {file.status === "failed" && (
@@ -502,27 +464,19 @@ export function KnowledgeFilesSection() {
                     </Button>
                   </div>
                 </div>
-
-                {isExpanded && file.status === "ready" && (
-                  <div className="space-y-3">
-                    {file.toolDescription && (
-                      <div className="mt-3 space-y-1 border-t pt-3">
-                        <p className="text-xs font-medium text-muted-foreground">
-                          Tool description (used at runtime when this file is active)
-                        </p>
-                        <p className="whitespace-pre-wrap text-xs text-muted-foreground">
-                          {file.toolDescription}
-                        </p>
-                      </div>
-                    )}
-                    <KnowledgeFileSheets fileId={file._id} />
-                  </div>
-                )}
               </li>
             );
           })}
         </ul>
       )}
+
+      <KnowledgeFileBrowserDialog
+        file={browsingFile}
+        open={browsingFileId !== null}
+        onOpenChange={(open) => {
+          if (!open) setBrowsingFileId(null);
+        }}
+      />
     </div>
   );
 }

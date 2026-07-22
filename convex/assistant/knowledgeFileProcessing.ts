@@ -45,6 +45,8 @@ type SheetMetaAi = {
   languages: string[];
   keywords: string[];
   searchHints: string;
+  /** Renamed column titles in the same order as the sheet's headers. */
+  columnNames?: string[];
 };
 
 type FileMetaAi = {
@@ -118,6 +120,98 @@ function normalizeHeader(raw: unknown, index: number, used: Set<string>): string
   }
   used.add(candidate);
   return candidate;
+}
+
+/** Drop columns where every cell value is empty. */
+function pruneEmptyColumns(sheet: ParsedSheet): ParsedSheet {
+  if (sheet.headers.length === 0) {
+    return sheet;
+  }
+
+  const keep = sheet.headers.map((_, colIndex) =>
+    sheet.rows.some((row) => (row.data[colIndex]?.value ?? "").trim().length > 0),
+  );
+
+  if (keep.every(Boolean)) {
+    return sheet;
+  }
+
+  // If every column is empty, keep nothing usable.
+  if (!keep.some(Boolean)) {
+    return { ...sheet, headers: [], rows: [] };
+  }
+
+  const headers = sheet.headers.filter((_, i) => keep[i]);
+  const rows = sheet.rows
+    .map((row) => {
+      const data = row.data.filter((_, i) => keep[i]);
+      const searchableText = buildSearchableText(data);
+      return {
+        ...row,
+        data,
+        searchableText,
+      };
+    })
+    .filter((row) => row.searchableText.length > 0);
+
+  return { ...sheet, headers, rows };
+}
+
+/** Re-index rows after pruning and drop any leftover blank rows. */
+function pruneEmptyRows(sheet: ParsedSheet): ParsedSheet {
+  const rows = sheet.rows
+    .filter((row) => row.data.some((cell) => cell.value.trim().length > 0))
+    .map((row, rowIndex) => ({
+      ...row,
+      rowIndex,
+      searchableText: buildSearchableText(row.data),
+    }))
+    .filter((row) => row.searchableText.length > 0);
+
+  return { ...sheet, rows };
+}
+
+function cleanParsedSheets(sheets: ParsedSheet[]): ParsedSheet[] {
+  return sheets
+    .map((sheet) => pruneEmptyRows(pruneEmptyColumns(sheet)))
+    .filter((sheet) => sheet.headers.length > 0 && sheet.rows.length > 0);
+}
+
+/**
+ * Apply AI-suggested column titles. Falls back to the original header when a
+ * suggestion is missing/blank. Keeps names unique within the sheet.
+ */
+function applyAiColumnNames(
+  sheet: ParsedSheet,
+  columnNames: string[] | undefined,
+): ParsedSheet {
+  if (!columnNames || columnNames.length !== sheet.headers.length) {
+    return sheet;
+  }
+
+  const used = new Set<string>();
+  const headers = sheet.headers.map((original, index) => {
+    const suggested = columnNames[index];
+    const raw =
+      typeof suggested === "string" && suggested.trim().length > 0
+        ? suggested.trim()
+        : original;
+    return normalizeHeader(raw, index, used);
+  });
+
+  const rows = sheet.rows.map((row) => {
+    const data = row.data.map((cell, index) => ({
+      header: headers[index] ?? cell.header,
+      value: cell.value,
+    }));
+    return {
+      ...row,
+      data,
+      searchableText: buildSearchableText(data),
+    };
+  });
+
+  return { ...sheet, headers, rows };
 }
 
 function buildSearchableText(data: CellPair[]): string {
@@ -404,6 +498,194 @@ async function enrichSheetsWithSearchableText(
   return working;
 }
 
+function cellValueFromSheet(
+  worksheet: XLSX.WorkSheet,
+  row: number,
+  col: number,
+): unknown {
+  const addr = XLSX.utils.encode_cell({ r: row, c: col });
+  const cell = worksheet[addr] as XLSX.CellObject | undefined;
+  if (!cell) {
+    return "";
+  }
+  // Prefer raw value so number formats (e.g. "$48") don't corrupt durations/IDs.
+  if (cell.v !== undefined && cell.v !== null && cell.v !== "") {
+    return cell.v;
+  }
+  if (cell.w !== undefined && cell.w !== null && cell.w !== "") {
+    return cell.w;
+  }
+  return "";
+}
+
+/**
+ * Build a dense string matrix with merged-cell values filled into covered cells.
+ *
+ * - Vertical merges are always filled (needed for master/detail rows).
+ * - Horizontal-only merges are filled only in the header band (rows 0–1),
+ *   so wide answer/description merges don't duplicate across columns.
+ */
+function worksheetToFilledMatrix(worksheet: XLSX.WorkSheet): string[][] {
+  const ref = worksheet["!ref"];
+  if (!ref) {
+    return [];
+  }
+
+  const range = XLSX.utils.decode_range(ref);
+  const colCount = Math.min(range.e.c - range.s.c + 1, MAX_HEADERS);
+  const maxRow = range.e.r;
+  const merges = worksheet["!merges"] ?? [];
+
+  const fill = new Map<string, unknown>();
+  for (const merge of merges) {
+    const isHorizontalOnly = merge.e.r === merge.s.r && merge.e.c > merge.s.c;
+    const origin = cellValueFromSheet(worksheet, merge.s.r, merge.s.c);
+    if (isHorizontalOnly) {
+      // Header group labels are short; wide prose merges (FAQ answers) must not duplicate.
+      if (merge.s.r > 1) {
+        continue;
+      }
+      if (cellToString(origin).length > 60) {
+        continue;
+      }
+    }
+
+    for (let r = merge.s.r; r <= merge.e.r; r++) {
+      for (let c = merge.s.c; c <= merge.e.c; c++) {
+        if (r === merge.s.r && c === merge.s.c) {
+          continue;
+        }
+        fill.set(`${r},${c}`, origin);
+      }
+    }
+  }
+
+  const matrix: string[][] = [];
+  for (let r = range.s.r; r <= maxRow; r++) {
+    const row: string[] = [];
+    let hasValue = false;
+    for (let i = 0; i < colCount; i++) {
+      const c = range.s.c + i;
+      let raw = cellValueFromSheet(worksheet, r, c);
+      if (raw === "" || raw === undefined || raw === null) {
+        raw = fill.get(`${r},${c}`) ?? "";
+      }
+      const value = cellToString(raw);
+      if (value) {
+        hasValue = true;
+      }
+      row.push(value);
+    }
+    if (hasValue) {
+      matrix.push(row);
+    }
+  }
+
+  return matrix;
+}
+
+function rowLooksLikeHeader(row: string[]): boolean {
+  const nonEmpty = row.map((cell) => cell.trim()).filter((cell) => cell.length > 0);
+  if (nonEmpty.length === 0) {
+    return false;
+  }
+  // Header cells are short labels — reject prose / FAQ answers.
+  if (nonEmpty.some((cell) => cell.length > 100)) {
+    return false;
+  }
+  const longCells = nonEmpty.filter((cell) => cell.length > 60).length;
+  if (longCells > Math.max(1, Math.floor(nonEmpty.length / 3))) {
+    return false;
+  }
+  return true;
+}
+
+function worksheetHasTwoRowHeaderMerges(worksheet: XLSX.WorkSheet): boolean {
+  const merges = worksheet["!merges"] ?? [];
+  return merges.some((merge) => {
+    if (merge.s.r !== 0) {
+      return false;
+    }
+    // Parent header vertically spans into row 2.
+    if (merge.e.r >= 1) {
+      return true;
+    }
+    // Horizontal group label over sub-columns (short labels only).
+    if (merge.e.c > merge.s.c) {
+      const origin = cellToString(cellValueFromSheet(worksheet, merge.s.r, merge.s.c));
+      return origin.length > 0 && origin.length <= 60;
+    }
+    return false;
+  });
+}
+
+/**
+ * Compose 1–2 header rows (common with merged parent/child labels like مدة → دقيقة/ساعة).
+ * Sheets without a real header row get placeholder Column N names (AI can rename later).
+ */
+function extractHeadersAndDataRows(
+  matrix: string[][],
+  worksheet: XLSX.WorkSheet,
+): {
+  headers: string[];
+  dataRows: string[][];
+} {
+  if (matrix.length === 0) {
+    return { headers: [], dataRows: [] };
+  }
+
+  const row0 = matrix[0] ?? [];
+  const row1 = matrix[1];
+
+  if (!rowLooksLikeHeader(row0)) {
+    const colCount = Math.min(
+      Math.max(row0.length, ...matrix.map((row) => row.length), 1),
+      MAX_HEADERS,
+    );
+    const usedHeaders = new Set<string>();
+    const headers: string[] = [];
+    for (let i = 0; i < colCount; i++) {
+      headers.push(normalizeHeader("", i, usedHeaders));
+    }
+    return {
+      headers,
+      dataRows: matrix.slice(0, MAX_ROWS_PER_SHEET),
+    };
+  }
+
+  const useTwoRowHeader =
+    Boolean(row1) &&
+    worksheetHasTwoRowHeaderMerges(worksheet) &&
+    rowLooksLikeHeader(row1!) &&
+    row0.some((cell, index) => {
+      const a = cell.trim();
+      const b = (row1?.[index] ?? "").trim();
+      return Boolean(a && b && a !== b);
+    });
+
+  const headerSource = useTwoRowHeader
+    ? row0.map((top, index) => {
+        const a = top.trim();
+        const b = (row1?.[index] ?? "").trim();
+        if (a && b && a !== b) {
+          return `${a} - ${b}`;
+        }
+        return a || b;
+      })
+    : row0;
+
+  const usedHeaders = new Set<string>();
+  const headerCount = Math.min(Math.max(headerSource.length, 1), MAX_HEADERS);
+  const headers: string[] = [];
+  for (let i = 0; i < headerCount; i++) {
+    headers.push(normalizeHeader(headerSource[i], i, usedHeaders));
+  }
+
+  const dataStart = useTwoRowHeader ? 2 : 1;
+  const dataRows = matrix.slice(dataStart, dataStart + MAX_ROWS_PER_SHEET);
+  return { headers, dataRows };
+}
+
 function parseWorkbook(buffer: ArrayBuffer, fileName: string): ParsedSheet[] {
   // codepage 65001 = UTF-8 (important for Arabic CSV; harmless for xlsx).
   const workbook = XLSX.read(buffer, {
@@ -426,29 +708,16 @@ function parseWorkbook(buffer: ArrayBuffer, fileName: string): ParsedSheet[] {
       continue;
     }
 
-    const matrix = XLSX.utils.sheet_to_json<(string | number | boolean | Date | null)[]>(
-      worksheet,
-      {
-        header: 1,
-        defval: "",
-        blankrows: false,
-        raw: false,
-      },
-    );
-
+    const matrix = worksheetToFilledMatrix(worksheet);
     if (matrix.length === 0) {
       continue;
     }
 
-    const headerRow = matrix[0] ?? [];
-    const usedHeaders = new Set<string>();
-    const headerCount = Math.min(Math.max(headerRow.length, 1), MAX_HEADERS);
-    const headers: string[] = [];
-    for (let i = 0; i < headerCount; i++) {
-      headers.push(normalizeHeader(headerRow[i], i, usedHeaders));
+    const { headers, dataRows } = extractHeadersAndDataRows(matrix, worksheet);
+    if (headers.length === 0) {
+      continue;
     }
 
-    const dataRows = matrix.slice(1, 1 + MAX_ROWS_PER_SHEET);
     const rows: ParsedSheet["rows"] = [];
 
     for (let rowIndex = 0; rowIndex < dataRows.length; rowIndex++) {
@@ -458,7 +727,7 @@ function parseWorkbook(buffer: ArrayBuffer, fileName: string): ParsedSheet[] {
 
       for (let col = 0; col < headers.length; col++) {
         const header = headers[col]!;
-        const value = cellToString(rawRow[col]);
+        const value = (rawRow[col] ?? "").trim();
         data.push({ header, value });
         if (value) {
           hasValue = true;
@@ -488,11 +757,12 @@ function parseWorkbook(buffer: ArrayBuffer, fileName: string): ParsedSheet[] {
     });
   }
 
-  if (sheets.length === 0) {
+  const cleaned = cleanParsedSheets(sheets);
+  if (cleaned.length === 0) {
     throw new Error(`Could not parse any sheets from ${fileName}`);
   }
 
-  return sheets;
+  return cleaned;
 }
 
 const KNOWLEDGE_LANGUAGES = ["en", "ar"] as const;
@@ -619,6 +889,7 @@ function parseAiJson(text: string): {
     languages?: string[];
     keywords?: string[];
     searchHints?: string;
+    columnNames?: string[];
   }>;
 } | null {
   const trimmed = text.trim();
@@ -639,6 +910,7 @@ function parseAiJson(text: string): {
         languages?: string[];
         keywords?: string[];
         searchHints?: string;
+        columnNames?: string[];
       }>;
     };
   } catch {
@@ -664,6 +936,22 @@ function normalizeStringList(value: unknown, fallback: string[], max = 12): stri
   return (cleaned.length > 0 ? cleaned : fallback).slice(0, max);
 }
 
+/** Accept AI column renames only when length matches the sheet headers. */
+function resolveAiColumnNames(
+  value: unknown,
+  headers: string[],
+): string[] | undefined {
+  if (!Array.isArray(value) || value.length !== headers.length) {
+    return undefined;
+  }
+  return value.map((item, index) => {
+    if (typeof item === "string" && item.trim().length > 0) {
+      return item.trim();
+    }
+    return headers[index]!;
+  });
+}
+
 async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<FileMetaAi> {
   const fallback = fallbackFileMeta(fileName, sheets);
 
@@ -682,6 +970,7 @@ async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<
       prompt: [
         "You are preparing spreadsheet knowledge for a customer-support AI assistant tool.",
         "Analyze languages, how the assistant should search later, and write the tool description.",
+        "Also improve column titles into clear, concise names the assistant can use as field keys.",
         "Return JSON only (no markdown) with this shape:",
         "{",
         '  "description": "1-2 sentences about the whole file",',
@@ -697,7 +986,8 @@ async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<
         '      "searchMode": "semantic"|"structured"|"hybrid",',
         '      "languages": ["en"|"ar"],',
         '      "keywords": ["important terms/entities from this sheet"],',
-        '      "searchHints": "sheet-specific search tips"',
+        '      "searchHints": "sheet-specific search tips",',
+        '      "columnNames": ["same length/order as headers; clearer column titles / field keys"]',
         "    }",
         "  ]",
         "}",
@@ -707,6 +997,13 @@ async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<
         '- "structured": plans, prices, IDs, tables looked up by exact fields',
         '- "hybrid": mix of both',
         "",
+        "columnNames guidance:",
+        "- Must have exactly one entry per header, same order as headers.",
+        "- Prefer short clear titles (e.g. Plan Name, Price KWD, Question, Answer).",
+        "- Fix vague headers like Column 1, Unnamed, or codes into meaningful names from sample values.",
+        "- Keep important original wording when already clear; bilingual sheets may keep Arabic titles when that is the primary language.",
+        "- Do not invent columns; do not drop or reorder columns.",
+        "",
         "Language codes: only use \"en\" and/or \"ar\". Do not use fa/farsi/persian or any other language codes.",
         "If content is Arabic-script, label it as ar.",
         "Write toolDescription and exampleQueries in English and/or Arabic to match the workbook.",
@@ -715,7 +1012,7 @@ async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<
         "Sheets:",
         JSON.stringify(summary, null, 2),
       ].join("\n"),
-      maxOutputTokens: 1400,
+      maxOutputTokens: 1800,
     });
 
     const parsed = parseAiJson(text);
@@ -738,6 +1035,7 @@ async function describeWithAi(fileName: string, sheets: ParsedSheet[]): Promise<
         keywords: normalizeStringList(ai?.keywords, sheetFallback.keywords, 16),
         searchHints:
           (ai?.searchHints ?? sheetFallback.searchHints).trim() || sheetFallback.searchHints,
+        columnNames: resolveAiColumnNames(ai?.columnNames, sheet.headers),
       };
     });
 
@@ -816,6 +1114,9 @@ export const processKnowledgeFile = internalAction({
       });
 
       const ai = await describeWithAi(file.fileName, sheets);
+      sheets = sheets.map((sheet, index) =>
+        applyAiColumnNames(sheet, ai.sheets[index]?.columnNames),
+      );
 
       await setProgress({
         status: "processing",
