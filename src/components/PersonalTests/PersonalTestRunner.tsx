@@ -576,37 +576,26 @@ export function PersonalTestRunner({
           </div>
 
           <div className="flex justify-between gap-3 pt-2">
-            {isRTL ? (
-              <>
-                <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
-                  {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
-                  <ChevronLeft className="ms-2 h-4 w-4" />
-                </Button>
-                <Button
-                  variant="outline"
-                  disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-                >
-                  <ChevronRight className="me-2 h-4 w-4" />
-                  {previousLabel}
-                </Button>
-              </>
-            ) : (
-              <>
-                <Button
-                  variant="outline"
-                  disabled={currentIndex === 0}
-                  onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
-                >
-                  <ChevronLeft className="me-2 h-4 w-4" />
-                  {previousLabel}
-                </Button>
-                <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
-                  {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
-                  <ChevronRight className="ms-2 h-4 w-4" />
-                </Button>
-              </>
-            )}
+            <Button
+              variant="outline"
+              disabled={currentIndex === 0}
+              onClick={() => setCurrentIndex((i) => Math.max(0, i - 1))}
+            >
+              {isRTL ? (
+                <ChevronRight className="h-4 w-4" />
+              ) : (
+                <ChevronLeft className="h-4 w-4" />
+              )}
+              {previousLabel}
+            </Button>
+            <Button variant="cta" onClick={handleNext} disabled={!canProceed}>
+              {currentIndex === questions.length - 1 ? seeResultsLabel : nextLabel}
+              {isRTL ? (
+                <ChevronLeft className="h-4 w-4" />
+              ) : (
+                <ChevronRight className="h-4 w-4" />
+              )}
+            </Button>
           </div>
         </div>
       ) : (
