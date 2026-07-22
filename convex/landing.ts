@@ -751,6 +751,69 @@ async function mapPlanToLandingPackage(
   };
 }
 
+const DEFAULT_PERSONAL_TEST_DISPLAY_ORDER = 50;
+
+type LandingTest = {
+  id: Id<"personalTests">;
+  nameEn: string;
+  nameAr: string;
+  descriptionEn: string | null;
+  descriptionAr: string | null;
+  thumbnailImageUrl: string | null;
+  questionCount: number;
+  displayOrder: number;
+  updatedAt: number;
+};
+
+const landingTestValidator = v.object({
+  id: v.id("personalTests"),
+  nameEn: v.string(),
+  nameAr: v.string(),
+  descriptionEn: v.union(v.string(), v.null()),
+  descriptionAr: v.union(v.string(), v.null()),
+  thumbnailImageUrl: v.union(v.string(), v.null()),
+  questionCount: v.number(),
+  displayOrder: v.number(),
+  updatedAt: v.number(),
+});
+
+/** Published, non-deleted personal tests for the public landing page. */
+export const listLandingTests = internalQuery({
+  args: {},
+  returns: v.array(landingTestValidator),
+  handler: async (ctx): Promise<Array<LandingTest>> => {
+    const tests = await ctx.db
+      .query("personalTests")
+      .withIndex("by_deletedAt_status", (q) =>
+        q.eq("deletedAt", undefined).eq("status", "published"),
+      )
+      .take(200);
+
+    return tests
+      .filter((test) => test.publishedSnapshot !== undefined)
+      .map((test) => ({
+        id: test._id,
+        nameEn: test.name,
+        nameAr: test.name_ar,
+        descriptionEn: test.description ?? null,
+        descriptionAr: test.description_ar ?? null,
+        thumbnailImageUrl: test.thumbnail_image_url ?? null,
+        questionCount: test.questionCount,
+        displayOrder: test.displayOrder ?? DEFAULT_PERSONAL_TEST_DISPLAY_ORDER,
+        updatedAt: test.updatedAt,
+      }))
+      .sort((a, b) => {
+        if (a.displayOrder !== b.displayOrder) {
+          return a.displayOrder - b.displayOrder;
+        }
+        if (a.updatedAt !== b.updatedAt) {
+          return a.updatedAt - b.updatedAt;
+        }
+        return a.nameEn.localeCompare(b.nameEn);
+      });
+  },
+});
+
 export const listLandingPackages = internalQuery({
   args: {},
   returns: v.array(landingPackageValidator),
