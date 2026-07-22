@@ -9,7 +9,11 @@ import { paginationOptsValidator } from "convex/server";
 import { v } from "convex/values";
 import { components } from "../_generated/api";
 import { internalMutation, mutation, query } from "../_generated/server";
-import { authorizeThreadAccess, requireAssistantAccess } from "./lib";
+import {
+  authorizeThreadAccess,
+  authorizeThreadReadAccess,
+  requireAssistantAccess,
+} from "./lib";
 import { assistantLanguageValidator, conversationTitleUpdateResultValidator } from "./validators";
 import { rehamDivaAgent } from "./agent";
 import {
@@ -60,7 +64,7 @@ export const getThreadLanguage = query({
   },
   returns: v.union(assistantLanguageValidator, v.null()),
   handler: async (ctx, args) => {
-    await authorizeThreadAccess(ctx, args.threadId);
+    await authorizeThreadReadAccess(ctx, args.threadId);
     const metadata = await getThreadMetadata(ctx, components.agent, {
       threadId: args.threadId,
     });
@@ -83,7 +87,7 @@ export const listThreadMessages = query({
   },
   returns: v.any(),
   handler: async (ctx, args) => {
-    await authorizeThreadAccess(ctx, args.threadId);
+    await authorizeThreadReadAccess(ctx, args.threadId);
     const paginated = await listUIMessages(ctx, components.agent, args);
     const streams = await syncStreams(ctx, components.agent, args);
     return { ...paginated, streams };

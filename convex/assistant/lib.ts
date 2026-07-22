@@ -23,6 +23,19 @@ export async function requireAssistantAccess(
   return userId as Id<"users">;
 }
 
+/** Tech staff may review all users' assistant conversations. */
+export async function requireAssistantTechAccess(
+  ctx: QueryCtx | MutationCtx,
+): Promise<Id<"users">> {
+  await requireUser(ctx, { requireTech: true });
+  const userId = await getAuthUserId(ctx);
+  if (!userId) {
+    throw new Error("Authentication required");
+  }
+  return userId as Id<"users">;
+}
+
+/** Owner-only access for sending/updating threads. */
 export async function authorizeThreadAccess(
   ctx: QueryCtx | MutationCtx,
   threadId: string,
@@ -38,6 +51,29 @@ export async function authorizeThreadAccess(
   }
 
   return userId as Id<"users">;
+}
+
+/** Owner or tech staff may read a thread's messages. */
+export async function authorizeThreadReadAccess(
+  ctx: QueryCtx | MutationCtx,
+  threadId: string,
+): Promise<Id<"users">> {
+  const userId = await requireAssistantAccess(ctx);
+
+  const { userId: threadUserId } = await getThreadMetadata(ctx, components.agent, {
+    threadId,
+  });
+
+  if (!threadUserId || threadUserId === userId) {
+    return userId as Id<"users">;
+  }
+
+  const user = await ctx.db.get(userId);
+  if (user?.isTech) {
+    return userId as Id<"users">;
+  }
+
+  throw new Error("Unauthorized: thread does not belong to user");
 }
 
 export function pickLocalizedCourseText(

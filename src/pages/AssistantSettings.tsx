@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
+import { MessagesSquare } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { KnowledgeFilesSection } from "@/components/assistant/KnowledgeFilesSection";
 import {
@@ -26,9 +27,11 @@ type AssistantSettingsData = FunctionReturnType<typeof api.assistant.settings.ge
 type ToolKnowledgeItem = AssistantSettingsData["tools"][number];
 
 const AssistantSettings = () => {
+  const currentUser = useQuery(api.user.getCurrentUser);
   const settings = useQuery(api.assistant.settings.getAssistantSettings);
   const updateSettings = useMutation(api.assistant.settings.updateAssistantSettings);
   const updateToolKnowledge = useMutation(api.assistant.settings.updateAssistantToolKnowledge);
+  const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
   const [addonDrafts, setAddonDrafts] = useState<Record<string, string>>({});
   const [isSaving, setIsSaving] = useState(false);
@@ -150,9 +153,19 @@ const AssistantSettings = () => {
             Customize the assistant prompt and which tools it can use. Core safety rules stay locked.
           </p>
         </div>
-        <Button asChild variant="outline">
-          <Link to="/assistant-test">Open assistant</Link>
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {isTech ? (
+            <Button asChild variant="outline">
+              <Link to="/assistant-conversations">
+                <MessagesSquare className="me-2 h-4 w-4" />
+                View all conversations
+              </Link>
+            </Button>
+          ) : null}
+          <Button asChild variant="outline">
+            <Link to="/assistant-test">Open assistant</Link>
+          </Button>
+        </div>
       </div>
 
       <Card>

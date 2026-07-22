@@ -36,6 +36,7 @@ import Coaches from "@/pages/Coaches";
 import CoachDetail from "@/pages/CoachDetail";
 import AssistantTest from "@/pages/AssistantTest";
 import AssistantSettings from "@/pages/AssistantSettings";
+import AssistantConversations from "@/pages/AssistantConversations";
 import StripeSubscriptions from "@/pages/StripeSubscriptions";
 import StripeSubscriptionSync from "@/pages/StripeSubscriptionSync";
 import { ThemeProvider } from "@/components/ThemeProvider";
@@ -321,6 +322,7 @@ const App = () => (
               <Route path="/assistant-settings" element={<AssistantSettings />} />
             </Route>
             <Route element={<TechRoute />}>
+              <Route path="/assistant-conversations" element={<AssistantConversations />} />
               <Route path="/blogs" element={<Blogs />} />
               <Route path="/blogs/:id" element={<BlogDetail />} />
               <Route path="/blog-categories" element={<BlogCategories />} />
