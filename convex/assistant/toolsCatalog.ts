@@ -58,7 +58,7 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     label: "Get my subscription",
     summary: "Look up the signed-in user's subscription status and plan.",
     defaultDescription:
-      "Get the authenticated user's current subscription status and plan information.",
+      "Get the authenticated user's current subscription status and plan. Call only when the user specifically asks about their own subscription, current plan, renewal, cancellation status, or wants to see their subscription details. Do not call for general plans/pricing, courses, FAQ, or billing-portal requests. Calling this tool shows a subscription card in the UI.",
   },
   listActiveSubscriptionPlans: {
     label: "List subscription plans",
