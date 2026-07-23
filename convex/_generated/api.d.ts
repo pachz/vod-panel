@@ -22,6 +22,7 @@ import type * as assistant_knowledgeFiles from "../assistant/knowledgeFiles.js";
 import type * as assistant_lib from "../assistant/lib.js";
 import type * as assistant_memory from "../assistant/memory.js";
 import type * as assistant_messages from "../assistant/messages.js";
+import type * as assistant_namedInstructions from "../assistant/namedInstructions.js";
 import type * as assistant_prompt from "../assistant/prompt.js";
 import type * as assistant_promptData from "../assistant/promptData.js";
 import type * as assistant_promptRuntime from "../assistant/promptRuntime.js";
@@ -97,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   "assistant/lib": typeof assistant_lib;
   "assistant/memory": typeof assistant_memory;
   "assistant/messages": typeof assistant_messages;
+  "assistant/namedInstructions": typeof assistant_namedInstructions;
   "assistant/prompt": typeof assistant_prompt;
   "assistant/promptData": typeof assistant_promptData;
   "assistant/promptRuntime": typeof assistant_promptRuntime;

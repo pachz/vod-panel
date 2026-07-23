@@ -3,6 +3,7 @@ import { v } from "convex/values";
 export const ASSISTANT_TOOL_IDS = [
   "searchCourses",
   "searchKnowledgeBase",
+  "getNamedInstructions",
   "getMySubscription",
   "listActiveSubscriptionPlans",
   "createBillingPortalSession",
@@ -16,6 +17,7 @@ export type AssistantToolId = (typeof ASSISTANT_TOOL_IDS)[number];
 export const assistantToolIdValidator = v.union(
   v.literal("searchCourses"),
   v.literal("searchKnowledgeBase"),
+  v.literal("getNamedInstructions"),
   v.literal("getMySubscription"),
   v.literal("listActiveSubscriptionPlans"),
   v.literal("createBillingPortalSession"),
@@ -55,6 +57,12 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     summary: "Search the active spreadsheet knowledge file (FAQ, plans, contacts, etc.).",
     defaultDescription:
       "Search the currently active admin knowledge workbook (Excel/CSV sheets). Use for FAQ, policies, plan tables, contact info, and other support facts stored in that file. Always pass both queryEn and queryAr—content may be Arabic-only or English-only. Optional sheetName narrows to one sheet. Returns matching rows with column values. If nothing is returned, say you could not find it in the knowledge base. This does not render UI cards.",
+  },
+  getNamedInstructions: {
+    label: "Get named instructions",
+    summary: "Load admin-defined instruction packs by name for specialized guidance.",
+    defaultDescription:
+      "Fetch detailed admin-defined instruction packs by name. Use when the conversation matches a pack's when-to-use guidance, or when you need specialized process/policy/tone rules that are not in the main system prompt. Pass one or more exact names from the available list. Follow returned instructions for the rest of the turn. This does not render UI cards and does not replace searchKnowledgeBase for factual FAQ lookup.",
   },
   getMySubscription: {
     label: "Get my subscription",

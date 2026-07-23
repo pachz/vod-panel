@@ -482,6 +482,27 @@ export default defineSchema({
   }).index("by_user", ["userId"]),
 
   /**
+   * Named instruction packs the assistant can fetch via getNamedInstructions.
+   * Admins define multiple named bodies; the model loads them on demand.
+   */
+  assistantNamedInstructions: defineTable({
+    /** Stable key the model passes to the tool (unique, lowercase slug-like). */
+    name: v.string(),
+    /** Human-readable label in the admin panel. */
+    title: v.string(),
+    /** Full instruction text returned to the model. */
+    body: v.string(),
+    /** Short hint shown in the tool description for when to fetch this pack. */
+    whenToUse: v.string(),
+    enabled: v.boolean(),
+    sortOrder: v.number(),
+    updatedAt: v.number(),
+    updatedBy: v.optional(v.id("users")),
+  })
+    .index("by_name", ["name"])
+    .index("by_enabled_and_sortOrder", ["enabled", "sortOrder"]),
+
+  /**
    * Spreadsheet knowledge base for the assistant (Excel/CSV).
    * At most one file should be isActive at a time (enforced in mutations).
    */

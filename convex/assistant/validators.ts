@@ -84,3 +84,10 @@ export const userMemoryUpdateResultValidator = v.object({
   success: v.boolean(),
   reason: v.optional(v.string()),
 });
+
+export const namedInstructionResultValidator = v.object({
+  name: v.string(),
+  title: v.string(),
+  body: v.string(),
+  found: v.boolean(),
+});

@@ -18,6 +18,10 @@ import {
   type AssistantToolOverrides,
 } from "./toolsCatalog";
 import { buildKnowledgeSearchToolDescription } from "./knowledgeFiles";
+import {
+  buildNamedInstructionsToolDescription,
+  type NamedInstructionsToolContext,
+} from "./namedInstructions";
 
 const SETTINGS_KEY = "global" as const;
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
@@ -63,6 +67,7 @@ function normalizeToolOverrides(
 function buildToolKnowledgeList(
   overrides: AssistantToolOverrides,
   knowledgeRuntimeDescription?: string | null,
+  namedInstructionsRuntimeDescription?: string | null,
 ) {
   return ASSISTANT_TOOL_IDS.map((toolId) => {
     const catalog = ASSISTANT_TOOL_CATALOG[toolId];
@@ -70,10 +75,15 @@ function buildToolKnowledgeList(
     const descriptionAddon = override?.descriptionAddon ?? "";
     const enabled = override?.enabled !== false;
     const addonTrimmed = descriptionAddon.trim();
-    const defaultDescription =
-      toolId === "searchKnowledgeBase" && knowledgeRuntimeDescription?.trim()
-        ? knowledgeRuntimeDescription.trim()
-        : catalog.defaultDescription;
+    let defaultDescription = catalog.defaultDescription;
+    if (toolId === "searchKnowledgeBase" && knowledgeRuntimeDescription?.trim()) {
+      defaultDescription = knowledgeRuntimeDescription.trim();
+    } else if (
+      toolId === "getNamedInstructions" &&
+      namedInstructionsRuntimeDescription?.trim()
+    ) {
+      defaultDescription = namedInstructionsRuntimeDescription.trim();
+    }
     const effectiveDescription =
       addonTrimmed.length > 0
         ? `${defaultDescription}\n\nAdditional guidance:\n${addonTrimmed}`
@@ -166,11 +176,33 @@ export const getAssistantSettings = query({
       });
     }
 
+    const enabledNamedInstructions = await ctx.db
+      .query("assistantNamedInstructions")
+      .withIndex("by_enabled_and_sortOrder", (q) => q.eq("enabled", true))
+      .take(100);
+    let namedInstructionsRuntimeDescription: string | null = null;
+    if (enabledNamedInstructions.length > 0) {
+      const context: NamedInstructionsToolContext = {
+        instructions: [...enabledNamedInstructions]
+          .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+          .map((row) => ({
+            name: row.name,
+            title: row.title,
+            whenToUse: row.whenToUse,
+          })),
+      };
+      namedInstructionsRuntimeDescription = buildNamedInstructionsToolDescription(context);
+    }
+
     return {
       customInstructions: settings?.customInstructions ?? ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
       fixedInstructions: ASSISTANT_FIXED_INSTRUCTIONS,
       defaultCustomInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
-      tools: buildToolKnowledgeList(overrides, knowledgeRuntimeDescription),
+      tools: buildToolKnowledgeList(
+        overrides,
+        knowledgeRuntimeDescription,
+        namedInstructionsRuntimeDescription,
+      ),
       updatedAt: settings?.updatedAt,
     };
   },

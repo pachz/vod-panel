@@ -6,6 +6,10 @@ import { resolveAssistantUserId } from "./auth";
 import {
   buildKnowledgeSearchToolDescription,
 } from "./knowledgeFiles";
+import {
+  buildNamedInstructionsToolDescription,
+  type NamedInstructionsToolContext,
+} from "./namedInstructions";
 import { ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS } from "./prompt";
 import {
   ASSISTANT_TOOL_IDS,
@@ -18,6 +22,7 @@ import type {
   billingPortalResultValidator,
   conversationTitleUpdateResultValidator,
   courseSearchResultValidator,
+  namedInstructionResultValidator,
   renderUiCardsResultValidator,
   subscriptionToolResultValidator,
   userMemoryUpdateResultValidator,
@@ -32,6 +37,7 @@ type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
 type RenderUiCardsResult = Infer<typeof renderUiCardsResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
+type NamedInstructionResult = Infer<typeof namedInstructionResultValidator>;
 
 type KnowledgeSearchResult = {
   sheetId: Id<"assistantKnowledgeSheets">;
@@ -164,6 +170,29 @@ function createSearchKnowledgeBaseTool(description: string) {
             sheetName: input.sheetName,
             limit: input.limit,
           },
+        );
+      });
+    },
+  });
+}
+
+function createGetNamedInstructionsTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      names: z
+        .array(z.string().min(1).max(80))
+        .min(1)
+        .max(10)
+        .describe(
+          "Exact instruction pack names to load (from the available list in this tool description)",
+        ),
+    }),
+    execute: async (ctx, input): Promise<Array<NamedInstructionResult>> => {
+      return await withToolCallLogging("getNamedInstructions", input, async () => {
+        return await ctx.runQuery(
+          internal.assistant.namedInstructions.getNamedInstructionsInternal,
+          { names: input.names },
         );
       });
     },
@@ -402,10 +431,12 @@ function createUpdateUserMemoryTool(description: string) {
 export function buildAssistantTools(
   overrides?: AssistantToolOverrides | null,
   knowledgeContext?: ActiveKnowledgeToolContext | null,
+  namedInstructionsContext?: NamedInstructionsToolContext | null,
 ) {
   const tools: {
     searchCourses?: ReturnType<typeof createSearchCoursesTool>;
     searchKnowledgeBase?: ReturnType<typeof createSearchKnowledgeBaseTool>;
+    getNamedInstructions?: ReturnType<typeof createGetNamedInstructionsTool>;
     getMySubscription?: ReturnType<typeof createGetMySubscriptionTool>;
     listActiveSubscriptionPlans?: ReturnType<typeof createListActiveSubscriptionPlansTool>;
     createBillingPortalSession?: ReturnType<typeof createBillingPortalSessionTool>;
@@ -424,13 +455,23 @@ export function buildAssistantTools(
       continue;
     }
 
-    const runtimeDescription =
-      toolId === "searchKnowledgeBase" && knowledgeContext
-        ? buildKnowledgeSearchToolDescription(
-            knowledgeContext,
-            overrides?.[toolId]?.descriptionAddon,
-          )
-        : undefined;
+    // Only expose named instructions when at least one enabled pack exists.
+    if (toolId === "getNamedInstructions" && !namedInstructionsContext) {
+      continue;
+    }
+
+    let runtimeDescription: string | undefined;
+    if (toolId === "searchKnowledgeBase" && knowledgeContext) {
+      runtimeDescription = buildKnowledgeSearchToolDescription(
+        knowledgeContext,
+        overrides?.[toolId]?.descriptionAddon,
+      );
+    } else if (toolId === "getNamedInstructions" && namedInstructionsContext) {
+      runtimeDescription = buildNamedInstructionsToolDescription(
+        namedInstructionsContext,
+        overrides?.[toolId]?.descriptionAddon,
+      );
+    }
 
     const description =
       runtimeDescription ??
@@ -442,6 +483,9 @@ export function buildAssistantTools(
         break;
       case "searchKnowledgeBase":
         tools.searchKnowledgeBase = createSearchKnowledgeBaseTool(description);
+        break;
+      case "getNamedInstructions":
+        tools.getNamedInstructions = createGetNamedInstructionsTool(description);
         break;
       case "getMySubscription":
         tools.getMySubscription = createGetMySubscriptionTool(description);

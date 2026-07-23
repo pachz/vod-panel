@@ -15,7 +15,8 @@ export const streamAssistantResponse = internalAction({
   returns: v.null(),
   handler: async (ctx, args) => {
     const nowMs = Date.now();
-    const [system, toolOverrides, knowledgeContext] = await Promise.all([
+    const [system, toolOverrides, knowledgeContext, namedInstructionsContext] =
+      await Promise.all([
       ctx.runQuery(internal.assistant.promptRuntime.getSystemInstructions, {
         userId: args.userId,
         nowMs,
@@ -23,11 +24,16 @@ export const streamAssistantResponse = internalAction({
       }),
       ctx.runQuery(internal.assistant.settings.getToolOverridesInternal, {}),
       ctx.runQuery(internal.assistant.knowledgeFiles.getActiveKnowledgeToolContextInternal, {}),
+      ctx.runQuery(
+        internal.assistant.namedInstructions.getNamedInstructionsToolContextInternal,
+        {},
+      ),
     ]);
 
     const tools = buildAssistantTools(
       toolOverrides as AssistantToolOverrides,
       knowledgeContext,
+      namedInstructionsContext,
     );
 
     const result = await rehamDivaAgent.streamText(

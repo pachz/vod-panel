@@ -5,6 +5,7 @@ import type { FunctionReturnType } from "convex/server";
 import { MessagesSquare } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { KnowledgeFilesSection } from "@/components/assistant/KnowledgeFilesSection";
+import { NamedInstructionsSection } from "@/components/assistant/NamedInstructionsSection";
 import {
   Accordion,
   AccordionContent,
@@ -350,6 +351,9 @@ const AssistantSettings = () => {
                           </Button>
                         </div>
                       </div>
+                      {tool.toolId === "getNamedInstructions" ? (
+                        <NamedInstructionsSection />
+                      ) : null}
                     </AccordionContent>
                   </AccordionItem>
                 );
