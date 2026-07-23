@@ -18,6 +18,7 @@ import type {
   billingPortalResultValidator,
   conversationTitleUpdateResultValidator,
   courseSearchResultValidator,
+  renderUiCardsResultValidator,
   subscriptionToolResultValidator,
   userMemoryUpdateResultValidator,
 } from "./validators";
@@ -28,6 +29,7 @@ type CourseSearchResult = Infer<typeof courseSearchResultValidator>;
 type SubscriptionToolResult = Infer<typeof subscriptionToolResultValidator>;
 type ActiveSubscriptionPlan = Infer<typeof activeSubscriptionPlanValidator>;
 type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
+type RenderUiCardsResult = Infer<typeof renderUiCardsResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
 
@@ -236,6 +238,105 @@ function createBillingPortalSessionTool(description: string) {
   });
 }
 
+function createRenderUiCardsTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      courseIds: z
+        .array(z.string())
+        .max(10)
+        .optional()
+        .describe("Course ids from searchCourses to show as course cards"),
+      planIds: z
+        .array(z.string())
+        .max(10)
+        .optional()
+        .describe("Plan ids from listActiveSubscriptionPlans to show as plan cards"),
+      showSubscription: z
+        .boolean()
+        .optional()
+        .describe("true to show the user's subscription summary card"),
+      showBillingPortal: z
+        .boolean()
+        .optional()
+        .describe("true to show the billing-management button"),
+      language: z
+        .enum(["en", "ar"])
+        .optional()
+        .describe("Display language for course card fields"),
+    }),
+    execute: async (ctx, input): Promise<RenderUiCardsResult> => {
+      return await withToolCallLogging("renderUiCards", input, async () => {
+        const userId = await resolveAssistantUserId(ctx);
+        const nowMs = Date.now();
+        const language = input.language ?? "en";
+        const courseIds = input.courseIds ?? [];
+        const planIds = input.planIds ?? [];
+
+        const courses =
+          courseIds.length > 0
+            ? await ctx.runQuery(internal.assistant.search.getCoursesByIdsForUiCardsInternal, {
+                courseIds,
+                language,
+                userId,
+                nowMs,
+              })
+            : [];
+
+        const plans =
+          planIds.length > 0
+            ? await ctx.runQuery(
+                internal.assistant.subscription.getPlansByIdsForUiCardsInternal,
+                {
+                  planIds,
+                  userId: userId ?? undefined,
+                  nowMs,
+                },
+              )
+            : [];
+
+        let subscription: SubscriptionToolResult | null = null;
+        if (input.showSubscription) {
+          if (!userId) {
+            subscription = {
+              authenticated: false,
+              status: "none",
+              hasBillingAccount: false,
+            };
+          } else {
+            subscription = await ctx.runQuery(
+              internal.assistant.subscription.getSubscriptionForAssistant,
+              { userId, nowMs },
+            );
+          }
+        }
+
+        let billingPortalUrl: string | null = null;
+        if (input.showBillingPortal) {
+          if (userId) {
+            try {
+              const portal = await ctx.runAction(
+                internal.assistant.billing.createBillingPortalForUser,
+                { userId },
+              );
+              billingPortalUrl = portal.url;
+            } catch {
+              billingPortalUrl = null;
+            }
+          }
+        }
+
+        return {
+          courses,
+          plans,
+          subscription,
+          billingPortalUrl,
+        };
+      });
+    },
+  });
+}
+
 function createUpdateConversationTitleTool(description: string) {
   return createTool({
     description,
@@ -308,6 +409,7 @@ export function buildAssistantTools(
     getMySubscription?: ReturnType<typeof createGetMySubscriptionTool>;
     listActiveSubscriptionPlans?: ReturnType<typeof createListActiveSubscriptionPlansTool>;
     createBillingPortalSession?: ReturnType<typeof createBillingPortalSessionTool>;
+    renderUiCards?: ReturnType<typeof createRenderUiCardsTool>;
     updateConversationTitle?: ReturnType<typeof createUpdateConversationTitleTool>;
     updateUserMemory?: ReturnType<typeof createUpdateUserMemoryTool>;
   } = {};
@@ -351,6 +453,9 @@ export function buildAssistantTools(
       case "createBillingPortalSession":
         tools.createBillingPortalSession = createBillingPortalSessionTool(description);
         break;
+      case "renderUiCards":
+        tools.renderUiCards = createRenderUiCardsTool(description);
+        break;
       case "updateConversationTitle":
         tools.updateConversationTitle = createUpdateConversationTitleTool(description);
         break;
@@ -372,6 +477,6 @@ export const rehamDivaAgent = new Agent(components.agent, {
   name: "Reham Diva Assistant",
   languageModel: openai.chat(modelId),
   instructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
-  stopWhen: stepCountIs(6),
+  stopWhen: stepCountIs(8),
   tools: buildAssistantTools(),
 });

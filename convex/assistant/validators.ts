@@ -67,6 +67,13 @@ export const billingPortalResultValidator = v.object({
   url: v.string(),
 });
 
+export const renderUiCardsResultValidator = v.object({
+  courses: v.array(courseSearchResultValidator),
+  plans: v.array(activeSubscriptionPlanValidator),
+  subscription: v.union(subscriptionToolResultValidator, v.null()),
+  billingPortalUrl: v.union(v.string(), v.null()),
+});
+
 export const conversationTitleUpdateResultValidator = v.object({
   success: v.boolean(),
   title: v.optional(v.string()),

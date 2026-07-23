@@ -184,3 +184,48 @@ export const searchCoursesInternal = internalQuery({
     );
   },
 });
+
+const MAX_UI_CARD_COURSES = 10;
+
+export const getCoursesByIdsForUiCardsInternal = internalQuery({
+  args: {
+    courseIds: v.array(v.string()),
+    language: assistantLanguageValidator,
+    userId: v.union(v.id("users"), v.null()),
+    nowMs: v.number(),
+  },
+  returns: v.array(courseSearchResultValidator),
+  handler: async (ctx, args) => {
+    const results = [];
+    const seen = new Set<string>();
+
+    for (const rawId of args.courseIds.slice(0, MAX_UI_CARD_COURSES)) {
+      const id = rawId.trim();
+      if (!id || seen.has(id)) {
+        continue;
+      }
+      seen.add(id);
+
+      let course: Doc<"courses"> | null = null;
+      try {
+        course = await ctx.db.get(id as Id<"courses">);
+      } catch {
+        continue;
+      }
+
+      if (
+        !course ||
+        course.deletedAt !== undefined ||
+        course.status !== "published"
+      ) {
+        continue;
+      }
+
+      results.push(
+        await mapCourseToResult(ctx, course, args.language, args.userId, args.nowMs),
+      );
+    }
+
+    return results;
+  },
+});

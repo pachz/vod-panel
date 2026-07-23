@@ -6,6 +6,7 @@ export const ASSISTANT_TOOL_IDS = [
   "getMySubscription",
   "listActiveSubscriptionPlans",
   "createBillingPortalSession",
+  "renderUiCards",
   "updateConversationTitle",
   "updateUserMemory",
 ] as const;
@@ -18,6 +19,7 @@ export const assistantToolIdValidator = v.union(
   v.literal("getMySubscription"),
   v.literal("listActiveSubscriptionPlans"),
   v.literal("createBillingPortalSession"),
+  v.literal("renderUiCards"),
   v.literal("updateConversationTitle"),
   v.literal("updateUserMemory"),
 );
@@ -46,31 +48,37 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     label: "Search courses",
     summary: "Find published courses by topic, goal, or keywords.",
     defaultDescription:
-      "Search published Reham Diva courses by topic, goal, or keywords. Returns only courses whose title, description, or category actually match the query. An empty list means nothing relevant was found.",
+      "Search published Reham Diva courses by topic, goal, or keywords. Returns course facts (including ids) for your reasoning and text replies. Does not render UI cards—call renderUiCards with selected course ids when the user should see course cards. An empty list means nothing relevant was found.",
   },
   searchKnowledgeBase: {
     label: "Search knowledge base",
     summary: "Search the active spreadsheet knowledge file (FAQ, plans, contacts, etc.).",
     defaultDescription:
-      "Search the currently active admin knowledge workbook (Excel/CSV sheets). Use for FAQ, policies, plan tables, contact info, and other support facts stored in that file. Always pass both queryEn and queryAr—content may be Arabic-only or English-only. Optional sheetName narrows to one sheet. Returns matching rows with column values. If nothing is returned, say you could not find it in the knowledge base.",
+      "Search the currently active admin knowledge workbook (Excel/CSV sheets). Use for FAQ, policies, plan tables, contact info, and other support facts stored in that file. Always pass both queryEn and queryAr—content may be Arabic-only or English-only. Optional sheetName narrows to one sheet. Returns matching rows with column values. If nothing is returned, say you could not find it in the knowledge base. This does not render UI cards.",
   },
   getMySubscription: {
     label: "Get my subscription",
     summary: "Look up the signed-in user's subscription status and plan.",
     defaultDescription:
-      "Get the authenticated user's current subscription status and plan. Call only when the user specifically asks about their own subscription, current plan, renewal, cancellation status, or wants to see their subscription details. Do not call for general plans/pricing, courses, FAQ, or billing-portal requests. Calling this tool shows a subscription card in the UI.",
+      "Get the authenticated user's current subscription status and plan facts for your reply. Does not render UI cards—call renderUiCards with showSubscription: true when the user should see the subscription card.",
   },
   listActiveSubscriptionPlans: {
     label: "List subscription plans",
     summary: "List currently offered public subscription packages and pricing.",
     defaultDescription:
-      "List currently offered active subscription plans (packages), including prices, billing interval, and key features. Use when the user asks what plans are available, about pricing, or how packages compare. Only returns public active plans.",
+      "List currently offered active subscription plans (packages), including ids, prices, billing interval, and key features. Does not render UI cards—call renderUiCards with selected plan ids when the user should see plan cards. Only returns public active plans.",
   },
   createBillingPortalSession: {
     label: "Billing portal",
     summary: "Create a secure Stripe billing portal link for the user.",
     defaultDescription:
-      "Create a secure Stripe billing portal session URL for the authenticated user.",
+      "Create a secure Stripe billing portal session URL for the authenticated user when they want to manage billing. Prefer renderUiCards with showBillingPortal: true to show the billing button in chat; use this tool only if you need the URL without rendering UI.",
+  },
+  renderUiCards: {
+    label: "Render UI cards",
+    summary: "Show course, plan, subscription, or billing UI cards in the chat.",
+    defaultDescription:
+      "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button). Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards.",
   },
   updateConversationTitle: {
     label: "Update conversation title",

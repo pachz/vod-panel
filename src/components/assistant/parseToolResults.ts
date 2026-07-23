@@ -1,7 +1,6 @@
 import type { UIMessage } from "@convex-dev/agent/react";
 import type {
   ActiveSubscriptionPlan,
-  BillingPortalResult,
   CourseSearchResult,
   ParsedToolResults,
   SubscriptionToolResult,
@@ -44,14 +43,63 @@ function isSubscriptionToolResult(value: unknown): value is SubscriptionToolResu
   return typeof record.authenticated === "boolean" && typeof record.status === "string";
 }
 
-function isBillingPortalResult(value: unknown): value is BillingPortalResult {
+function isRenderUiCardsResult(value: unknown): value is {
+  courses: unknown;
+  plans: unknown;
+  subscription: unknown;
+  billingPortalUrl: unknown;
+} {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
-  return typeof record.url === "string" && record.url.startsWith("https://");
+  return (
+    Array.isArray(record.courses) &&
+    Array.isArray(record.plans) &&
+    "subscription" in record &&
+    "billingPortalUrl" in record
+  );
 }
 
-function extractFromPart(part: unknown, results: ParsedToolResults) {
-  if (!part || typeof part !== "object") return;
+function emptyResults(): ParsedToolResults {
+  return {
+    courses: [],
+    plans: [],
+    subscription: null,
+    billingPortalUrl: null,
+  };
+}
+
+function applyRenderUiCardsOutput(
+  output: {
+    courses: unknown;
+    plans: unknown;
+    subscription: unknown;
+    billingPortalUrl: unknown;
+  },
+  results: ParsedToolResults,
+) {
+  if (isCourseSearchResultArray(output.courses)) {
+    results.courses.push(...output.courses);
+  }
+  if (isActiveSubscriptionPlanArray(output.plans)) {
+    results.plans.push(...output.plans);
+  }
+  if (output.subscription === null) {
+    results.subscription = null;
+  } else if (isSubscriptionToolResult(output.subscription)) {
+    results.subscription = output.subscription;
+  }
+  if (output.billingPortalUrl === null) {
+    results.billingPortalUrl = null;
+  } else if (
+    typeof output.billingPortalUrl === "string" &&
+    output.billingPortalUrl.startsWith("https://")
+  ) {
+    results.billingPortalUrl = output.billingPortalUrl;
+  }
+}
+
+function getToolPartMeta(part: unknown): { toolName: string; output: unknown } | null {
+  if (!part || typeof part !== "object") return null;
   const record = part as Record<string, unknown>;
   const toolName =
     (typeof record.toolName === "string" && record.toolName) ||
@@ -64,43 +112,20 @@ function extractFromPart(part: unknown, results: ParsedToolResults) {
     record.result ??
     (record.state === "output-available" ? record.output : undefined);
 
-  if (!toolName || output === undefined) return;
-
-  if (toolName === "searchCourses" && isCourseSearchResultArray(output)) {
-    results.courses.push(...output);
-    return;
-  }
-
-  if (
-    toolName === "listActiveSubscriptionPlans" &&
-    isActiveSubscriptionPlanArray(output)
-  ) {
-    results.plans.push(...output);
-    return;
-  }
-
-  if (toolName === "getMySubscription" && isSubscriptionToolResult(output)) {
-    results.subscription = output;
-    return;
-  }
-
-  if (toolName === "createBillingPortalSession") {
-    if (isBillingPortalResult(output)) {
-      results.billingPortalUrl = output.url;
-    }
-  }
+  if (!toolName || output === undefined) return null;
+  return { toolName, output };
 }
 
+/** Cards/buttons only come from renderUiCards — never from lookup tools. */
 export function parseToolResultsFromMessage(message: UIMessage): ParsedToolResults {
-  const results: ParsedToolResults = {
-    courses: [],
-    plans: [],
-    subscription: null,
-    billingPortalUrl: null,
-  };
+  const results = emptyResults();
 
   for (const part of message.parts ?? []) {
-    extractFromPart(part, results);
+    const meta = getToolPartMeta(part);
+    if (!meta || meta.toolName !== "renderUiCards" || !isRenderUiCardsResult(meta.output)) {
+      continue;
+    }
+    applyRenderUiCardsOutput(meta.output, results);
   }
 
   return results;
