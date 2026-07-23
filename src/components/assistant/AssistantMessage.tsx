@@ -12,18 +12,12 @@ type AssistantMessageProps = {
   message: UIMessage;
 };
 
-function AssistantText({
-  message,
-  hasStructuredCards,
-}: {
-  message: UIMessage;
-  hasStructuredCards: boolean;
-}) {
+function AssistantText({ message }: { message: UIMessage }) {
   const [visibleText] = useSmoothText(message.text, {
     startStreaming: message.status === "streaming",
   });
 
-  const displayText = formatAssistantMessageText(visibleText, { hasStructuredCards });
+  const displayText = formatAssistantMessageText(visibleText);
   if (!displayText) {
     return null;
   }
@@ -35,12 +29,6 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const { t, isRTL } = useLanguage();
   const isUser = message.role === "user";
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
-  const hasStructuredCards = Boolean(
-    toolResults?.courses.length ||
-      toolResults?.plans.length ||
-      toolResults?.subscription ||
-      toolResults?.billingPortalUrl,
-  );
 
   return (
     <div
@@ -59,7 +47,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
         ) : (
           <>
-            <AssistantText message={message} hasStructuredCards={hasStructuredCards} />
+            <AssistantText message={message} />
             {toolResults?.courses.length ? (
               <div className="grid gap-3">
                 {toolResults.courses.map((course) => (
