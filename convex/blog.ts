@@ -110,20 +110,11 @@ async function markUnpublishedChanges(ctx: MutationCtx, blog: Doc<"blogs">) {
     return;
   }
 
-  const patch: {
-    hasUnpublishedChanges: boolean;
-    updatedAt: number;
-    status?: "published";
-  } = {
+  // Keep status as-is so an unpublished (draft) post is not re-published on save.
+  await ctx.db.patch("blogs", blog._id, {
     hasUnpublishedChanges: true,
     updatedAt: Date.now(),
-  };
-
-  if (blog.status === "draft") {
-    patch.status = "published";
-  }
-
-  await ctx.db.patch("blogs", blog._id, patch);
+  });
 }
 
 function resolveHasUnpublishedChanges(blog: Doc<"blogs">) {
@@ -199,7 +190,8 @@ function validatePublishable(blog: Doc<"blogs">) {
   if (!blog.simple_content.trim() || !blog.simple_content_ar.trim()) {
     throw new ConvexError({
       code: "INVALID_INPUT",
-      message: "Simple content is required in both languages before publishing.",
+      message:
+        "Excerpt is required in both languages before publishing.",
     });
   }
   if (!blog.body.trim() || !blog.body_ar.trim()) {
@@ -628,6 +620,13 @@ export const unpublishBlog = mutation({
       throw new ConvexError({
         code: "INVALID_INPUT",
         message: "This blog has never been published.",
+      });
+    }
+
+    if (blog.status !== "published") {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "This blog is already unpublished.",
       });
     }
 

@@ -1,12 +1,13 @@
 import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Check, Copy, Upload } from "lucide-react";
+import { AlertCircle, ArrowLeft, Check, Copy, EyeOff, Upload } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
 import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -23,6 +24,26 @@ import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone
 import { RichTextarea } from "@/components/RichTextarea";
 import { blogUpdateSchema } from "../../shared/validation/blog";
 import { cn } from "@/lib/utils";
+
+function getMissingPublishFields(fields: {
+  title: string;
+  titleAr: string;
+  simpleContent: string;
+  simpleContentAr: string;
+  body: string;
+  bodyAr: string;
+  hasImage: boolean;
+}): string[] {
+  const missing: string[] = [];
+  if (!fields.title.trim()) missing.push("Title (English)");
+  if (!fields.titleAr.trim()) missing.push("Title (Arabic)");
+  if (!fields.simpleContent.trim()) missing.push("Excerpt (English)");
+  if (!fields.simpleContentAr.trim()) missing.push("Excerpt (Arabic)");
+  if (!fields.body.trim()) missing.push("Full content (English)");
+  if (!fields.bodyAr.trim()) missing.push("Full content (Arabic)");
+  if (!fields.hasImage) missing.push("Featured image");
+  return missing;
+}
 
 const ShareIconButton = ({
   href,
@@ -59,6 +80,7 @@ const BlogDetail = () => {
 
   const updateBlog = useMutation(api.blog.updateBlog);
   const publishBlog = useMutation(api.blog.publishBlog);
+  const unpublishBlog = useMutation(api.blog.unpublishBlog);
   const generateImageUploadUrl = useMutation(api.blog.generateBlogImageUploadUrl);
   const updateBlogImages = useMutation(api.blog.updateBlogImages);
   const convertToJpeg = useAction(api.image.convertToJpeg);
@@ -75,6 +97,7 @@ const BlogDetail = () => {
   const [readingTimeMinutes, setReadingTimeMinutes] = useState("5");
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [isUnpublishing, setIsUnpublishing] = useState(false);
   const [initialized, setInitialized] = useState(false);
   const [linkCopied, setLinkCopied] = useState(false);
 
@@ -313,6 +336,20 @@ const BlogDetail = () => {
     }
   };
 
+  const handleUnpublish = async () => {
+    if (!blogId) return;
+
+    setIsUnpublishing(true);
+    try {
+      await unpublishBlog({ blogId });
+      toast.success("Blog unpublished.");
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      setIsUnpublishing(false);
+    }
+  };
+
   const handleCopyLink = async () => {
     if (!blog?.slug || typeof window === "undefined") return;
     const url = `${window.location.origin}/articles/${blog.slug}`;
@@ -348,17 +385,22 @@ const BlogDetail = () => {
     );
   }
 
-  const isDraft = blog.status === "draft" && !blog.publishedSnapshot;
-  const formReady =
-    title.trim().length > 0 &&
-    titleAr.trim().length > 0 &&
-    simpleContent.trim().length > 0 &&
-    simpleContentAr.trim().length > 0 &&
-    body.trim().length > 0 &&
-    bodyAr.trim().length > 0 &&
-    Boolean(imagePreviewUrl);
-  const showPublishButton = formReady && (isDraft || blog.hasUnpublishedChanges);
-  const isPublished = blog.status === "published" || Boolean(blog.publishedSnapshot);
+  const isPublished = blog.status === "published";
+  const missingPublishFields = getMissingPublishFields({
+    title,
+    titleAr,
+    simpleContent,
+    simpleContentAr,
+    body,
+    bodyAr,
+    hasImage: Boolean(imagePreviewUrl),
+  });
+  const formReady = missingPublishFields.length === 0;
+  // Drafts (including unpublished) or published posts with pending edits.
+  const canAttemptPublish = blog.status === "draft" || blog.hasUnpublishedChanges;
+  const showPublishButton = canAttemptPublish;
+  const showPublishBlockedMessage = canAttemptPublish && !formReady;
+  const showUnpublishButton = isPublished;
   const publicUrl =
     blog.slug && typeof window !== "undefined"
       ? `${window.location.origin}/articles/${blog.slug}`
@@ -398,21 +440,50 @@ const BlogDetail = () => {
         </div>
 
         <div className="flex flex-wrap gap-2">
-          <Button variant="outline" onClick={() => handleSave()} disabled={isSaving}>
+          <Button
+            variant="outline"
+            onClick={() => handleSave()}
+            disabled={isSaving || isPublishing || isUnpublishing}
+          >
             {isSaving ? "Saving…" : "Save"}
           </Button>
+          {showUnpublishButton && (
+            <Button
+              variant="outline"
+              onClick={handleUnpublish}
+              disabled={isUnpublishing || isPublishing || isSaving}
+            >
+              <EyeOff className="mr-2 h-4 w-4" />
+              {isUnpublishing ? "Unpublishing…" : "Unpublish"}
+            </Button>
+          )}
           {showPublishButton && (
-            <Button variant="cta" onClick={handlePublish} disabled={isPublishing || isSaving}>
+            <Button
+              variant="cta"
+              onClick={handlePublish}
+              disabled={!formReady || isPublishing || isUnpublishing || isSaving}
+            >
               <Upload className="mr-2 h-4 w-4" />
               {isPublishing
                 ? "Publishing…"
-                : blog.hasUnpublishedChanges
+                : isPublished && blog.hasUnpublishedChanges
                   ? "Publish changes"
                   : "Publish"}
             </Button>
           )}
         </div>
       </div>
+
+      {showPublishBlockedMessage && (
+        <Alert variant="destructive">
+          <AlertCircle className="h-4 w-4" />
+          <AlertTitle>Cannot publish yet</AlertTitle>
+          <AlertDescription>
+            This blog cannot be published. Please complete all required fields
+            before publishing: {missingPublishFields.join(", ")}.
+          </AlertDescription>
+        </Alert>
+      )}
 
       <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
         <form onSubmit={handleSave} className="space-y-6">
@@ -481,21 +552,59 @@ const BlogDetail = () => {
             </div>
           </div>
 
-          <div className="space-y-4 rounded-xl border bg-card p-6">
-            <h2 className="font-medium">Simple content (excerpt)</h2>
+          <div
+            className={cn(
+              "space-y-4 rounded-xl border bg-card p-6",
+              showPublishBlockedMessage &&
+                (!simpleContent.trim() || !simpleContentAr.trim()) &&
+                "border-destructive/50",
+            )}
+          >
+            <div className="space-y-1">
+              <h2 className="font-medium">Excerpt</h2>
+              <p className="text-sm text-muted-foreground">
+                Required in both languages before publishing.
+              </p>
+            </div>
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="simple">English</Label>
+                <Label
+                  htmlFor="simple"
+                  className={cn(
+                    showPublishBlockedMessage &&
+                      !simpleContent.trim() &&
+                      "text-destructive",
+                  )}
+                >
+                  English
+                </Label>
                 <Textarea
                   id="simple"
                   value={simpleContent}
                   onChange={(e) => setSimpleContent(e.target.value)}
                   rows={4}
                   maxLength={1000}
+                  aria-invalid={
+                    showPublishBlockedMessage && !simpleContent.trim()
+                  }
+                  className={cn(
+                    showPublishBlockedMessage &&
+                      !simpleContent.trim() &&
+                      "border-destructive focus-visible:ring-destructive",
+                  )}
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="simple-ar">Arabic</Label>
+                <Label
+                  htmlFor="simple-ar"
+                  className={cn(
+                    showPublishBlockedMessage &&
+                      !simpleContentAr.trim() &&
+                      "text-destructive",
+                  )}
+                >
+                  Arabic
+                </Label>
                 <Textarea
                   id="simple-ar"
                   value={simpleContentAr}
@@ -503,6 +612,14 @@ const BlogDetail = () => {
                   onChange={(e) => setSimpleContentAr(e.target.value)}
                   rows={4}
                   maxLength={1000}
+                  aria-invalid={
+                    showPublishBlockedMessage && !simpleContentAr.trim()
+                  }
+                  className={cn(
+                    showPublishBlockedMessage &&
+                      !simpleContentAr.trim() &&
+                      "border-destructive focus-visible:ring-destructive",
+                  )}
                 />
               </div>
             </div>
