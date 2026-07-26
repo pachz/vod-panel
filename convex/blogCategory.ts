@@ -35,7 +35,7 @@ export const listBlogCategories = query({
   args: {},
   returns: v.array(blogCategoryValidator),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const categories = await ctx.db
       .query("blogCategories")
@@ -50,7 +50,7 @@ export const listDeletedBlogCategories = query({
   args: {},
   returns: v.array(blogCategoryValidator),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const categories = await ctx.db.query("blogCategories").collect();
 
@@ -68,7 +68,7 @@ export const createBlogCategory = mutation({
   },
   returns: v.id("blogCategories"),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const validated = validateBlogCategoryInput(args);
 
@@ -109,7 +109,7 @@ export const updateBlogCategory = mutation({
   },
   returns: v.null(),
   handler: async (ctx, { id, ...args }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const category = await ctx.db.get("blogCategories", id);
     if (!category || category.deletedAt !== undefined) {
@@ -158,7 +158,7 @@ export const deleteBlogCategory = mutation({
   args: { id: v.id("blogCategories") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const category = await ctx.db.get("blogCategories", id);
     if (!category || category.deletedAt !== undefined) {
@@ -187,7 +187,7 @@ export const restoreBlogCategory = mutation({
   args: { id: v.id("blogCategories") },
   returns: v.null(),
   handler: async (ctx, { id }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const category = await ctx.db.get("blogCategories", id);
     if (!category || category.deletedAt === undefined) {

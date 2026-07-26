@@ -303,7 +303,7 @@ export const listBlogs = query({
     continueCursor: v.union(v.string(), v.null()),
   }),
   handler: async (ctx, { search, status, categoryId, limit = 12, cursor }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const numItems = Math.min(Math.max(limit, 1), 100);
 
@@ -409,7 +409,7 @@ export const getBlog = query({
     v.null(),
   ),
   handler: async (ctx, { blogId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const blog = await ctx.db.get("blogs", blogId);
     if (!blog || blog.deletedAt !== undefined) {
@@ -461,7 +461,7 @@ export const createBlog = mutation({
   },
   returns: v.id("blogs"),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const data = validateCreateInput({
       title: args.title,
       titleAr: args.titleAr,
@@ -516,7 +516,7 @@ export const updateBlog = mutation({
   },
   returns: v.null(),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const blog = await getBlogOrThrow(ctx, args.blogId);
     const data = validateUpdateInput({
       title: args.title,
@@ -573,7 +573,7 @@ export const publishBlog = mutation({
   args: { blogId: v.id("blogs") },
   returns: v.null(),
   handler: async (ctx, { blogId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const blog = await getBlogOrThrow(ctx, blogId);
     validatePublishable(blog);
 
@@ -616,7 +616,7 @@ export const unpublishBlog = mutation({
   args: { blogId: v.id("blogs") },
   returns: v.null(),
   handler: async (ctx, { blogId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const blog = await getBlogOrThrow(ctx, blogId);
 
     if (!blog.publishedSnapshot) {
@@ -645,7 +645,7 @@ export const deleteBlog = mutation({
   args: { blogId: v.id("blogs") },
   returns: v.null(),
   handler: async (ctx, { blogId }) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const blog = await getBlogOrThrow(ctx, blogId);
 
     await adjustBlogCount(ctx, blog.category_id, -1);
@@ -662,7 +662,7 @@ export const generateBlogImageUploadUrl = mutation({
   args: {},
   returns: v.string(),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     return await ctx.storage.generateUploadUrl();
   },
 });
@@ -678,7 +678,7 @@ export const updateBlogImages = mutation({
     thumbnailImageUrl: v.optional(v.string()),
   }),
   handler: async (ctx, args) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
     const blog = await getBlogOrThrow(ctx, args.blogId);
 
     const imageUrl = await ctx.storage.getUrl(args.imageStorageId);
@@ -766,7 +766,7 @@ export const getPublishedBlog = query({
   returns: v.union(publishedBlogDetailValidator, v.null()),
   handler: async (ctx, { slug, relatedSeed }) => {
     // Tech-only while blogs are in preview.
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const blog = await ctx.db
       .query("blogs")
@@ -894,7 +894,7 @@ export const listPublishedBlogs = query({
   }),
   handler: async (ctx, { search, categoryId, limit = 12, cursor }) => {
     // Tech-only while blogs are in preview.
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const numItems = Math.min(Math.max(limit, 1), 100);
 
@@ -1017,7 +1017,7 @@ export const listPublishedBlogCategoryIds = query({
   args: {},
   returns: v.array(v.id("blogCategories")),
   handler: async (ctx) => {
-    await requireUser(ctx, { requireTech: true });
+    await requireUser(ctx, { requireGodOrTech: true });
 
     const blogs = await ctx.db
       .query("blogs")

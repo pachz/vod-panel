@@ -322,11 +322,13 @@ const App = () => (
               <Route path="/assistant-test" element={<AssistantTest />} />
               <Route path="/assistant-settings" element={<AssistantSettings />} />
             </Route>
-            <Route element={<TechRoute />}>
-              <Route path="/assistant-conversations" element={<AssistantConversations />} />
+            <Route element={<GodOrTechRoute />}>
               <Route path="/blogs" element={<Blogs />} />
               <Route path="/blogs/:id" element={<BlogDetail />} />
               <Route path="/blog-categories" element={<BlogCategories />} />
+            </Route>
+            <Route element={<TechRoute />}>
+              <Route path="/assistant-conversations" element={<AssistantConversations />} />
               <Route path="/legacy-subscription-migration" element={<LegacySubscriptionMigration />} />
               <Route path="/stripe-subscriptions" element={<StripeSubscriptions />} />
               <Route path="/stripe-subscriptions/sync" element={<StripeSubscriptionSync />} />

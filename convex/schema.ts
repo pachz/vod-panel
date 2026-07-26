@@ -608,7 +608,7 @@ export default defineSchema({
       filterFields: ["fileId", "sheetId"],
     }),
 
-  /** Blog categories (separate from course categories). Tech-only for now. */
+  /** Blog categories (separate from course categories). Admin or tech. */
   blogCategories: defineTable({
     name: v.string(),
     name_ar: v.string(),

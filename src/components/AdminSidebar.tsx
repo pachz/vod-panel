@@ -56,9 +56,12 @@ const adminMenuItems: MenuItem[] = [
   { title: "Payments", url: "/payments", icon: CreditCard },
 ];
 
-const techMenuItems: MenuItem[] = [
+const blogMenuItems: MenuItem[] = [
   { title: "Blogs", url: "/blogs", icon: Newspaper },
   { title: "Blog Categories", url: "/blog-categories", icon: Tags },
+];
+
+const techMenuItems: MenuItem[] = [
   { title: "Browse Blogs", url: "/articles", icon: PanelsTopLeft },
   { title: "Stripe subscriptions", url: "/stripe-subscriptions", icon: CreditCard },
   { title: "Legacy migration", url: "/legacy-subscription-migration", icon: ArrowRightLeft },
@@ -107,6 +110,7 @@ export function AdminSidebar() {
         icon: ClipboardList,
       });
       items.push(...assistantMenuItems);
+      items.push(...blogMenuItems);
     }
     if (isTech) {
       items.push(...techMenuItems);
