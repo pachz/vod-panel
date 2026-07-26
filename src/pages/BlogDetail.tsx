@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useParams } from "react-router-dom";
-import { ArrowLeft, Upload } from "lucide-react";
+import { ArrowLeft, Check, Copy, Upload } from "lucide-react";
 import { useAction, useMutation, useQuery } from "convex/react";
+import { format } from "date-fns";
 import { toast } from "sonner";
 
 import { api } from "../../convex/_generated/api";
@@ -21,6 +22,32 @@ import {
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
 import { RichTextarea } from "@/components/RichTextarea";
 import { blogUpdateSchema } from "../../shared/validation/blog";
+import { cn } from "@/lib/utils";
+
+const ShareIconButton = ({
+  href,
+  label,
+  className,
+  children,
+}: {
+  href: string;
+  label: string;
+  className: string;
+  children: ReactNode;
+}) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={label}
+    className={cn(
+      "flex h-9 w-9 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90",
+      className,
+    )}
+  >
+    {children}
+  </a>
+);
 
 const BlogDetail = () => {
   const { id } = useParams<{ id: string }>();
@@ -49,6 +76,7 @@ const BlogDetail = () => {
   const [isSaving, setIsSaving] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
   const [initialized, setInitialized] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
 
   const [imagePreviewUrl, setImagePreviewUrl] = useState<string | null>(null);
   const [uploadState, setUploadState] = useState<ImageUploadState>({
@@ -87,8 +115,8 @@ const BlogDetail = () => {
   const resetTempPreview = () => {
     if (tempImageUrlRef.current) {
       URL.revokeObjectURL(tempImageUrlRef.current);
-      tempImageUrlRef.current = null;
     }
+    tempImageUrlRef.current = null;
   };
 
   const getErrorMessage = (error: unknown) => {
@@ -285,6 +313,19 @@ const BlogDetail = () => {
     }
   };
 
+  const handleCopyLink = async () => {
+    if (!blog?.slug || typeof window === "undefined") return;
+    const url = `${window.location.origin}/articles/${blog.slug}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      toast.success("Link copied.");
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link.");
+    }
+  };
+
   if (blog === undefined) {
     return (
       <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
@@ -317,6 +358,20 @@ const BlogDetail = () => {
     bodyAr.trim().length > 0 &&
     Boolean(imagePreviewUrl);
   const showPublishButton = formReady && (isDraft || blog.hasUnpublishedChanges);
+  const isPublished = blog.status === "published" || Boolean(blog.publishedSnapshot);
+  const publicUrl =
+    blog.slug && typeof window !== "undefined"
+      ? `${window.location.origin}/articles/${blog.slug}`
+      : null;
+  const encodedUrl = publicUrl ? encodeURIComponent(publicUrl) : "";
+  const encodedTitle = encodeURIComponent(blog.title);
+  const savedCategoryName =
+    categories?.find((c) => c._id === blog.category_id)?.name ?? "—";
+  const savedAuthorName =
+    coaches?.find((c) => c._id === blog.author_id)?.name ?? "—";
+
+  const formatTimestamp = (value?: number) =>
+    value ? format(new Date(value), "d MMM yyyy, HH:mm") : "—";
 
   return (
     <div className="space-y-6">
@@ -359,140 +414,257 @@ const BlogDetail = () => {
         </div>
       </div>
 
-      <form onSubmit={handleSave} className="space-y-6">
-        <div className="max-w-3xl space-y-4 rounded-xl border bg-card p-6">
-          <h2 className="font-medium">Basic information</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="title">Title (EN)</Label>
-              <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem] xl:grid-cols-[minmax(0,1fr)_20rem]">
+        <form onSubmit={handleSave} className="space-y-6">
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <h2 className="font-medium">Basic information</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="title">Title (EN)</Label>
+                <Input id="title" value={title} onChange={(e) => setTitle(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="title-ar">Title (AR)</Label>
+                <Input
+                  id="title-ar"
+                  value={titleAr}
+                  dir="rtl"
+                  onChange={(e) => setTitleAr(e.target.value)}
+                />
+              </div>
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="title-ar">Title (AR)</Label>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label>Category</Label>
+                <Select value={categoryId} onValueChange={setCategoryId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select category" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(categories ?? []).map((c) => (
+                      <SelectItem key={c._id} value={c._id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Author (coach)</Label>
+                <Select value={authorId} onValueChange={setAuthorId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Select author" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {(coaches ?? []).map((c) => (
+                      <SelectItem key={c._id} value={c._id}>
+                        {c.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="max-w-xs space-y-2">
+              <Label htmlFor="reading-time">Reading time (minutes)</Label>
               <Input
-                id="title-ar"
-                value={titleAr}
-                dir="rtl"
-                onChange={(e) => setTitleAr(e.target.value)}
+                id="reading-time"
+                type="number"
+                min={1}
+                max={120}
+                value={readingTimeMinutes}
+                onChange={(e) => setReadingTimeMinutes(e.target.value)}
               />
+              <p className="text-sm text-muted-foreground">Shown as &ldquo;N min read&rdquo;.</p>
             </div>
           </div>
 
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={categoryId} onValueChange={setCategoryId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select category" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(categories ?? []).map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Author (coach)</Label>
-              <Select value={authorId} onValueChange={setAuthorId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Select author" />
-                </SelectTrigger>
-                <SelectContent>
-                  {(coaches ?? []).map((c) => (
-                    <SelectItem key={c._id} value={c._id}>
-                      {c.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <h2 className="font-medium">Simple content (excerpt)</h2>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="simple">English</Label>
+                <Textarea
+                  id="simple"
+                  value={simpleContent}
+                  onChange={(e) => setSimpleContent(e.target.value)}
+                  rows={4}
+                  maxLength={1000}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="simple-ar">Arabic</Label>
+                <Textarea
+                  id="simple-ar"
+                  value={simpleContentAr}
+                  dir="rtl"
+                  onChange={(e) => setSimpleContentAr(e.target.value)}
+                  rows={4}
+                  maxLength={1000}
+                />
+              </div>
             </div>
           </div>
 
-          <div className="max-w-xs space-y-2">
-            <Label htmlFor="reading-time">Reading time (minutes)</Label>
-            <Input
-              id="reading-time"
-              type="number"
-              min={1}
-              max={120}
-              value={readingTimeMinutes}
-              onChange={(e) => setReadingTimeMinutes(e.target.value)}
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <h2 className="font-medium">Full rich content</h2>
+            <RichTextarea
+              id="body"
+              label="English body"
+              value={body}
+              onChange={setBody}
+              rows={8}
+              maxLength={100_000}
             />
-            <p className="text-sm text-muted-foreground">Shown as &ldquo;N min read&rdquo;.</p>
+            <RichTextarea
+              id="body-ar"
+              label="Arabic body"
+              value={bodyAr}
+              onChange={setBodyAr}
+              dir="rtl"
+              rows={8}
+              maxLength={100_000}
+            />
           </div>
-        </div>
 
-        <div className="max-w-3xl space-y-4 rounded-xl border bg-card p-6">
-          <h2 className="font-medium">Simple content (excerpt)</h2>
-          <div className="grid gap-4 sm:grid-cols-2">
-            <div className="space-y-2">
-              <Label htmlFor="simple">English</Label>
-              <Textarea
-                id="simple"
-                value={simpleContent}
-                onChange={(e) => setSimpleContent(e.target.value)}
-                rows={4}
-                maxLength={1000}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="simple-ar">Arabic</Label>
-              <Textarea
-                id="simple-ar"
-                value={simpleContentAr}
-                dir="rtl"
-                onChange={(e) => setSimpleContentAr(e.target.value)}
-                rows={4}
-                maxLength={1000}
-              />
-            </div>
+          <div className="space-y-4 rounded-xl border bg-card p-6">
+            <h2 className="font-medium">Featured image</h2>
+            <ImageDropzone
+              id="blog-image"
+              label="Blog image"
+              helperText="Upload a featured image. A thumbnail is generated automatically."
+              aspectRatioClass="aspect-video"
+              value={imagePreviewUrl}
+              onSelectFile={handleImageSelect}
+              uploadState={uploadState}
+              disabled={isSaving}
+            />
           </div>
-        </div>
 
-        <div className="max-w-3xl space-y-4 rounded-xl border bg-card p-6">
-          <h2 className="font-medium">Full rich content</h2>
-          <RichTextarea
-            id="body"
-            label="English body"
-            value={body}
-            onChange={setBody}
-            rows={8}
-            maxLength={100_000}
-          />
-          <RichTextarea
-            id="body-ar"
-            label="Arabic body"
-            value={bodyAr}
-            onChange={setBodyAr}
-            dir="rtl"
-            rows={8}
-            maxLength={100_000}
-          />
-        </div>
+          <div className="flex gap-2">
+            <Button type="submit" variant="outline" disabled={isSaving}>
+              {isSaving ? "Saving…" : "Save"}
+            </Button>
+          </div>
+        </form>
 
-        <div className="max-w-3xl space-y-4 rounded-xl border bg-card p-6">
-          <h2 className="font-medium">Featured image</h2>
-          <ImageDropzone
-            id="blog-image"
-            label="Blog image"
-            helperText="Upload a featured image. A thumbnail is generated automatically."
-            aspectRatioClass="aspect-video"
-            value={imagePreviewUrl}
-            onSelectFile={handleImageSelect}
-            uploadState={uploadState}
-            disabled={isSaving}
-          />
-        </div>
+        <aside className="space-y-4 lg:sticky lg:top-24 lg:self-start">
+          <section className="space-y-4 rounded-xl border bg-card p-5">
+            <h2 className="text-sm font-semibold tracking-tight">Post information</h2>
+            <dl className="space-y-3 text-sm">
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="text-end font-medium">
+                  {blog.status === "published" ? "Published" : "Draft"}
+                  {blog.hasUnpublishedChanges ? (
+                    <span className="mt-0.5 block text-xs font-normal text-amber-600">
+                      Unpublished changes
+                    </span>
+                  ) : null}
+                </dd>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Category</dt>
+                <dd className="text-end font-medium">{savedCategoryName}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Author</dt>
+                <dd className="text-end font-medium">{savedAuthorName}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Published</dt>
+                <dd className="text-end font-medium">{formatTimestamp(blog.publishedAt)}</dd>
+              </div>
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Last updated</dt>
+                <dd className="text-end font-medium">{formatTimestamp(blog.updatedAt)}</dd>
+              </div>
+              {blog.slug ? (
+                <div className="flex items-start justify-between gap-3">
+                  <dt className="text-muted-foreground">Slug</dt>
+                  <dd className="break-all text-end font-medium">{blog.slug}</dd>
+                </div>
+              ) : null}
+            </dl>
+          </section>
 
-        <div className="flex gap-2">
-          <Button type="submit" variant="outline" disabled={isSaving}>
-            {isSaving ? "Saving…" : "Save"}
-          </Button>
-        </div>
-      </form>
+          <section className="space-y-4 rounded-xl border bg-card p-5">
+            <h2 className="text-sm font-semibold tracking-tight">Share</h2>
+            {isPublished && publicUrl ? (
+              <>
+                <p className="break-all text-xs text-muted-foreground">{publicUrl}</p>
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={handleCopyLink}
+                >
+                  {linkCopied ? (
+                    <>
+                      <Check className="mr-2 h-4 w-4" />
+                      Copied
+                    </>
+                  ) : (
+                    <>
+                      <Copy className="mr-2 h-4 w-4" />
+                      Copy link
+                    </>
+                  )}
+                </Button>
+                <div className="flex flex-wrap items-center gap-2">
+                  <ShareIconButton
+                    href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`}
+                    label="Share on Facebook"
+                    className="bg-[#1877F2]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M14 8.2h2.4V5H14c-2.3 0-3.8 1.6-3.8 4v1.7H8.2V14h2V19h2.8v-5h2.2l.4-3.3h-2.6V9.2c0-.6.3-1 1-1z" />
+                    </svg>
+                  </ShareIconButton>
+                  <ShareIconButton
+                    href={`https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`}
+                    label="Share on X"
+                    className="bg-[#1DA1F2]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+                      <path d="M22 5.8c-.7.3-1.5.5-2.3.6A4 4 0 0 0 21.4 4c-.8.5-1.7.8-2.6 1a4 4 0 0 0-6.8 3.6A11.3 11.3 0 0 1 3.1 4.7a4 4 0 0 0 1.2 5.3 4 4 0 0 1-1.8-.5v.1a4 4 0 0 0 3.2 3.9 4 4 0 0 1-1.8.1 4 4 0 0 0 3.7 2.8A8 8 0 0 1 2 18.1a11.3 11.3 0 0 0 6.1 1.8c7.3 0 11.3-6.1 11.3-11.3v-.5A8 8 0 0 0 22 5.8z" />
+                    </svg>
+                  </ShareIconButton>
+                  <ShareIconButton
+                    href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`}
+                    label="Share on LinkedIn"
+                    className="bg-[#0A66C2]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+                      <path d="M6.5 9H3.7v11.3h2.8V9zM5.1 3.7a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2zM20.3 13.2c0-2.4-1.3-4-3.7-4-1.3 0-2.2.7-2.6 1.4h-.1V9H11.3c0 .8 0 11.3 0 11.3h2.8v-6.3c0-.3 0-.7.1-1 .3-.7.9-1.4 2-1.4 1.4 0 2 1.1 2 2.6v6.1h2.8v-6.3z" />
+                    </svg>
+                  </ShareIconButton>
+                  <ShareIconButton
+                    href={`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`}
+                    label="Share on WhatsApp"
+                    className="bg-[#25D366]"
+                  >
+                    <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                      <path d="M12 2.1A9.9 9.9 0 0 0 3.4 17l-1.1 4 4.1-1.1A9.9 9.9 0 1 0 12 2.1zm5.7 14.1c-.2.7-1.3 1.2-1.8 1.3-.5.1-1 .2-3.4-.7-3-1.1-5-4.4-5.1-4.6-.2-.2-1.3-1.8-1.3-3.4 0-1.6.8-2.4 1.1-2.7.3-.3.7-.4 1-.4h.7c.2 0 .5 0 .7.6l1 2.4c.1.2.1.4 0 .6l-.4.7c-.1.2-.3.4-.1.7.2.3.7 1.2 1.5 1.9 1 .9 1.9 1.2 2.2 1.3.3.1.5.1.7-.1l.8-1.1c.2-.2.4-.2.7-.1l2.1 1c.2.1.4.2.5.3.1.2.1.8-.2 1.5z" />
+                    </svg>
+                  </ShareIconButton>
+                </div>
+                <Button variant="ghost" size="sm" className="w-full" asChild>
+                  <Link to={`/articles/${blog.slug}`} target="_blank">
+                    Open public page
+                  </Link>
+                </Button>
+              </>
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                Publish this post to get a public link for sharing.
+              </p>
+            )}
+          </section>
+        </aside>
+      </div>
     </div>
   );
 };

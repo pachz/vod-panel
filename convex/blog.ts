@@ -10,6 +10,7 @@ import {
   type BlogUpdateInput,
 } from "../shared/validation/blog";
 import { requireUser } from "./utils/auth";
+import { generateUniqueSlug, slugify } from "./utils/slug";
 
 type BlogSnapshot = {
   title: string;
@@ -171,6 +172,23 @@ function parsePublishedSnapshot(raw: string): BlogSnapshot | null {
   }
 }
 
+/** Deterministic shuffle so queries stay cache-friendly (no Math.random / Date.now). */
+function seededShuffle<T>(items: T[], seed: number): T[] {
+  const result = [...items];
+  let state = seed >>> 0;
+  const next = () => {
+    state = (Math.imul(1664525, state) + 1013904223) >>> 0;
+    return state / 0x100000000;
+  };
+  for (let i = result.length - 1; i > 0; i -= 1) {
+    const j = Math.floor(next() * (i + 1));
+    const tmp = result[i]!;
+    result[i] = result[j]!;
+    result[j] = tmp;
+  }
+  return result;
+}
+
 function validatePublishable(blog: Doc<"blogs">) {
   if (!blog.title.trim() || !blog.title_ar.trim()) {
     throw new ConvexError({
@@ -203,6 +221,7 @@ const blogListItemValidator = v.object({
   _creationTime: v.number(),
   title: v.string(),
   title_ar: v.string(),
+  slug: v.optional(v.string()),
   status: v.union(v.literal("draft"), v.literal("published")),
   category_id: v.id("blogCategories"),
   categoryName: v.string(),
@@ -223,6 +242,7 @@ const publishedBlogCardValidator = v.object({
   _id: v.id("blogs"),
   title: v.string(),
   title_ar: v.string(),
+  slug: v.string(),
   simple_content: v.string(),
   simple_content_ar: v.string(),
   thumbnail_image_url: v.optional(v.string()),
@@ -258,6 +278,7 @@ async function enrichAdminListItem(
     _creationTime: blog._creationTime,
     title: blog.title,
     title_ar: blog.title_ar,
+    slug: blog.slug,
     status: blog.status,
     category_id: blog.category_id,
     categoryName: category?.name ?? "Unknown",
@@ -373,6 +394,7 @@ export const getBlog = query({
       _creationTime: v.number(),
       title: v.string(),
       title_ar: v.string(),
+      slug: v.optional(v.string()),
       simple_content: v.string(),
       simple_content_ar: v.string(),
       body: v.string(),
@@ -414,6 +436,7 @@ export const getBlog = query({
       _creationTime: blog._creationTime,
       title: blog.title,
       title_ar: blog.title_ar,
+      slug: blog.slug,
       simple_content: blog.simple_content,
       simple_content_ar: blog.simple_content_ar,
       body: blog.body,
@@ -454,11 +477,17 @@ export const createBlog = mutation({
     await getCategoryOrThrow(ctx, args.categoryId);
     await getAuthorOrThrow(ctx, args.authorId);
 
+    const baseSlug = slugify(data.title);
+    const slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
+      fallbackSlug: "blog",
+    });
+
     const now = Date.now();
     const blogId = await ctx.db.insert("blogs", {
       title: data.title,
       title_ar: data.titleAr,
       title_search: buildTitleSearch(data.title, data.titleAr),
+      slug,
       simple_content: "",
       simple_content_ar: "",
       body: "",
@@ -516,10 +545,21 @@ export const updateBlog = mutation({
 
     await markUnpublishedChanges(ctx, blog);
 
+    // Keep existing slug stable for SEO; only create one if missing.
+    let slug = blog.slug;
+    if (!slug) {
+      const baseSlug = slugify(data.title);
+      slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
+        excludeId: args.blogId,
+        fallbackSlug: "blog",
+      });
+    }
+
     await ctx.db.patch("blogs", args.blogId, {
       title: data.title,
       title_ar: data.titleAr,
       title_search: buildTitleSearch(data.title, data.titleAr),
+      slug,
       simple_content: data.simpleContent,
       simple_content_ar: data.simpleContentAr,
       body: data.body,
@@ -542,6 +582,15 @@ export const publishBlog = mutation({
     const blog = await getBlogOrThrow(ctx, blogId);
     validatePublishable(blog);
 
+    let slug = blog.slug;
+    if (!slug) {
+      const baseSlug = slugify(blog.title);
+      slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
+        excludeId: blogId,
+        fallbackSlug: "blog",
+      });
+    }
+
     const now = Date.now();
     const snapshot = buildSnapshot(blog);
     const patch: {
@@ -549,12 +598,14 @@ export const publishBlog = mutation({
       hasUnpublishedChanges: boolean;
       updatedAt: number;
       status: "published";
+      slug: string;
       publishedAt?: number;
     } = {
       publishedSnapshot: snapshot,
       hasUnpublishedChanges: false,
       updatedAt: now,
       status: "published",
+      slug,
     };
 
     if (blog.publishedAt === undefined) {
@@ -667,6 +718,7 @@ const publishedBlogDetailValidator = v.object({
   _id: v.id("blogs"),
   title: v.string(),
   title_ar: v.string(),
+  slug: v.string(),
   simple_content: v.string(),
   simple_content_ar: v.string(),
   body: v.string(),
@@ -695,6 +747,7 @@ const publishedBlogDetailValidator = v.object({
       _id: v.id("blogs"),
       title: v.string(),
       title_ar: v.string(),
+      slug: v.string(),
       thumbnail_image_url: v.optional(v.string()),
       image_url: v.optional(v.string()),
       publishedAt: v.optional(v.number()),
@@ -703,18 +756,27 @@ const publishedBlogDetailValidator = v.object({
 });
 
 export const getPublishedBlog = query({
-  args: { blogId: v.id("blogs") },
+  args: {
+    slug: v.string(),
+    /** Client-provided seed for related-post shuffle (stable for a page visit). */
+    relatedSeed: v.optional(v.number()),
+  },
   returns: v.union(publishedBlogDetailValidator, v.null()),
-  handler: async (ctx, { blogId }) => {
+  handler: async (ctx, { slug, relatedSeed }) => {
     // Tech-only while blogs are in preview.
     await requireUser(ctx, { requireTech: true });
 
-    const blog = await ctx.db.get("blogs", blogId);
+    const blog = await ctx.db
+      .query("blogs")
+      .withIndex("slug", (q) => q.eq("slug", slug))
+      .unique();
+
     if (
       !blog ||
       blog.deletedAt !== undefined ||
       blog.status !== "published" ||
-      !blog.publishedSnapshot
+      !blog.publishedSnapshot ||
+      !blog.slug
     ) {
       return null;
     }
@@ -742,42 +804,52 @@ export const getPublishedBlog = query({
           .eq("status", "published"),
       )
       .order("desc")
-      .take(8);
+      .take(50);
 
-    const related: Array<{
+    const relatedPool: Array<{
       _id: Id<"blogs">;
       title: string;
       title_ar: string;
+      slug: string;
       thumbnail_image_url?: string;
       image_url?: string;
       publishedAt?: number;
     }> = [];
 
     for (const candidate of relatedCandidates) {
-      if (candidate._id === blogId || !candidate.publishedSnapshot) {
+      if (
+        candidate._id === blog._id ||
+        !candidate.publishedSnapshot ||
+        !candidate.slug
+      ) {
         continue;
       }
       const relatedSnapshot = parsePublishedSnapshot(candidate.publishedSnapshot);
       if (!relatedSnapshot) {
         continue;
       }
-      related.push({
+      relatedPool.push({
         _id: candidate._id,
         title: relatedSnapshot.title,
         title_ar: relatedSnapshot.title_ar,
+        slug: candidate.slug,
         thumbnail_image_url: relatedSnapshot.thumbnail_image_url,
         image_url: relatedSnapshot.image_url,
         publishedAt: candidate.publishedAt,
       });
-      if (related.length >= 3) {
-        break;
-      }
     }
+
+    const seed =
+      relatedSeed !== undefined && Number.isFinite(relatedSeed)
+        ? Math.abs(Math.floor(relatedSeed))
+        : blog._creationTime;
+    const related = seededShuffle(relatedPool, seed).slice(0, 5);
 
     return {
       _id: blog._id,
       title: snapshot.title,
       title_ar: snapshot.title_ar,
+      slug: blog.slug,
       simple_content: snapshot.simple_content,
       simple_content_ar: snapshot.simple_content_ar,
       body: snapshot.body,
@@ -864,6 +936,7 @@ export const listPublishedBlogs = query({
       _id: Id<"blogs">;
       title: string;
       title_ar: string;
+      slug: string;
       simple_content: string;
       simple_content_ar: string;
       thumbnail_image_url?: string;
@@ -886,7 +959,7 @@ export const listPublishedBlogs = query({
     }> = [];
 
     for (const blog of results.page) {
-      if (!blog.publishedSnapshot) {
+      if (!blog.publishedSnapshot || !blog.slug) {
         continue;
       }
       const snapshot = parsePublishedSnapshot(blog.publishedSnapshot);
@@ -907,6 +980,7 @@ export const listPublishedBlogs = query({
         _id: blog._id,
         title: snapshot.title,
         title_ar: snapshot.title_ar,
+        slug: blog.slug,
         simple_content: snapshot.simple_content,
         simple_content_ar: snapshot.simple_content_ar,
         thumbnail_image_url: snapshot.thumbnail_image_url,

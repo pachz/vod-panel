@@ -217,7 +217,7 @@ const UserBlogs = () => {
             return (
               <Link
                 key={blog._id}
-                to={`/articles/${blog._id}`}
+                to={`/articles/${blog.slug}`}
                 className="group block overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-shadow hover:shadow-md"
               >
                 <article>

@@ -4,10 +4,9 @@ import { format } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { ChevronRight, Clock } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import type { ReactNode } from "react";
+import { useMemo, type ReactNode } from "react";
 
 import { api } from "../../convex/_generated/api";
-import type { Id } from "../../convex/_generated/dataModel";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
 
@@ -37,14 +36,17 @@ const ShareIconButton = ({
 );
 
 const UserBlogDetail = () => {
-  const { id } = useParams<{ id: string }>();
-  const blogId = id as Id<"blogs"> | undefined;
+  const { slug } = useParams<{ slug: string }>();
   const { language, t, isRTL } = useLanguage();
   const dateLocale = language === "ar" ? arSA : enUS;
+  const relatedSeed = useMemo(
+    () => Math.floor(Math.random() * 1_000_000_000),
+    [slug],
+  );
 
   const blog = useQuery(
     api.blog.getPublishedBlog,
-    blogId ? { blogId } : "skip",
+    slug ? { slug, relatedSeed } : "skip",
   );
 
   if (blog === undefined) {
@@ -296,7 +298,7 @@ const UserBlogDetail = () => {
                   return (
                     <li key={related._id}>
                       <Link
-                        to={`/articles/${related._id}`}
+                        to={`/articles/${related.slug}`}
                         className="group flex gap-3"
                       >
                         <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl bg-muted">

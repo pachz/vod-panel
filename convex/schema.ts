@@ -628,6 +628,8 @@ export default defineSchema({
     title_ar: v.string(),
     /** Combined title + title_ar for full-text search. */
     title_search: v.optional(v.string()),
+    /** URL slug derived from English title; unique. Optional until backfilled. */
+    slug: v.optional(v.string()),
     /** Short excerpt / summary. */
     simple_content: v.string(),
     simple_content_ar: v.string(),
@@ -660,6 +662,7 @@ export default defineSchema({
       "status",
     ])
     .index("by_author", ["author_id", "deletedAt"])
+    .index("slug", ["slug"])
     .searchIndex("search_title", {
       searchField: "title_search",
       filterFields: ["deletedAt", "category_id", "status"],

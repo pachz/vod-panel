@@ -2,6 +2,7 @@ import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { buildCourseSearchFields } from "./lib/courseSearchText";
+import { generateUniqueSlug, slugify } from "./utils/slug";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
@@ -133,9 +134,31 @@ export const assignLessonsToDefaultChapter = migrations.define({
   },
 });
 
+/**
+ * Backfill unique URL slugs for blogs from English titles.
+ */
+export const backfillBlogSlugs = migrations.define({
+  table: "blogs",
+  migrateOne: async (ctx, blog) => {
+    if (blog.slug !== undefined && blog.slug.length > 0) return;
+
+    const baseSlug = slugify(blog.title);
+    const slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
+      excludeId: blog._id,
+      fallbackSlug: "blog",
+    });
+    return { slug };
+  },
+});
+
 /** Backfill course search_text_en / search_text_ar. */
 export const runBackfillCoursesSearchText = migrations.runner(
   internal.migrations.backfillCoursesSearchText,
+);
+
+/** Backfill blog URL slugs. */
+export const runBackfillBlogSlugs = migrations.runner(
+  internal.migrations.backfillBlogSlugs,
 );
 
 /** Run all migrations in order. */
@@ -147,4 +170,5 @@ export const runAll = migrations.runner([
   internal.migrations.normalizeAuthAccountEmails,
   internal.migrations.addDefaultChaptersToCourses,
   internal.migrations.assignLessonsToDefaultChapter,
+  internal.migrations.backfillBlogSlugs,
 ]);

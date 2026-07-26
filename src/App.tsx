@@ -344,7 +344,7 @@ const App = () => (
           <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
           <Route element={<TechRoute />}>
             <Route path="/articles" element={<UserBlogs />} />
-            <Route path="/articles/:id" element={<UserBlogDetail />} />
+            <Route path="/articles/:slug" element={<UserBlogDetail />} />
           </Route>
         </Route>
         {/* Root redirect */}
