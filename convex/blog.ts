@@ -403,6 +403,7 @@ export const getBlog = query({
       publishedAt: v.optional(v.number()),
       createdAt: v.number(),
       updatedAt: v.number(),
+      viewCount: v.number(),
       canPublish: v.boolean(),
     }),
     v.null(),
@@ -445,6 +446,7 @@ export const getBlog = query({
       publishedAt: blog.publishedAt,
       createdAt: blog.createdAt,
       updatedAt: blog.updatedAt,
+      viewCount: blog.view_count ?? 0,
       canPublish,
     };
   },

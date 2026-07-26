@@ -725,6 +725,12 @@ const BlogDetail = () => {
                 <dt className="text-muted-foreground">Last updated</dt>
                 <dd className="text-end font-medium">{formatTimestamp(blog.updatedAt)}</dd>
               </div>
+              <div className="flex items-start justify-between gap-3">
+                <dt className="text-muted-foreground">Views</dt>
+                <dd className="text-end font-medium">
+                  {blog.viewCount.toLocaleString()}
+                </dd>
+              </div>
               {blog.slug ? (
                 <div className="flex items-start justify-between gap-3">
                   <dt className="text-muted-foreground">Slug</dt>
