@@ -38,7 +38,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     >
       <div
         className={cn(
-          "max-w-[92%] space-y-3 rounded-2xl px-4 py-3 sm:max-w-[80%]",
+          "min-w-0 max-w-[92%] space-y-3 overflow-hidden rounded-2xl px-4 py-3 sm:max-w-[80%]",
           isUser
             ? "bg-primary text-primary-foreground"
             : "border border-border/60 bg-card/90 text-foreground",
@@ -76,7 +76,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
               />
             ) : null}
             {toolResults?.callToActions.length ? (
-              <div className="grid gap-2 pt-1">
+              <div className="grid min-w-0 gap-2 pt-1">
                 {toolResults.callToActions.map((cta, index) => (
                   <AssistantCtaButton
                     key={`${cta.url}-${index}`}
