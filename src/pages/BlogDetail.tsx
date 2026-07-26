@@ -24,6 +24,7 @@ import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone
 import { RichTextarea } from "@/components/RichTextarea";
 import { blogUpdateSchema } from "../../shared/validation/blog";
 import { cn } from "@/lib/utils";
+import { getLocalizedSiteUrl } from "@/lib/siteUrl";
 
 function getMissingPublishFields(fields: {
   title: string;
@@ -353,8 +354,8 @@ const BlogDetail = () => {
   };
 
   const handleCopyLink = async () => {
-    if (!blog?.slug || typeof window === "undefined") return;
-    const url = `${window.location.origin}/articles/${blog.slug}`;
+    if (!blog?.slug) return;
+    const url = getLocalizedSiteUrl("en", `blog/${blog.slug}`);
     try {
       await navigator.clipboard.writeText(url);
       setLinkCopied(true);
@@ -411,10 +412,9 @@ const BlogDetail = () => {
   const showPublishButton = canAttemptPublish;
   const showPublishBlockedMessage = canAttemptPublish && !formReady;
   const showUnpublishButton = isPublished;
-  const publicUrl =
-    blog.slug && typeof window !== "undefined"
-      ? `${window.location.origin}/articles/${blog.slug}`
-      : null;
+  const publicUrl = blog.slug
+    ? getLocalizedSiteUrl("en", `blog/${blog.slug}`)
+    : null;
   const encodedUrl = publicUrl ? encodeURIComponent(publicUrl) : "";
   const encodedTitle = encodeURIComponent(blog.title);
   const savedCategoryName =
@@ -802,9 +802,9 @@ const BlogDetail = () => {
                   </ShareIconButton>
                 </div>
                 <Button variant="ghost" size="sm" className="w-full" asChild>
-                  <Link to={`/articles/${blog.slug}`} target="_blank">
+                  <a href={publicUrl} target="_blank" rel="noopener noreferrer">
                     Open public page
-                  </Link>
+                  </a>
                 </Button>
               </>
             ) : (

@@ -357,7 +357,7 @@ const Blogs = () => {
         onClick: (blog) => {
           if (!blog.slug) return;
           window.open(
-            getLocalizedSiteUrl("en", `blogs/${blog.slug}`),
+            getLocalizedSiteUrl("en", `blog/${blog.slug}`),
             "_blank",
             "noopener,noreferrer",
           );

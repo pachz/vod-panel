@@ -8,6 +8,7 @@ import { useMemo, type ReactNode } from "react";
 import { api } from "../../convex/_generated/api";
 import { MarkdownContent } from "@/components/MarkdownContent";
 import { useLanguage } from "@/hooks/use-language";
+import { getLocalizedSiteUrl } from "@/lib/siteUrl";
 import { cn } from "@/lib/utils";
 
 const ShareIconButton = ({
@@ -81,8 +82,10 @@ const UserBlogDetail = () => {
     ? format(new Date(blog.publishedAt), "d MMM yyyy", { locale: dateLocale })
     : null;
 
-  const shareUrl =
-    typeof window !== "undefined" ? window.location.href : "";
+  const shareUrl = getLocalizedSiteUrl(
+    language === "ar" ? "ar" : "en",
+    `blog/${blog.slug}`,
+  );
   const encodedUrl = encodeURIComponent(shareUrl);
   const encodedTitle = encodeURIComponent(title);
 
