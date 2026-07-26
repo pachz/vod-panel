@@ -1,4 +1,4 @@
-import { mutation, query } from "./_generated/server";
+import { internalQuery, mutation, query } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import type { Doc, Id } from "./_generated/dataModel";
@@ -11,6 +11,7 @@ import {
 } from "../shared/validation/blog";
 import { requireUser } from "./utils/auth";
 import { generateUniqueSlug, slugify } from "./utils/slug";
+import { getBlogViewCounts, blogViewCountsValidator } from "./blogViews";
 
 type BlogSnapshot = {
   title: string;
@@ -1032,5 +1033,332 @@ export const listPublishedBlogCategoryIds = query({
       }
     }
     return Array.from(ids);
+  },
+});
+
+const landingBlogCardValidator = v.object({
+  id: v.id("blogs"),
+  slug: v.string(),
+  titleEn: v.string(),
+  titleAr: v.string(),
+  excerptEn: v.string(),
+  excerptAr: v.string(),
+  thumbnailImageUrl: v.union(v.string(), v.null()),
+  imageUrl: v.union(v.string(), v.null()),
+  readingTimeMinutes: v.number(),
+  publishedAt: v.union(v.number(), v.null()),
+  viewCount: v.number(),
+  category: v.object({
+    id: v.id("blogCategories"),
+    nameEn: v.string(),
+    nameAr: v.string(),
+    color: v.string(),
+  }),
+  author: v.object({
+    id: v.id("coaches"),
+    nameEn: v.string(),
+    nameAr: v.string(),
+    profileThumbnailUrl: v.union(v.string(), v.null()),
+    profileImageUrl: v.union(v.string(), v.null()),
+  }),
+});
+
+const landingBlogDetailValidator = v.object({
+  id: v.id("blogs"),
+  slug: v.string(),
+  titleEn: v.string(),
+  titleAr: v.string(),
+  excerptEn: v.string(),
+  excerptAr: v.string(),
+  bodyEn: v.string(),
+  bodyAr: v.string(),
+  thumbnailImageUrl: v.union(v.string(), v.null()),
+  imageUrl: v.union(v.string(), v.null()),
+  readingTimeMinutes: v.number(),
+  publishedAt: v.union(v.number(), v.null()),
+  views: blogViewCountsValidator,
+  category: v.object({
+    id: v.id("blogCategories"),
+    nameEn: v.string(),
+    nameAr: v.string(),
+    color: v.string(),
+  }),
+  author: v.object({
+    id: v.id("coaches"),
+    nameEn: v.string(),
+    nameAr: v.string(),
+    descriptionEn: v.string(),
+    descriptionAr: v.string(),
+    profileThumbnailUrl: v.union(v.string(), v.null()),
+    profileImageUrl: v.union(v.string(), v.null()),
+  }),
+  related: v.array(
+    v.object({
+      id: v.id("blogs"),
+      slug: v.string(),
+      titleEn: v.string(),
+      titleAr: v.string(),
+      thumbnailImageUrl: v.union(v.string(), v.null()),
+      imageUrl: v.union(v.string(), v.null()),
+      publishedAt: v.union(v.number(), v.null()),
+      viewCount: v.number(),
+    }),
+  ),
+});
+
+type LandingBlogCard = {
+  id: Id<"blogs">;
+  slug: string;
+  titleEn: string;
+  titleAr: string;
+  excerptEn: string;
+  excerptAr: string;
+  thumbnailImageUrl: string | null;
+  imageUrl: string | null;
+  readingTimeMinutes: number;
+  publishedAt: number | null;
+  viewCount: number;
+  category: {
+    id: Id<"blogCategories">;
+    nameEn: string;
+    nameAr: string;
+    color: string;
+  };
+  author: {
+    id: Id<"coaches">;
+    nameEn: string;
+    nameAr: string;
+    profileThumbnailUrl: string | null;
+    profileImageUrl: string | null;
+  };
+};
+
+async function toLandingBlogCard(
+  ctx: QueryCtx,
+  blog: Doc<"blogs">,
+): Promise<LandingBlogCard | null> {
+  if (!blog.publishedSnapshot || !blog.slug) {
+    return null;
+  }
+  const snapshot = parsePublishedSnapshot(blog.publishedSnapshot);
+  if (!snapshot) {
+    return null;
+  }
+
+  const [category, author] = await Promise.all([
+    ctx.db.get("blogCategories", snapshot.category_id),
+    ctx.db.get("coaches", snapshot.author_id),
+  ]);
+
+  if (
+    !category ||
+    category.deletedAt !== undefined ||
+    !author ||
+    author.deletedAt !== undefined
+  ) {
+    return null;
+  }
+
+  return {
+    id: blog._id,
+    slug: blog.slug,
+    titleEn: snapshot.title,
+    titleAr: snapshot.title_ar,
+    excerptEn: snapshot.simple_content,
+    excerptAr: snapshot.simple_content_ar,
+    thumbnailImageUrl: snapshot.thumbnail_image_url ?? null,
+    imageUrl: snapshot.image_url ?? null,
+    readingTimeMinutes: snapshot.reading_time_minutes,
+    publishedAt: blog.publishedAt ?? null,
+    viewCount: blog.view_count ?? 0,
+    category: {
+      id: category._id,
+      nameEn: category.name,
+      nameAr: category.name_ar,
+      color: category.color,
+    },
+    author: {
+      id: author._id,
+      nameEn: author.name,
+      nameAr: author.name_ar,
+      profileThumbnailUrl: author.profile_thumbnail_url ?? null,
+      profileImageUrl: author.profile_image_url ?? null,
+    },
+  };
+}
+
+/** Public landing API: published blogs (no Convex auth; gated by LANDING_SECRET in HTTP). */
+export const listLandingBlogs = internalQuery({
+  args: {
+    limit: v.optional(v.number()),
+    categoryId: v.optional(v.id("blogCategories")),
+  },
+  returns: v.array(landingBlogCardValidator),
+  handler: async (ctx, args): Promise<Array<LandingBlogCard>> => {
+    const limit = Math.min(
+      Math.max(Math.floor(args.limit ?? 200), 1),
+      200,
+    );
+    const categoryId = args.categoryId;
+
+    const blogs =
+      categoryId !== undefined
+        ? await ctx.db
+            .query("blogs")
+            .withIndex("by_deletedAt_category_status", (q) =>
+              q
+                .eq("deletedAt", undefined)
+                .eq("category_id", categoryId)
+                .eq("status", "published"),
+            )
+            .order("desc")
+            .take(limit)
+        : await ctx.db
+            .query("blogs")
+            .withIndex("by_deletedAt_status", (q) =>
+              q.eq("deletedAt", undefined).eq("status", "published"),
+            )
+            .order("desc")
+            .take(limit);
+
+    const page: Array<LandingBlogCard> = [];
+    for (const blog of blogs) {
+      const card = await toLandingBlogCard(ctx, blog);
+      if (card) {
+        page.push(card);
+      }
+    }
+    return page;
+  },
+});
+
+/** Public landing API: published blog detail by slug. */
+export const getLandingBlogBySlug = internalQuery({
+  args: {
+    slug: v.string(),
+    relatedSeed: v.optional(v.number()),
+    /** Client/HTTP-provided instant for current day/week/month buckets. */
+    atMs: v.number(),
+  },
+  returns: v.union(landingBlogDetailValidator, v.null()),
+  handler: async (ctx, { slug, relatedSeed, atMs }) => {
+    const blog = await ctx.db
+      .query("blogs")
+      .withIndex("slug", (q) => q.eq("slug", slug))
+      .unique();
+
+    if (
+      !blog ||
+      blog.deletedAt !== undefined ||
+      blog.status !== "published" ||
+      !blog.publishedSnapshot ||
+      !blog.slug
+    ) {
+      return null;
+    }
+
+    const snapshot = parsePublishedSnapshot(blog.publishedSnapshot);
+    if (!snapshot) {
+      return null;
+    }
+
+    const [category, author, views] = await Promise.all([
+      ctx.db.get("blogCategories", snapshot.category_id),
+      ctx.db.get("coaches", snapshot.author_id),
+      getBlogViewCounts(ctx, blog._id, atMs),
+    ]);
+
+    if (
+      !category ||
+      category.deletedAt !== undefined ||
+      !author ||
+      author.deletedAt !== undefined
+    ) {
+      return null;
+    }
+
+    const relatedCandidates = await ctx.db
+      .query("blogs")
+      .withIndex("by_deletedAt_category_status", (q) =>
+        q
+          .eq("deletedAt", undefined)
+          .eq("category_id", snapshot.category_id)
+          .eq("status", "published"),
+      )
+      .order("desc")
+      .take(50);
+
+    const relatedPool: Array<{
+      id: Id<"blogs">;
+      slug: string;
+      titleEn: string;
+      titleAr: string;
+      thumbnailImageUrl: string | null;
+      imageUrl: string | null;
+      publishedAt: number | null;
+      viewCount: number;
+    }> = [];
+
+    for (const candidate of relatedCandidates) {
+      if (
+        candidate._id === blog._id ||
+        !candidate.publishedSnapshot ||
+        !candidate.slug
+      ) {
+        continue;
+      }
+      const relatedSnapshot = parsePublishedSnapshot(candidate.publishedSnapshot);
+      if (!relatedSnapshot) {
+        continue;
+      }
+      relatedPool.push({
+        id: candidate._id,
+        slug: candidate.slug,
+        titleEn: relatedSnapshot.title,
+        titleAr: relatedSnapshot.title_ar,
+        thumbnailImageUrl: relatedSnapshot.thumbnail_image_url ?? null,
+        imageUrl: relatedSnapshot.image_url ?? null,
+        publishedAt: candidate.publishedAt ?? null,
+        viewCount: candidate.view_count ?? 0,
+      });
+    }
+
+    const seed =
+      relatedSeed !== undefined && Number.isFinite(relatedSeed)
+        ? Math.abs(Math.floor(relatedSeed))
+        : blog._creationTime;
+    const related = seededShuffle(relatedPool, seed).slice(0, 5);
+
+    return {
+      id: blog._id,
+      slug: blog.slug,
+      titleEn: snapshot.title,
+      titleAr: snapshot.title_ar,
+      excerptEn: snapshot.simple_content,
+      excerptAr: snapshot.simple_content_ar,
+      bodyEn: snapshot.body,
+      bodyAr: snapshot.body_ar,
+      thumbnailImageUrl: snapshot.thumbnail_image_url ?? null,
+      imageUrl: snapshot.image_url ?? null,
+      readingTimeMinutes: snapshot.reading_time_minutes,
+      publishedAt: blog.publishedAt ?? null,
+      views,
+      category: {
+        id: category._id,
+        nameEn: category.name,
+        nameAr: category.name_ar,
+        color: category.color,
+      },
+      author: {
+        id: author._id,
+        nameEn: author.name,
+        nameAr: author.name_ar,
+        descriptionEn: author.description,
+        descriptionAr: author.description_ar,
+        profileThumbnailUrl: author.profile_thumbnail_url ?? null,
+        profileImageUrl: author.profile_image_url ?? null,
+      },
+      related,
+    };
   },
 });

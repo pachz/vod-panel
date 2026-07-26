@@ -649,6 +649,8 @@ export default defineSchema({
     /** True when draft edits differ from the published snapshot. */
     hasUnpublishedChanges: v.optional(v.boolean()),
     publishedAt: v.optional(v.number()),
+    /** Denormalized all-time view count (source of truth also in blogViewBuckets). */
+    view_count: v.optional(v.number()),
     createdAt: v.number(),
     updatedAt: v.number(),
     deletedAt: v.optional(v.number()),
@@ -667,4 +669,31 @@ export default defineSchema({
       searchField: "title_search",
       filterFields: ["deletedAt", "category_id", "status"],
     }),
+
+  /**
+   * Time-bucketed blog view counters.
+   * granularity + periodKey:
+   * - total / "all"
+   * - day / "YYYY-MM-DD" (UTC)
+   * - week / "YYYY-Www" (ISO week, UTC)
+   * - month / "YYYY-MM" (UTC)
+   */
+  blogViewBuckets: defineTable({
+    blogId: v.id("blogs"),
+    granularity: v.union(
+      v.literal("total"),
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+    ),
+    periodKey: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_blog_granularity_period", [
+      "blogId",
+      "granularity",
+      "periodKey",
+    ])
+    .index("by_granularity_period", ["granularity", "periodKey"]),
 });

@@ -3,6 +3,7 @@ import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { ensureSeedAccount } from "./seed";
 import { internal } from "./_generated/api";
+import type { Id } from "./_generated/dataModel";
 
 const http = httpRouter();
 
@@ -558,6 +559,247 @@ http.route({
             error instanceof Error
               ? error.message
               : "Failed to load course details",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/blogs",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const url = new URL(request.url);
+    const limitParam = url.searchParams.get("limit");
+    const parsedLimit =
+      limitParam === null ? NaN : Number.parseInt(limitParam, 10);
+    const limit = Number.isFinite(parsedLimit)
+      ? Math.min(Math.max(parsedLimit, 1), 200)
+      : 200;
+    const categoryIdParam = url.searchParams.get("categoryId");
+    const categoryId = categoryIdParam
+      ? (categoryIdParam as Id<"blogCategories">)
+      : undefined;
+
+    try {
+      const blogs = await ctx.runQuery(internal.blog.listLandingBlogs, {
+        limit,
+        categoryId,
+      });
+
+      return new Response(JSON.stringify({ blogs }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing blogs endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error ? error.message : "Failed to load blogs",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
+http.route({
+  pathPrefix: "/landing/blog/",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const url = new URL(request.url);
+    const segments = url.pathname.split("/").filter(Boolean);
+    const slug = segments.length >= 3 ? segments[segments.length - 1] : null;
+
+    if (!slug) {
+      return new Response(JSON.stringify({ error: "Missing blog slug" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    const relatedSeedParam = url.searchParams.get("relatedSeed");
+    const parsedRelatedSeed =
+      relatedSeedParam === null
+        ? undefined
+        : Number.parseInt(relatedSeedParam, 10);
+    const relatedSeed =
+      parsedRelatedSeed !== undefined && Number.isFinite(parsedRelatedSeed)
+        ? parsedRelatedSeed
+        : undefined;
+
+    try {
+      const blog = await ctx.runQuery(internal.blog.getLandingBlogBySlug, {
+        slug: decodeURIComponent(slug),
+        relatedSeed,
+        atMs: Date.now(),
+      });
+
+      if (!blog) {
+        return new Response(JSON.stringify({ error: "Blog not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify(blog), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "public, max-age=60",
+        },
+      });
+    } catch (error) {
+      console.error("Landing blog detail endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to load blog details",
+        }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/blogs/view",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    if (!landingSecret) {
+      console.error("LANDING_SECRET env var is missing");
+      return new Response(
+        JSON.stringify({ error: "Landing endpoint not configured" }),
+        {
+          status: 500,
+          headers: { "Content-Type": "application/json" },
+        },
+      );
+    }
+
+    const headerSecret =
+      request.headers.get("landing-secret") ??
+      request.headers.get("LANDING_SECRET");
+
+    if (!headerSecret || headerSecret !== landingSecret) {
+      return new Response(JSON.stringify({ error: "Unauthorized" }), {
+        status: 401,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    let slug: string | null = null;
+    const url = new URL(request.url);
+    slug = url.searchParams.get("slug");
+
+    if (!slug) {
+      try {
+        const body: unknown = await request.json();
+        if (
+          typeof body === "object" &&
+          body !== null &&
+          "slug" in body &&
+          typeof (body as { slug: unknown }).slug === "string"
+        ) {
+          slug = (body as { slug: string }).slug;
+        }
+      } catch {
+        // ignore JSON parse errors; slug may be missing
+      }
+    }
+
+    if (!slug || !slug.trim()) {
+      return new Response(JSON.stringify({ error: "Missing blog slug" }), {
+        status: 400,
+        headers: { "Content-Type": "application/json" },
+      });
+    }
+
+    try {
+      const result = await ctx.runMutation(
+        internal.blogViews.recordBlogViewBySlug,
+        { slug: slug.trim() },
+      );
+
+      if (!result) {
+        return new Response(JSON.stringify({ error: "Blog not found" }), {
+          status: 404,
+          headers: { "Content-Type": "application/json" },
+        });
+      }
+
+      return new Response(JSON.stringify(result), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      });
+    } catch (error) {
+      console.error("Landing blog view endpoint error:", error);
+      return new Response(
+        JSON.stringify({
+          error:
+            error instanceof Error
+              ? error.message
+              : "Failed to record blog view",
         }),
         {
           status: 500,
