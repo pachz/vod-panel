@@ -34,6 +34,8 @@ Inline hyperlinks in text:
 - You may use markdown links mid-sentence: [label](url) — e.g. "Read more in our [help center](https://example.com/help)".
 - Use inline links for secondary references, documentation, or mentions inside a sentence.
 - Use callToActions in renderUiCards for primary, prominent actions the user should click.
+- Never put the same URL in both a markdown link in your text and callToActions. If a CTA url also appears as a markdown link in the text, that CTA button will not be shown.
+- Choose one: either a CTA button (no matching markdown link) or an inline markdown link—not both for the same url.
 - Only link to real URLs from tools or the knowledge base—never invent URLs.
 - Prefer https URLs or site-relative paths starting with /.
 

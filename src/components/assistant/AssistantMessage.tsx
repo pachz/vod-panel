@@ -7,6 +7,7 @@ import { BillingPortalButton } from "./BillingPortalButton";
 import { AssistantCtaButton } from "./AssistantCtaButton";
 import { parseToolResultsFromMessage } from "./parseToolResults";
 import { AssistantRichText } from "./formatAssistantText";
+import { filterCallToActionsNotDuplicatedInText } from "./assistantLinks";
 import { useLanguage } from "@/hooks/use-language";
 
 type AssistantMessageProps = {
@@ -30,6 +31,10 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const { t, isRTL } = useLanguage();
   const isUser = message.role === "user";
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
+  const visibleCallToActions =
+    toolResults?.callToActions.length
+      ? filterCallToActionsNotDuplicatedInText(toolResults.callToActions, message.text)
+      : [];
 
   return (
     <div
@@ -75,9 +80,9 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 label={t("assistantManageSubscription")}
               />
             ) : null}
-            {toolResults?.callToActions.length ? (
+            {visibleCallToActions.length ? (
               <div className="grid min-w-0 gap-2 pt-1">
-                {toolResults.callToActions.map((cta, index) => (
+                {visibleCallToActions.map((cta, index) => (
                   <AssistantCtaButton
                     key={`${cta.url}-${index}`}
                     text={cta.text}
