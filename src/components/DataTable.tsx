@@ -29,6 +29,8 @@ export interface TableAction<T> {
   onClick: (item: T) => void;
   variant?: "default" | "destructive" | "outline" | "secondary" | "ghost" | "link";
   className?: string;
+  /** When provided, the action is only rendered for items that return true. */
+  isVisible?: (item: T) => boolean;
 }
 
 interface DataTableProps<T> {
@@ -148,6 +150,9 @@ export function DataTable<T>({
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       {actions.map((action, index) => {
+                        if (action.isVisible && !action.isVisible(item)) {
+                          return null;
+                        }
                         const Icon = action.icon;
                         return (
                           <Tooltip key={index}>

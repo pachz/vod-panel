@@ -42,12 +42,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { blogCreateSchema } from "../../shared/validation/blog";
+import { getLocalizedSiteUrl } from "@/lib/siteUrl";
 
 type BlogListItem = {
   _id: Id<"blogs">;
   _creationTime: number;
   title: string;
   title_ar: string;
+  slug?: string;
   status: "draft" | "published";
   category_id: Id<"blogCategories">;
   categoryName: string;
@@ -351,7 +353,15 @@ const Blogs = () => {
       {
         icon: Eye,
         label: "View blog",
-        onClick: (blog) => navigate(`/blogs/${blog._id}`),
+        isVisible: (blog) => blog.status === "published" && Boolean(blog.slug),
+        onClick: (blog) => {
+          if (!blog.slug) return;
+          window.open(
+            getLocalizedSiteUrl("en", `blogs/${blog.slug}`),
+            "_blank",
+            "noopener,noreferrer",
+          );
+        },
       },
       {
         icon: Pencil,
