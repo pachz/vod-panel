@@ -116,7 +116,10 @@ export function AdminSidebar() {
       items.push(...techMenuItems);
     }
     if (items.length > 0) {
-      items.push(takeTestsMenuItem);
+      // Take Tests is a member feature; keep it for tech-only panels, not admins.
+      if (!isAdmin) {
+        items.push(takeTestsMenuItem);
+      }
       return items;
     }
     return memberMenuItems;
