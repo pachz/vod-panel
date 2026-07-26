@@ -109,7 +109,9 @@ const BlogDetail = () => {
   const tempImageUrlRef = useRef<string | null>(null);
 
   useEffect(() => {
-    if (!blog || initialized) return;
+    if (!blog || categories === undefined || coaches === undefined || initialized) {
+      return;
+    }
     setTitle(blog.title);
     setTitleAr(blog.title_ar);
     setSimpleContent(blog.simple_content);
@@ -121,7 +123,7 @@ const BlogDetail = () => {
     setReadingTimeMinutes(String(blog.reading_time_minutes));
     setImagePreviewUrl(blog.image_url ?? blog.thumbnail_image_url ?? null);
     setInitialized(true);
-  }, [blog, initialized]);
+  }, [blog, categories, coaches, initialized]);
 
   useEffect(() => {
     setInitialized(false);
@@ -363,7 +365,7 @@ const BlogDetail = () => {
     }
   };
 
-  if (blog === undefined) {
+  if (blog === undefined || categories === undefined || coaches === undefined) {
     return (
       <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
         Loading blog…
@@ -381,6 +383,14 @@ const BlogDetail = () => {
           </Link>
         </Button>
         <p className="text-muted-foreground">Blog not found.</p>
+      </div>
+    );
+  }
+
+  if (!initialized) {
+    return (
+      <div className="rounded-xl border bg-card p-8 text-center text-muted-foreground">
+        Loading blog…
       </div>
     );
   }
@@ -508,31 +518,48 @@ const BlogDetail = () => {
             <div className="grid gap-4 sm:grid-cols-2">
               <div className="space-y-2">
                 <Label>Category</Label>
-                <Select value={categoryId} onValueChange={setCategoryId}>
+                <Select
+                  value={categoryId || undefined}
+                  onValueChange={setCategoryId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select category" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(categories ?? []).map((c) => (
+                    {categories.map((c) => (
                       <SelectItem key={c._id} value={c._id}>
                         {c.name}
                       </SelectItem>
                     ))}
+                    {categoryId &&
+                      !categories.some((c) => c._id === categoryId) && (
+                        <SelectItem value={categoryId}>
+                          Current category (unavailable)
+                        </SelectItem>
+                      )}
                   </SelectContent>
                 </Select>
               </div>
               <div className="space-y-2">
                 <Label>Author (coach)</Label>
-                <Select value={authorId} onValueChange={setAuthorId}>
+                <Select
+                  value={authorId || undefined}
+                  onValueChange={setAuthorId}
+                >
                   <SelectTrigger>
                     <SelectValue placeholder="Select author" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(coaches ?? []).map((c) => (
+                    {coaches.map((c) => (
                       <SelectItem key={c._id} value={c._id}>
                         {c.name}
                       </SelectItem>
                     ))}
+                    {authorId && !coaches.some((c) => c._id === authorId) && (
+                      <SelectItem value={authorId}>
+                        Current author (unavailable)
+                      </SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
               </div>

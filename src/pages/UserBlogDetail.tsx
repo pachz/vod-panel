@@ -3,10 +3,10 @@ import { useQuery } from "convex/react";
 import { format } from "date-fns";
 import { arSA, enUS } from "date-fns/locale";
 import { ChevronRight, Clock } from "lucide-react";
-import ReactMarkdown from "react-markdown";
 import { useMemo, type ReactNode } from "react";
 
 import { api } from "../../convex/_generated/api";
+import { MarkdownContent } from "@/components/MarkdownContent";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
 
@@ -196,7 +196,8 @@ const UserBlogDetail = () => {
             isRTL && "prose-rtl",
           )}
         >
-          <ReactMarkdown
+          <MarkdownContent
+            value={body}
             components={{
               p: ({ children }) => (
                 <p className="mb-5 text-[1.05rem] leading-8 text-muted-foreground last:mb-0">
@@ -219,10 +220,14 @@ const UserBlogDetail = () => {
                 </h3>
               ),
               ul: ({ children }) => (
-                <ul className="mb-5 list-disc space-y-2 ps-5 text-muted-foreground">{children}</ul>
+                <ul className="mb-5 list-disc space-y-2 ps-5 text-muted-foreground">
+                  {children}
+                </ul>
               ),
               ol: ({ children }) => (
-                <ol className="mb-5 list-decimal space-y-2 ps-5 text-muted-foreground">{children}</ol>
+                <ol className="mb-5 list-decimal space-y-2 ps-5 text-muted-foreground">
+                  {children}
+                </ol>
               ),
               li: ({ children }) => (
                 <li className="text-[1.05rem] leading-8 text-muted-foreground">{children}</li>
@@ -239,9 +244,7 @@ const UserBlogDetail = () => {
                 </blockquote>
               ),
             }}
-          >
-            {body}
-          </ReactMarkdown>
+          />
         </article>
 
         <aside className="space-y-6 lg:sticky lg:top-24 lg:self-start">

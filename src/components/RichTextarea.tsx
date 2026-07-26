@@ -1,8 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import type { ComponentType, ReactNode } from "react";
-import { Bold, Italic, List, Maximize2, Quote, Type, Edit, Eye } from "lucide-react";
-import ReactMarkdown from "react-markdown";
+import type { ComponentType } from "react";
+import {
+  AlignCenter,
+  AlignJustify,
+  AlignLeft,
+  AlignRight,
+  Bold,
+  Edit,
+  Eye,
+  Italic,
+  List,
+  Maximize2,
+  Quote,
+  Type,
+} from "lucide-react";
 
+import { MarkdownContent } from "@/components/MarkdownContent";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -14,9 +27,18 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
 import { Tabs, TabsContent } from "@/components/ui/tabs";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
+import {
+  applyTextAlignment,
+  type TextAlign,
+} from "@/lib/markdownAlignment";
+import { cn } from "@/lib/utils";
 
 type FormattingAction = "bold" | "italic" | "list" | "quote" | "heading";
 
@@ -49,6 +71,17 @@ const FORMATTING_BUTTONS: Array<{
   { action: "list", icon: List, label: "Bulleted list" },
 ];
 
+const ALIGNMENT_BUTTONS: Array<{
+  align: TextAlign;
+  icon: ComponentType<{ className?: string }>;
+  label: string;
+}> = [
+  { align: "left", icon: AlignLeft, label: "Align left" },
+  { align: "center", icon: AlignCenter, label: "Align center" },
+  { align: "right", icon: AlignRight, label: "Align right" },
+  { align: "justify", icon: AlignJustify, label: "Justify" },
+];
+
 export const RichTextarea = ({
   id,
   label,
@@ -71,15 +104,17 @@ export const RichTextarea = ({
   const [activeTab, setActiveTab] = useState<"edit" | "preview">("edit");
   const dialogTextareaRef = useRef<HTMLTextAreaElement | null>(null);
 
-  const handleDialogOpen = useCallback((open: boolean) => {
-    if (open) {
-      // Save the current value as previous when opening
-      setPreviousValue(value ?? "");
-      setEditingValue(value ?? "");
-      setActiveTab("edit");
-    }
-    setIsDialogOpen(open);
-  }, [value]);
+  const handleDialogOpen = useCallback(
+    (open: boolean) => {
+      if (open) {
+        setPreviousValue(value ?? "");
+        setEditingValue(value ?? "");
+        setActiveTab("edit");
+      }
+      setIsDialogOpen(open);
+    },
+    [value],
+  );
 
   const handleSave = useCallback(() => {
     onChange(editingValue);
@@ -87,19 +122,20 @@ export const RichTextarea = ({
   }, [editingValue, onChange]);
 
   const handleCancel = useCallback(() => {
-    // Revert to previous value
     setEditingValue(previousValue);
     setIsDialogOpen(false);
   }, [previousValue]);
 
-  const handleDialogClose = useCallback((open: boolean) => {
-    if (!open) {
-      // If closing without explicit save/cancel, revert
-      handleCancel();
-    } else {
-      setIsDialogOpen(open);
-    }
-  }, [handleCancel]);
+  const handleDialogClose = useCallback(
+    (open: boolean) => {
+      if (!open) {
+        handleCancel();
+      } else {
+        setIsDialogOpen(open);
+      }
+    },
+    [handleCancel],
+  );
 
   useEffect(() => {
     if (!isDialogOpen) {
@@ -118,224 +154,115 @@ export const RichTextarea = ({
     });
   }, [isDialogOpen]);
 
-  // Sync editing value when value prop changes (but not when dialog is open)
   useEffect(() => {
     if (!isDialogOpen) {
       setEditingValue(value ?? "");
     }
   }, [value, isDialogOpen]);
 
-  const applyFormatting = useCallback(
-    (action: FormattingAction) => {
-      const textarea = dialogTextareaRef.current;
-      if (!textarea) {
-        return;
-      }
-
-      const { selectionStart, selectionEnd, value: currentValue } = textarea;
-      const selectedText = currentValue.slice(selectionStart, selectionEnd);
-
-      const surroundSelection = (
-        before: string,
-        after = before,
-        transform?: (input: string) => string,
-      ) => {
-        const content = transform ? transform(selectedText) : selectedText;
-        const newValue =
-          currentValue.slice(0, selectionStart) +
-          before +
-          content +
-          after +
-          currentValue.slice(selectionEnd);
-
-        setEditingValue(newValue);
-
-        const nextSelectionStart = selectionStart + before.length;
-        const nextSelectionEnd = nextSelectionStart + content.length;
-
-        requestAnimationFrame(() => {
-          textarea.focus();
-          textarea.selectionStart = nextSelectionStart;
-          textarea.selectionEnd = nextSelectionEnd;
-        });
-      };
-
-      switch (action) {
-        case "bold":
-          surroundSelection("**");
-          break;
-        case "italic":
-          surroundSelection("*");
-          break;
-        case "heading":
-          surroundSelection("## ", "");
-          break;
-        case "quote": {
-          surroundSelection("> ", "", (input) => {
-            const lines = input.split(/\r?\n/);
-            return lines
-              .map((line) => (line ? `> ${line}` : ">"))
-              .join("\n");
-          });
-          break;
-        }
-        case "list": {
-          if (!selectedText) {
-            surroundSelection("- ");
-            break;
-          }
-
-          const lines = selectedText.split(/\r?\n/);
-          const formatted = lines
-            .map((line) => {
-              const trimmed = line.trim();
-              if (!trimmed) {
-                return "- ";
-              }
-              if (/^-{1,2}\s/.test(trimmed)) {
-                return trimmed;
-              }
-              return `- ${trimmed}`;
-            })
-            .join("\n");
-
-          surroundSelection("", "", () => formatted);
-          break;
-        }
-        default:
-          break;
-      }
-    },
-    [],
-  );
-
-  const formattingButtons = useMemo(() => FORMATTING_BUTTONS, []);
-
-  const renderInline = useCallback((input: string) => {
-    if (!input) {
-      return null;
+  const applyFormatting = useCallback((action: FormattingAction) => {
+    const textarea = dialogTextareaRef.current;
+    if (!textarea) {
+      return;
     }
 
-    const nodes: ReactNode[] = [];
-    const regex = /(\*\*[^*]+\*\*|\*[^*]+\*)/g;
-    let lastIndex = 0;
-    let match: RegExpExecArray | null;
+    const { selectionStart, selectionEnd, value: currentValue } = textarea;
+    const selectedText = currentValue.slice(selectionStart, selectionEnd);
 
-    while ((match = regex.exec(input)) !== null) {
-      const [token] = match;
-      if (match.index > lastIndex) {
-        nodes.push(
-          <span key={`${match.index}-text`}>
-            {input.slice(lastIndex, match.index)}
-          </span>,
-        );
-      }
+    const surroundSelection = (
+      before: string,
+      after = before,
+      transform?: (input: string) => string,
+    ) => {
+      const content = transform ? transform(selectedText) : selectedText;
+      const newValue =
+        currentValue.slice(0, selectionStart) +
+        before +
+        content +
+        after +
+        currentValue.slice(selectionEnd);
 
-      if (token.startsWith("**")) {
-        nodes.push(
-          <strong key={`${match.index}-bold`}>
-            {token.slice(2, -2)}
-          </strong>,
-        );
-      } else if (token.startsWith("*")) {
-        nodes.push(
-          <em key={`${match.index}-italic`}>
-            {token.slice(1, -1)}
-          </em>,
-        );
-      }
+      setEditingValue(newValue);
 
-      lastIndex = match.index + token.length;
-    }
+      const nextSelectionStart = selectionStart + before.length;
+      const nextSelectionEnd = nextSelectionStart + content.length;
 
-    if (lastIndex < input.length) {
-      nodes.push(
-        <span key={`${lastIndex}-rest`}>
-          {input.slice(lastIndex)}
-        </span>,
-      );
-    }
-
-    return nodes;
-  }, []);
-
-  const previewContent = useMemo(() => {
-    const safeValue = value ?? "";
-    if (!safeValue.trim()) {
-      return (
-        <span className="text-sm text-muted-foreground">
-          Add some content…
-        </span>
-      );
-    }
-
-    const elements: ReactNode[] = [];
-    const lines = safeValue.split(/\r?\n/);
-    let currentList: string[] = [];
-
-    const flushList = () => {
-      if (currentList.length === 0) {
-        return;
-      }
-      const items = currentList.map((item, index) => (
-        <li key={`list-item-${index}`}>{renderInline(item)}</li>
-      ));
-      elements.push(
-        <ul key={`list-${elements.length}`} className="list-disc space-y-1 pl-5">
-          {items}
-        </ul>,
-      );
-      currentList = [];
+      requestAnimationFrame(() => {
+        textarea.focus();
+        textarea.selectionStart = nextSelectionStart;
+        textarea.selectionEnd = nextSelectionEnd;
+      });
     };
 
-    lines.forEach((line, index) => {
-      const trimmed = line.trim();
-
-      if (!trimmed) {
-        flushList();
-        elements.push(<div key={`spacer-${index}`} className="h-2" />);
-        return;
+    switch (action) {
+      case "bold":
+        surroundSelection("**");
+        break;
+      case "italic":
+        surroundSelection("*");
+        break;
+      case "heading":
+        surroundSelection("## ", "");
+        break;
+      case "quote": {
+        surroundSelection("> ", "", (input) => {
+          const lines = input.split(/\r?\n/);
+          return lines.map((line) => (line ? `> ${line}` : ">")).join("\n");
+        });
+        break;
       }
+      case "list": {
+        if (!selectedText) {
+          surroundSelection("- ");
+          break;
+        }
 
-      if (trimmed.startsWith("- ")) {
-        currentList.push(trimmed.slice(2));
-        return;
+        const lines = selectedText.split(/\r?\n/);
+        const formatted = lines
+          .map((line) => {
+            const trimmed = line.trim();
+            if (!trimmed) {
+              return "- ";
+            }
+            if (/^-{1,2}\s/.test(trimmed)) {
+              return trimmed;
+            }
+            return `- ${trimmed}`;
+          })
+          .join("\n");
+
+        surroundSelection("", "", () => formatted);
+        break;
       }
+      default:
+        break;
+    }
+  }, []);
 
-      flushList();
+  const applyAlignment = useCallback((align: TextAlign) => {
+    const textarea = dialogTextareaRef.current;
+    if (!textarea) {
+      return;
+    }
 
-      if (trimmed.startsWith("##")) {
-        elements.push(
-          <h3 key={`heading-${index}`} className="text-lg font-semibold">
-            {renderInline(trimmed.replace(/^#+\s*/, ""))}
-          </h3>,
-        );
-        return;
-      }
+    const result = applyTextAlignment(
+      textarea.value,
+      textarea.selectionStart,
+      textarea.selectionEnd,
+      align,
+    );
 
-      if (trimmed.startsWith(">")) {
-        elements.push(
-          <blockquote
-            key={`quote-${index}`}
-            className="border-l-2 border-border pl-3 italic text-muted-foreground"
-          >
-            {renderInline(trimmed.replace(/^>\s?/, ""))}
-          </blockquote>,
-        );
-        return;
-      }
+    setEditingValue(result.value);
 
-      elements.push(
-        <p key={`paragraph-${index}`} className="text-sm leading-6">
-          {renderInline(trimmed)}
-        </p>,
-      );
+    requestAnimationFrame(() => {
+      textarea.focus();
+      textarea.selectionStart = result.selectionStart;
+      textarea.selectionEnd = result.selectionEnd;
     });
+  }, []);
 
-    flushList();
-
-    return elements;
-  }, [renderInline, value]);
+  const formattingButtons = useMemo(() => FORMATTING_BUTTONS, []);
+  const alignmentButtons = useMemo(() => ALIGNMENT_BUTTONS, []);
 
   const minHeight = rows * 24;
 
@@ -357,13 +284,13 @@ export const RichTextarea = ({
               <Maximize2 className="h-4 w-4" />
             </Button>
           </DialogTrigger>
-          <DialogContent className="max-w-5xl max-h-[90vh] overflow-hidden flex flex-col">
+          <DialogContent className="flex max-h-[90vh] max-w-5xl flex-col overflow-hidden">
             <DialogHeader>
               <DialogTitle>{modalTitle ?? label}</DialogTitle>
             </DialogHeader>
-            <div className="flex-1 overflow-hidden flex flex-col space-y-4">
+            <div className="flex flex-1 flex-col space-y-4 overflow-hidden">
               <div className="flex items-center justify-between gap-2">
-                <div className="flex flex-wrap gap-2">
+                <div className="flex flex-wrap items-center gap-2">
                   {formattingButtons.map(({ action, icon: Icon, label: text }) => (
                     <Button
                       key={action}
@@ -377,6 +304,28 @@ export const RichTextarea = ({
                       <span className="hidden sm:inline">{text}</span>
                     </Button>
                   ))}
+                  <div className="mx-1 hidden h-6 w-px bg-border sm:block" />
+                  <TooltipProvider>
+                    {alignmentButtons.map(({ align, icon: Icon, label: text }) => (
+                      <Tooltip key={align}>
+                        <TooltipTrigger asChild>
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            onClick={() => applyAlignment(align)}
+                            aria-label={text}
+                            className="h-8 w-8 p-0"
+                          >
+                            <Icon className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>
+                          <p>{text}</p>
+                        </TooltipContent>
+                      </Tooltip>
+                    ))}
+                  </TooltipProvider>
                 </div>
                 <TooltipProvider>
                   <div className="flex items-center gap-1 rounded-md border border-border bg-muted/50 p-1">
@@ -389,7 +338,8 @@ export const RichTextarea = ({
                           onClick={() => setActiveTab("edit")}
                           className={cn(
                             "h-7 w-7 p-0",
-                            activeTab === "edit" && "bg-background text-foreground shadow-sm border border-border"
+                            activeTab === "edit" &&
+                              "border border-border bg-background text-foreground shadow-sm",
                           )}
                         >
                           <Edit className="h-3.5 w-3.5" />
@@ -408,7 +358,8 @@ export const RichTextarea = ({
                           onClick={() => setActiveTab("preview")}
                           className={cn(
                             "h-7 w-7 p-0",
-                            activeTab === "preview" && "bg-background text-foreground shadow-sm border border-border"
+                            activeTab === "preview" &&
+                              "border border-border bg-background text-foreground shadow-sm",
                           )}
                         >
                           <Eye className="h-3.5 w-3.5" />
@@ -421,8 +372,12 @@ export const RichTextarea = ({
                   </div>
                 </TooltipProvider>
               </div>
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "edit" | "preview")} className="flex-1 flex flex-col overflow-hidden">
-                <TabsContent value="edit" className="flex-1 overflow-auto mt-0">
+              <Tabs
+                value={activeTab}
+                onValueChange={(v) => setActiveTab(v as "edit" | "preview")}
+                className="flex flex-1 flex-col overflow-hidden"
+              >
+                <TabsContent value="edit" className="mt-0 flex-1 overflow-auto">
                   <Textarea
                     ref={dialogTextareaRef}
                     id={`${id}-expanded`}
@@ -438,33 +393,20 @@ export const RichTextarea = ({
                     )}
                   />
                 </TabsContent>
-                <TabsContent value="preview" className="flex-1 overflow-auto mt-0">
-                  <div className={cn(
-                    "prose prose-sm max-w-none dark:prose-invert min-h-[18rem] p-4 border rounded-md",
-                    dir === "rtl" && "prose-rtl"
-                  )} dir={dir}>
-                    {editingValue.trim() ? (
-                      <ReactMarkdown
-                        components={{
-                          p: ({ children }) => <p className="text-sm leading-6 text-muted-foreground mb-3 last:mb-0">{children}</p>,
-                          ul: ({ children }) => <ul className="list-disc space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ul>,
-                          ol: ({ children }) => <ol className="list-decimal space-y-1 pl-5 mb-3 last:mb-0 text-sm leading-6 text-muted-foreground">{children}</ol>,
-                          li: ({ children }) => <li className="text-sm leading-6 text-muted-foreground">{children}</li>,
-                          h1: ({ children }) => <h1 className="text-2xl font-bold mb-3 mt-4 first:mt-0">{children}</h1>,
-                          h2: ({ children }) => <h2 className="text-xl font-semibold mb-2 mt-3 first:mt-0">{children}</h2>,
-                          h3: ({ children }) => <h3 className="text-lg font-semibold mb-2 mt-3 first:mt-0">{children}</h3>,
-                          strong: ({ children }) => <strong className="font-semibold text-foreground">{children}</strong>,
-                          em: ({ children }) => <em className="italic">{children}</em>,
-                          code: ({ children }) => <code className="bg-muted px-1.5 py-0.5 rounded text-xs font-mono">{children}</code>,
-                          blockquote: ({ children }) => <blockquote className="border-l-4 border-primary pl-4 italic my-3">{children}</blockquote>,
-                        }}
-                      >
-                        {editingValue}
-                      </ReactMarkdown>
-                    ) : (
-                      <p className="text-sm text-muted-foreground">Add some content to see the preview...</p>
+                <TabsContent value="preview" className="mt-0 flex-1 overflow-auto">
+                  <MarkdownContent
+                    value={editingValue}
+                    dir={dir}
+                    className={cn(
+                      "prose prose-sm min-h-[18rem] max-w-none rounded-md border p-4 dark:prose-invert",
+                      dir === "rtl" && "prose-rtl",
                     )}
-                  </div>
+                    emptyFallback={
+                      <p className="text-sm text-muted-foreground">
+                        Add some content to see the preview...
+                      </p>
+                    }
+                  />
                 </TabsContent>
               </Tabs>
               {description ? (
@@ -472,18 +414,10 @@ export const RichTextarea = ({
               ) : null}
             </div>
             <DialogFooter>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleCancel}
-              >
+              <Button type="button" variant="outline" onClick={handleCancel}>
                 Cancel
               </Button>
-              <Button
-                type="button"
-                variant="cta"
-                onClick={handleSave}
-              >
+              <Button type="button" variant="cta" onClick={handleSave}>
                 Save
               </Button>
             </DialogFooter>
@@ -501,12 +435,11 @@ export const RichTextarea = ({
         style={{ minHeight }}
         aria-label={`Edit ${label}`}
       >
-        <div
-          className={cn("space-y-1 w-full", dir === "rtl" && "text-right", textareaClassName)}
+        <MarkdownContent
+          value={value ?? ""}
           dir={dir}
-        >
-          {previewContent}
-        </div>
+          className={cn("w-full space-y-1", dir === "rtl" && "text-right", textareaClassName)}
+        />
       </button>
       {description ? (
         <p className="text-xs text-muted-foreground">{description}</p>
@@ -514,4 +447,3 @@ export const RichTextarea = ({
     </div>
   );
 };
-
