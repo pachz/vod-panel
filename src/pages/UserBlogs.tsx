@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useSearchParams } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { Clock, ChevronDown, Search } from "lucide-react";
 import { useQuery } from "convex/react";
 import { format } from "date-fns";
@@ -215,63 +215,66 @@ const UserBlogs = () => {
               : null;
 
             return (
-              <article
+              <Link
                 key={blog._id}
-                className="overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-shadow hover:shadow-md"
+                to={`/articles/${blog._id}`}
+                className="group block overflow-hidden rounded-2xl border border-border/40 bg-card shadow-sm transition-shadow hover:shadow-md"
               >
-                <div className="aspect-[16/10] overflow-hidden bg-muted">
-                  {imageUrl ? (
-                    <img
-                      src={imageUrl}
-                      alt={title}
-                      className="h-full w-full object-cover"
-                    />
-                  ) : null}
-                </div>
-                <div className="space-y-3 p-5">
-                  <span
-                    className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium"
-                    style={{
-                      color: blog.category.color,
-                      borderColor: `${blog.category.color}55`,
-                      backgroundColor: `${blog.category.color}14`,
-                    }}
-                  >
-                    {categoryName}
-                  </span>
-                  <h2 className="text-lg font-semibold leading-snug tracking-tight">
-                    {title}
-                  </h2>
-                  <p className="line-clamp-3 text-sm text-muted-foreground">
-                    {excerpt}
-                  </p>
-                  <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4 text-xs text-muted-foreground">
-                    <div className="flex min-w-0 items-center gap-2">
-                      {authorImage ? (
-                        <img
-                          src={authorImage}
-                          alt=""
-                          className="h-7 w-7 rounded-full object-cover"
-                        />
-                      ) : (
-                        <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
-                          {authorName.slice(0, 1)}
+                <article>
+                  <div className="aspect-[16/10] overflow-hidden bg-muted">
+                    {imageUrl ? (
+                      <img
+                        src={imageUrl}
+                        alt={title}
+                        className="h-full w-full object-cover transition-transform duration-300 group-hover:scale-[1.02]"
+                      />
+                    ) : null}
+                  </div>
+                  <div className="space-y-3 p-5">
+                    <span
+                      className="inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-medium"
+                      style={{
+                        color: blog.category.color,
+                        borderColor: `${blog.category.color}55`,
+                        backgroundColor: `${blog.category.color}14`,
+                      }}
+                    >
+                      {categoryName}
+                    </span>
+                    <h2 className="text-lg font-semibold leading-snug tracking-tight group-hover:text-pink-600">
+                      {title}
+                    </h2>
+                    <p className="line-clamp-3 text-sm text-muted-foreground">
+                      {excerpt}
+                    </p>
+                    <div className="flex items-center justify-between gap-3 border-t border-border/40 pt-4 text-xs text-muted-foreground">
+                      <div className="flex min-w-0 items-center gap-2">
+                        {authorImage ? (
+                          <img
+                            src={authorImage}
+                            alt=""
+                            className="h-7 w-7 rounded-full object-cover"
+                          />
+                        ) : (
+                          <div className="flex h-7 w-7 items-center justify-center rounded-full bg-muted text-[10px] font-medium">
+                            {authorName.slice(0, 1)}
+                          </div>
+                        )}
+                        <div className="min-w-0">
+                          <p className="truncate font-medium text-foreground">{authorName}</p>
+                          {publishedLabel ? <p>{publishedLabel}</p> : null}
                         </div>
-                      )}
-                      <div className="min-w-0">
-                        <p className="truncate font-medium text-foreground">{authorName}</p>
-                        {publishedLabel ? <p>{publishedLabel}</p> : null}
+                      </div>
+                      <div className="flex shrink-0 items-center gap-1">
+                        <Clock className="h-3.5 w-3.5" />
+                        <span>
+                          {blog.reading_time_minutes} {t("minRead")}
+                        </span>
                       </div>
                     </div>
-                    <div className="flex shrink-0 items-center gap-1">
-                      <Clock className="h-3.5 w-3.5" />
-                      <span>
-                        {blog.reading_time_minutes} {t("minRead")}
-                      </span>
-                    </div>
                   </div>
-                </div>
-              </article>
+                </article>
+              </Link>
             );
           })}
         </div>

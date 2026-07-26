@@ -663,6 +663,149 @@ export const updateBlogImages = mutation({
   },
 });
 
+const publishedBlogDetailValidator = v.object({
+  _id: v.id("blogs"),
+  title: v.string(),
+  title_ar: v.string(),
+  simple_content: v.string(),
+  simple_content_ar: v.string(),
+  body: v.string(),
+  body_ar: v.string(),
+  thumbnail_image_url: v.optional(v.string()),
+  image_url: v.optional(v.string()),
+  reading_time_minutes: v.number(),
+  publishedAt: v.optional(v.number()),
+  category: v.object({
+    _id: v.id("blogCategories"),
+    name: v.string(),
+    name_ar: v.string(),
+    color: v.string(),
+  }),
+  author: v.object({
+    _id: v.id("coaches"),
+    name: v.string(),
+    name_ar: v.string(),
+    description: v.string(),
+    description_ar: v.string(),
+    profile_thumbnail_url: v.optional(v.string()),
+    profile_image_url: v.optional(v.string()),
+  }),
+  related: v.array(
+    v.object({
+      _id: v.id("blogs"),
+      title: v.string(),
+      title_ar: v.string(),
+      thumbnail_image_url: v.optional(v.string()),
+      image_url: v.optional(v.string()),
+      publishedAt: v.optional(v.number()),
+    }),
+  ),
+});
+
+export const getPublishedBlog = query({
+  args: { blogId: v.id("blogs") },
+  returns: v.union(publishedBlogDetailValidator, v.null()),
+  handler: async (ctx, { blogId }) => {
+    // Tech-only while blogs are in preview.
+    await requireUser(ctx, { requireTech: true });
+
+    const blog = await ctx.db.get("blogs", blogId);
+    if (
+      !blog ||
+      blog.deletedAt !== undefined ||
+      blog.status !== "published" ||
+      !blog.publishedSnapshot
+    ) {
+      return null;
+    }
+
+    const snapshot = parsePublishedSnapshot(blog.publishedSnapshot);
+    if (!snapshot) {
+      return null;
+    }
+
+    const [category, author] = await Promise.all([
+      ctx.db.get("blogCategories", snapshot.category_id),
+      ctx.db.get("coaches", snapshot.author_id),
+    ]);
+
+    if (!category || category.deletedAt !== undefined || !author || author.deletedAt !== undefined) {
+      return null;
+    }
+
+    const relatedCandidates = await ctx.db
+      .query("blogs")
+      .withIndex("by_deletedAt_category_status", (q) =>
+        q
+          .eq("deletedAt", undefined)
+          .eq("category_id", snapshot.category_id)
+          .eq("status", "published"),
+      )
+      .order("desc")
+      .take(8);
+
+    const related: Array<{
+      _id: Id<"blogs">;
+      title: string;
+      title_ar: string;
+      thumbnail_image_url?: string;
+      image_url?: string;
+      publishedAt?: number;
+    }> = [];
+
+    for (const candidate of relatedCandidates) {
+      if (candidate._id === blogId || !candidate.publishedSnapshot) {
+        continue;
+      }
+      const relatedSnapshot = parsePublishedSnapshot(candidate.publishedSnapshot);
+      if (!relatedSnapshot) {
+        continue;
+      }
+      related.push({
+        _id: candidate._id,
+        title: relatedSnapshot.title,
+        title_ar: relatedSnapshot.title_ar,
+        thumbnail_image_url: relatedSnapshot.thumbnail_image_url,
+        image_url: relatedSnapshot.image_url,
+        publishedAt: candidate.publishedAt,
+      });
+      if (related.length >= 3) {
+        break;
+      }
+    }
+
+    return {
+      _id: blog._id,
+      title: snapshot.title,
+      title_ar: snapshot.title_ar,
+      simple_content: snapshot.simple_content,
+      simple_content_ar: snapshot.simple_content_ar,
+      body: snapshot.body,
+      body_ar: snapshot.body_ar,
+      thumbnail_image_url: snapshot.thumbnail_image_url,
+      image_url: snapshot.image_url,
+      reading_time_minutes: snapshot.reading_time_minutes,
+      publishedAt: blog.publishedAt,
+      category: {
+        _id: category._id,
+        name: category.name,
+        name_ar: category.name_ar,
+        color: category.color,
+      },
+      author: {
+        _id: author._id,
+        name: author.name,
+        name_ar: author.name_ar,
+        description: author.description,
+        description_ar: author.description_ar,
+        profile_thumbnail_url: author.profile_thumbnail_url,
+        profile_image_url: author.profile_image_url,
+      },
+      related,
+    };
+  },
+});
+
 export const listPublishedBlogs = query({
   args: {
     search: v.optional(v.string()),

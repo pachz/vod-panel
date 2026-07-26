@@ -29,6 +29,7 @@ import UserPersonalTestResults from "@/pages/UserPersonalTestResults";
 import Blogs from "@/pages/Blogs";
 import BlogDetail from "@/pages/BlogDetail";
 import UserBlogs from "@/pages/UserBlogs";
+import UserBlogDetail from "@/pages/UserBlogDetail";
 import Payments from "@/pages/Payments";
 import SubscriptionPlans from "@/pages/SubscriptionPlans";
 import SubscriptionPlanEditor from "@/pages/SubscriptionPlanEditor";
@@ -343,6 +344,7 @@ const App = () => (
           <Route path="/my-tests/:id" element={<UserPersonalTestTake />} />
           <Route element={<TechRoute />}>
             <Route path="/articles" element={<UserBlogs />} />
+            <Route path="/articles/:id" element={<UserBlogDetail />} />
           </Route>
         </Route>
         {/* Root redirect */}

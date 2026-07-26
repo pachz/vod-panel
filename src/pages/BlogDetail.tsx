@@ -167,6 +167,7 @@ const BlogDetail = () => {
           storageId: convertedStorageId,
           maxWidth: 640,
           maxHeight: 400,
+          quality: 95,
         });
       } catch {
         // Thumbnail is optional; fall back to full image.
