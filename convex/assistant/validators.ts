@@ -67,11 +67,17 @@ export const billingPortalResultValidator = v.object({
   url: v.string(),
 });
 
+export const assistantCtaButtonValidator = v.object({
+  text: v.string(),
+  url: v.string(),
+});
+
 export const renderUiCardsResultValidator = v.object({
   courses: v.array(courseSearchResultValidator),
   plans: v.array(activeSubscriptionPlanValidator),
   subscription: v.union(subscriptionToolResultValidator, v.null()),
   billingPortalUrl: v.union(v.string(), v.null()),
+  callToActions: v.array(assistantCtaButtonValidator),
 });
 
 export const conversationTitleUpdateResultValidator = v.object({

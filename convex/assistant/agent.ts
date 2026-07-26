@@ -289,6 +289,24 @@ function createRenderUiCardsTool(description: string) {
         .boolean()
         .optional()
         .describe("true to show the billing-management button"),
+      callToActions: z
+        .array(
+          z.object({
+            text: z
+              .string()
+              .min(1)
+              .max(80)
+              .describe("Button label shown to the user"),
+            url: z
+              .string()
+              .min(1)
+              .max(2000)
+              .describe("https URL or site-relative path starting with /"),
+          }),
+        )
+        .max(3)
+        .optional()
+        .describe("Optional large call-to-action buttons (text + link)"),
       language: z
         .enum(["en", "ar"])
         .optional()
@@ -355,15 +373,35 @@ function createRenderUiCardsTool(description: string) {
           }
         }
 
+        const callToActions = (input.callToActions ?? [])
+          .map((cta) => ({
+            text: cta.text.trim(),
+            url: cta.url.trim(),
+          }))
+          .filter((cta) => cta.text.length > 0 && isSafeAssistantToolUrl(cta.url));
+
         return {
           courses,
           plans,
           subscription,
           billingPortalUrl,
+          callToActions,
         };
       });
     },
   });
+}
+
+function isSafeAssistantToolUrl(url: string): boolean {
+  if (url.startsWith("/")) {
+    return !url.startsWith("//") && !url.includes("://");
+  }
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 function createUpdateConversationTitleTool(description: string) {

@@ -65,4 +65,5 @@ export type ParsedToolResults = {
   plans: ActiveSubscriptionPlan[];
   subscription: SubscriptionToolResult | null;
   billingPortalUrl: string | null;
+  callToActions: Array<{ text: string; url: string }>;
 };

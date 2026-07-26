@@ -4,8 +4,9 @@ import { CourseRecommendationCard } from "./CourseRecommendationCard";
 import { SubscriptionPlanCard } from "./SubscriptionPlanCard";
 import { SubscriptionSummaryCard } from "./SubscriptionSummaryCard";
 import { BillingPortalButton } from "./BillingPortalButton";
+import { AssistantCtaButton } from "./AssistantCtaButton";
 import { parseToolResultsFromMessage } from "./parseToolResults";
-import { formatAssistantMessageText } from "./formatAssistantText";
+import { AssistantRichText } from "./formatAssistantText";
 import { useLanguage } from "@/hooks/use-language";
 
 type AssistantMessageProps = {
@@ -17,12 +18,12 @@ function AssistantText({ message }: { message: UIMessage }) {
     startStreaming: message.status === "streaming",
   });
 
-  const displayText = formatAssistantMessageText(visibleText);
-  if (!displayText) {
-    return null;
-  }
-
-  return <p className="whitespace-pre-wrap text-sm leading-relaxed">{displayText}</p>;
+  return (
+    <AssistantRichText
+      text={visibleText}
+      className="whitespace-pre-wrap text-sm leading-relaxed"
+    />
+  );
 }
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
@@ -73,6 +74,17 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 url={toolResults.billingPortalUrl}
                 label={t("assistantManageSubscription")}
               />
+            ) : null}
+            {toolResults?.callToActions.length ? (
+              <div className="grid gap-2 pt-1">
+                {toolResults.callToActions.map((cta, index) => (
+                  <AssistantCtaButton
+                    key={`${cta.url}-${index}`}
+                    text={cta.text}
+                    url={cta.url}
+                  />
+                ))}
+              </div>
             ) : null}
           </>
         )}

@@ -1,4 +1,5 @@
 import type { UIMessage } from "@convex-dev/agent/react";
+import { normalizeCtaButtons } from "./assistantLinks";
 import type {
   ActiveSubscriptionPlan,
   CourseSearchResult,
@@ -48,6 +49,7 @@ function isRenderUiCardsResult(value: unknown): value is {
   plans: unknown;
   subscription: unknown;
   billingPortalUrl: unknown;
+  callToActions?: unknown;
 } {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
@@ -65,6 +67,7 @@ function emptyResults(): ParsedToolResults {
     plans: [],
     subscription: null,
     billingPortalUrl: null,
+    callToActions: [],
   };
 }
 
@@ -74,6 +77,7 @@ function applyRenderUiCardsOutput(
     plans: unknown;
     subscription: unknown;
     billingPortalUrl: unknown;
+    callToActions?: unknown;
   },
   results: ParsedToolResults,
 ) {
@@ -96,6 +100,7 @@ function applyRenderUiCardsOutput(
   ) {
     results.billingPortalUrl = output.billingPortalUrl;
   }
+  results.callToActions.push(...normalizeCtaButtons(output.callToActions));
 }
 
 function getToolPartMeta(part: unknown): { toolName: string; output: unknown } | null {

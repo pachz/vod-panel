@@ -84,9 +84,9 @@ export const ASSISTANT_TOOL_CATALOG: Record<
   },
   renderUiCards: {
     label: "Render UI cards",
-    summary: "Show course, plan, subscription, or billing UI cards in the chat.",
+    summary: "Show course, plan, subscription, billing, or CTA buttons in the chat.",
     defaultDescription:
-      "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button). Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards.",
+      "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button), callToActions (array of { text, url } for large call-to-action buttons—use https URLs or site paths starting with /). Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards or CTA buttons.",
   },
   updateConversationTitle: {
     label: "Update conversation title",
