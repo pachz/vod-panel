@@ -89,6 +89,14 @@ export const showCoursesCatalogResultValidator = v.object({
   urlAr: v.string(),
 });
 
+export const sendWhatsAppSupportResultValidator = v.object({
+  messageEn: v.string(),
+  messageAr: v.string(),
+  buttonTextEn: v.string(),
+  buttonTextAr: v.string(),
+  url: v.string(),
+});
+
 export const conversationTitleUpdateResultValidator = v.object({
   success: v.boolean(),
   title: v.optional(v.string()),

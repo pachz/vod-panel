@@ -12,6 +12,7 @@ import {
   ASSISTANT_TOOL_CATALOG,
   ASSISTANT_TOOL_IDS,
   COURSES_CATALOG_DEFAULTS,
+  WHATSAPP_SUPPORT_DEFAULTS,
   assistantToolIdValidator,
   isAssistantToolId,
   type AssistantToolId,
@@ -23,15 +24,21 @@ import {
   buildNamedInstructionsToolDescription,
   type NamedInstructionsToolContext,
 } from "./namedInstructions";
-import { showCoursesCatalogResultValidator } from "./validators";
+import {
+  sendWhatsAppSupportResultValidator,
+  showCoursesCatalogResultValidator,
+} from "./validators";
 import type { Infer } from "convex/values";
 
 const SETTINGS_KEY = "global" as const;
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
 const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
+const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
+const MAX_WHATSAPP_PREFILL_LENGTH = 300;
 
 type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
+type SendWhatsAppSupportResult = Infer<typeof sendWhatsAppSupportResultValidator>;
 
 const toolKnowledgeItemValidator = v.object({
   toolId: assistantToolIdValidator,
@@ -52,6 +59,16 @@ const coursesCatalogSettingsValidator = v.object({
   buttonTextAr: v.string(),
   urlEn: v.string(),
   urlAr: v.string(),
+});
+
+const whatsAppSupportSettingsValidator = v.object({
+  messageEn: v.string(),
+  messageAr: v.string(),
+  defaultMessageEn: v.string(),
+  defaultMessageAr: v.string(),
+  buttonTextEn: v.string(),
+  buttonTextAr: v.string(),
+  url: v.string(),
 });
 
 function resolveCoursesCatalogMessages(settings: {
@@ -78,6 +95,44 @@ export function buildShowCoursesCatalogResult(settings: {
     buttonTextAr: COURSES_CATALOG_DEFAULTS.buttonTextAr,
     urlEn: COURSES_CATALOG_DEFAULTS.urlEn,
     urlAr: COURSES_CATALOG_DEFAULTS.urlAr,
+  };
+}
+
+function resolveWhatsAppSupportMessages(settings: {
+  whatsAppSupportMessageEn?: string;
+  whatsAppSupportMessageAr?: string;
+} | null): { messageEn: string; messageAr: string } {
+  const messageEn = settings?.whatsAppSupportMessageEn?.trim();
+  const messageAr = settings?.whatsAppSupportMessageAr?.trim();
+  return {
+    messageEn: messageEn || WHATSAPP_SUPPORT_DEFAULTS.messageEn,
+    messageAr: messageAr || WHATSAPP_SUPPORT_DEFAULTS.messageAr,
+  };
+}
+
+export function buildWhatsAppSupportUrl(prefillText?: string | null): string {
+  const base = WHATSAPP_SUPPORT_DEFAULTS.url;
+  const text = prefillText?.trim();
+  if (!text) {
+    return base;
+  }
+  return `${base}?text=${encodeURIComponent(text.slice(0, MAX_WHATSAPP_PREFILL_LENGTH))}`;
+}
+
+export function buildSendWhatsAppSupportResult(
+  settings: {
+    whatsAppSupportMessageEn?: string;
+    whatsAppSupportMessageAr?: string;
+  } | null,
+  prefillText?: string | null,
+): SendWhatsAppSupportResult {
+  const messages = resolveWhatsAppSupportMessages(settings);
+  return {
+    messageEn: messages.messageEn,
+    messageAr: messages.messageAr,
+    buttonTextEn: WHATSAPP_SUPPORT_DEFAULTS.buttonTextEn,
+    buttonTextAr: WHATSAPP_SUPPORT_DEFAULTS.buttonTextAr,
+    url: buildWhatsAppSupportUrl(prefillText),
   };
 }
 
@@ -177,6 +232,17 @@ export const getShowCoursesCatalogInternal = internalQuery({
   },
 });
 
+export const getSendWhatsAppSupportInternal = internalQuery({
+  args: {
+    text: v.optional(v.string()),
+  },
+  returns: sendWhatsAppSupportResultValidator,
+  handler: async (ctx, args): Promise<SendWhatsAppSupportResult> => {
+    const settings = await getSettingsDoc(ctx);
+    return buildSendWhatsAppSupportResult(settings, args.text);
+  },
+});
+
 export const getAssistantSettings = query({
   args: {},
   returns: v.object({
@@ -185,6 +251,7 @@ export const getAssistantSettings = query({
     defaultCustomInstructions: v.string(),
     tools: v.array(toolKnowledgeItemValidator),
     coursesCatalog: coursesCatalogSettingsValidator,
+    whatsAppSupport: whatsAppSupportSettingsValidator,
     updatedAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
@@ -193,6 +260,7 @@ export const getAssistantSettings = query({
     const settings = await getSettingsDoc(ctx);
     const overrides = normalizeToolOverrides(settings?.toolOverrides);
     const catalogResult = buildShowCoursesCatalogResult(settings);
+    const whatsAppResult = buildSendWhatsAppSupportResult(settings);
 
     const activeFiles = await ctx.db
       .query("assistantKnowledgeFiles")
@@ -267,6 +335,15 @@ export const getAssistantSettings = query({
         buttonTextAr: catalogResult.buttonTextAr,
         urlEn: catalogResult.urlEn,
         urlAr: catalogResult.urlAr,
+      },
+      whatsAppSupport: {
+        messageEn: whatsAppResult.messageEn,
+        messageAr: whatsAppResult.messageAr,
+        defaultMessageEn: WHATSAPP_SUPPORT_DEFAULTS.messageEn,
+        defaultMessageAr: WHATSAPP_SUPPORT_DEFAULTS.messageAr,
+        buttonTextEn: whatsAppResult.buttonTextEn,
+        buttonTextAr: whatsAppResult.buttonTextAr,
+        url: whatsAppResult.url,
       },
       updatedAt: settings?.updatedAt,
     };
@@ -461,6 +538,76 @@ export const updateCoursesCatalogMessages = mutation({
         buttonTextAr: catalogResult.buttonTextAr,
         urlEn: catalogResult.urlEn,
         urlAr: catalogResult.urlAr,
+      },
+    };
+  },
+});
+
+export const updateWhatsAppSupportMessages = mutation({
+  args: {
+    messageEn: v.string(),
+    messageAr: v.string(),
+  },
+  returns: v.object({
+    updatedAt: v.number(),
+    whatsAppSupport: whatsAppSupportSettingsValidator,
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    if (args.messageEn.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH) {
+      throw new Error(
+        `English WhatsApp support message is too long (${args.messageEn.length.toLocaleString()} characters). Please shorten it to ${MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+    if (args.messageAr.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH) {
+      throw new Error(
+        `Arabic WhatsApp support message is too long (${args.messageAr.length.toLocaleString()} characters). Please shorten it to ${MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+
+    const now = Date.now();
+    const existing = await getSettingsDoc(ctx);
+    const whatsAppSupportMessageEn = args.messageEn.trim();
+    const whatsAppSupportMessageAr = args.messageAr.trim();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        whatsAppSupportMessageEn,
+        whatsAppSupportMessageAr,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    } else {
+      await ctx.db.insert("assistantSettings", {
+        key: SETTINGS_KEY,
+        customInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+        whatsAppSupportMessageEn,
+        whatsAppSupportMessageAr,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    }
+
+    const whatsAppResult = buildSendWhatsAppSupportResult({
+      whatsAppSupportMessageEn,
+      whatsAppSupportMessageAr,
+    });
+
+    return {
+      updatedAt: now,
+      whatsAppSupport: {
+        messageEn: whatsAppResult.messageEn,
+        messageAr: whatsAppResult.messageAr,
+        defaultMessageEn: WHATSAPP_SUPPORT_DEFAULTS.messageEn,
+        defaultMessageAr: WHATSAPP_SUPPORT_DEFAULTS.messageAr,
+        buttonTextEn: whatsAppResult.buttonTextEn,
+        buttonTextAr: whatsAppResult.buttonTextAr,
+        url: whatsAppResult.url,
       },
     };
   },

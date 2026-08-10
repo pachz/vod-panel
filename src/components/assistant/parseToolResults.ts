@@ -4,6 +4,7 @@ import type {
   ActiveSubscriptionPlan,
   CourseSearchResult,
   ParsedToolResults,
+  SendWhatsAppSupportResult,
   ShowCoursesCatalogResult,
   SubscriptionToolResult,
 } from "./types";
@@ -75,6 +76,19 @@ function isShowCoursesCatalogResult(value: unknown): value is ShowCoursesCatalog
   );
 }
 
+function isSendWhatsAppSupportResult(value: unknown): value is SendWhatsAppSupportResult {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.messageEn === "string" &&
+    typeof record.messageAr === "string" &&
+    typeof record.buttonTextEn === "string" &&
+    typeof record.buttonTextAr === "string" &&
+    typeof record.url === "string" &&
+    record.url.startsWith("https://")
+  );
+}
+
 function emptyResults(): ParsedToolResults {
   return {
     courses: [],
@@ -83,6 +97,7 @@ function emptyResults(): ParsedToolResults {
     billingPortalUrl: null,
     callToActions: [],
     coursesCatalog: null,
+    whatsAppSupport: null,
   };
 }
 
@@ -136,7 +151,7 @@ function getToolPartMeta(part: unknown): { toolName: string; output: unknown } |
   return { toolName, output };
 }
 
-/** Cards/buttons only come from renderUiCards / showCoursesCatalog — never from lookup tools. */
+/** Cards/buttons only come from renderUiCards / fixed CTA tools — never from lookup tools. */
 export function parseToolResultsFromMessage(message: UIMessage): ParsedToolResults {
   const results = emptyResults();
 
@@ -151,6 +166,11 @@ export function parseToolResultsFromMessage(message: UIMessage): ParsedToolResul
 
     if (meta.toolName === "showCoursesCatalog" && isShowCoursesCatalogResult(meta.output)) {
       results.coursesCatalog = meta.output;
+      continue;
+    }
+
+    if (meta.toolName === "sendWhatsAppSupport" && isSendWhatsAppSupportResult(meta.output)) {
+      results.whatsAppSupport = meta.output;
     }
   }
 

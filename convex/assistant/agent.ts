@@ -24,6 +24,7 @@ import type {
   courseSearchResultValidator,
   namedInstructionResultValidator,
   renderUiCardsResultValidator,
+  sendWhatsAppSupportResultValidator,
   showCoursesCatalogResultValidator,
   subscriptionToolResultValidator,
   userMemoryUpdateResultValidator,
@@ -37,6 +38,7 @@ type ActiveSubscriptionPlan = Infer<typeof activeSubscriptionPlanValidator>;
 type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
 type RenderUiCardsResult = Infer<typeof renderUiCardsResultValidator>;
 type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
+type SendWhatsAppSupportResult = Infer<typeof sendWhatsAppSupportResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
 type NamedInstructionResult = Infer<typeof namedInstructionResultValidator>;
@@ -406,6 +408,28 @@ function createShowCoursesCatalogTool(description: string) {
   });
 }
 
+function createSendWhatsAppSupportTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({
+      text: z
+        .string()
+        .max(300)
+        .optional()
+        .describe(
+          "Optional short first-person WhatsApp prefill in the same language as the chat. Omit if nothing useful.",
+        ),
+    }),
+    execute: async (ctx, input): Promise<SendWhatsAppSupportResult> => {
+      return await withToolCallLogging("sendWhatsAppSupport", input, async () => {
+        return await ctx.runQuery(internal.assistant.settings.getSendWhatsAppSupportInternal, {
+          text: input.text,
+        });
+      });
+    },
+  });
+}
+
 function isSafeAssistantToolUrl(url: string): boolean {
   if (url.startsWith("/")) {
     return !url.startsWith("//") && !url.includes("://");
@@ -494,6 +518,7 @@ export function buildAssistantTools(
     createBillingPortalSession?: ReturnType<typeof createBillingPortalSessionTool>;
     renderUiCards?: ReturnType<typeof createRenderUiCardsTool>;
     showCoursesCatalog?: ReturnType<typeof createShowCoursesCatalogTool>;
+    sendWhatsAppSupport?: ReturnType<typeof createSendWhatsAppSupportTool>;
     updateConversationTitle?: ReturnType<typeof createUpdateConversationTitleTool>;
     updateUserMemory?: ReturnType<typeof createUpdateUserMemoryTool>;
   } = {};
@@ -555,6 +580,9 @@ export function buildAssistantTools(
         break;
       case "showCoursesCatalog":
         tools.showCoursesCatalog = createShowCoursesCatalogTool(description);
+        break;
+      case "sendWhatsAppSupport":
+        tools.sendWhatsAppSupport = createSendWhatsAppSupportTool(description);
         break;
       case "updateConversationTitle":
         tools.updateConversationTitle = createUpdateConversationTitleTool(description);

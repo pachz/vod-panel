@@ -474,6 +474,10 @@ export default defineSchema({
     coursesCatalogMessageEn: v.optional(v.string()),
     /** Optional overrides for the showCoursesCatalog fixed message (Arabic). */
     coursesCatalogMessageAr: v.optional(v.string()),
+    /** Optional overrides for the sendWhatsAppSupport fixed message (English). */
+    whatsAppSupportMessageEn: v.optional(v.string()),
+    /** Optional overrides for the sendWhatsAppSupport fixed message (Arabic). */
+    whatsAppSupportMessageAr: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),

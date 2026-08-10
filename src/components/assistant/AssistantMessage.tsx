@@ -51,6 +51,19 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             : toolResults.coursesCatalog.urlEn,
       }
     : null;
+  const whatsAppSupport = toolResults?.whatsAppSupport
+    ? {
+        message:
+          language === "ar"
+            ? toolResults.whatsAppSupport.messageAr
+            : toolResults.whatsAppSupport.messageEn,
+        buttonText:
+          language === "ar"
+            ? toolResults.whatsAppSupport.buttonTextAr
+            : toolResults.whatsAppSupport.buttonTextEn,
+        url: toolResults.whatsAppSupport.url,
+      }
+    : null;
 
   return (
     <div
@@ -113,6 +126,14 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                   {coursesCatalog.message}
                 </p>
                 <AssistantCtaButton text={coursesCatalog.buttonText} url={coursesCatalog.url} />
+              </div>
+            ) : null}
+            {whatsAppSupport ? (
+              <div className="grid min-w-0 gap-2 pt-1">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {whatsAppSupport.message}
+                </p>
+                <AssistantCtaButton text={whatsAppSupport.buttonText} url={whatsAppSupport.url} />
               </div>
             ) : null}
           </>

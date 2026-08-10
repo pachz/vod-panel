@@ -9,6 +9,7 @@ export const ASSISTANT_TOOL_IDS = [
   "createBillingPortalSession",
   "renderUiCards",
   "showCoursesCatalog",
+  "sendWhatsAppSupport",
   "updateConversationTitle",
   "updateUserMemory",
 ] as const;
@@ -24,6 +25,7 @@ export const assistantToolIdValidator = v.union(
   v.literal("createBillingPortalSession"),
   v.literal("renderUiCards"),
   v.literal("showCoursesCatalog"),
+  v.literal("sendWhatsAppSupport"),
   v.literal("updateConversationTitle"),
   v.literal("updateUserMemory"),
 );
@@ -38,6 +40,15 @@ export const COURSES_CATALOG_DEFAULTS = {
   buttonTextAr: "جميع الدورات",
   urlEn: "https://www.rehamdiva.com/en/courses",
   urlAr: "https://www.rehamdiva.com/ar/courses",
+} as const;
+
+/** Default WhatsApp support CTA copy. Admins may override messageEn / messageAr in settings. */
+export const WHATSAPP_SUPPORT_DEFAULTS = {
+  messageEn: "To reach our support team, you can message us on WhatsApp.",
+  messageAr: "للتواصل مع فريق الدعم، يمكنك مراسلتنا عبر واتساب.",
+  buttonTextEn: "Message on WhatsApp",
+  buttonTextAr: "مراسلة عبر واتساب",
+  url: "https://wa.me/96550406406",
 } as const;
 
 export const assistantToolOverrideValidator = v.object({
@@ -107,6 +118,12 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     summary: "Append a fixed catalog message and an All courses button after your reply.",
     defaultDescription:
       "Show a fixed courses-catalog message line and an All courses button after your text reply. Use when the user wants to browse the full courses list/catalog, or when inviting them to explore more courses beyond specific recommendations. Input: none. Do not write the catalog message line or the button label yourself—the UI appends them from this tool. Call at most once per turn. Prefer writing your reply, then calling this tool.",
+  },
+  sendWhatsAppSupport: {
+    label: "Send WhatsApp support",
+    summary: "Append a fixed support message and a WhatsApp button after your reply.",
+    defaultDescription:
+      "Show a fixed WhatsApp-support message line and a Message on WhatsApp button after your text reply. Use when the user needs human support, wants to contact the team, or you cannot fully resolve their issue. Optional input text: a short first-person WhatsApp prefill in the same language as the chat (omit if nothing useful). Do not write the support message line or the button label yourself—the UI appends them from this tool. Call at most once per turn. Prefer writing your reply, then calling this tool.",
   },
   updateConversationTitle: {
     label: "Update conversation title",

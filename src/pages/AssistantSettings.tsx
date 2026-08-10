@@ -24,6 +24,7 @@ import { toast } from "sonner";
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
 const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
+const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
 
 type AssistantSettingsData = FunctionReturnType<typeof api.assistant.settings.getAssistantSettings>;
 type ToolKnowledgeItem = AssistantSettingsData["tools"][number];
@@ -36,15 +37,21 @@ const AssistantSettings = () => {
   const updateCoursesCatalogMessages = useMutation(
     api.assistant.settings.updateCoursesCatalogMessages,
   );
+  const updateWhatsAppSupportMessages = useMutation(
+    api.assistant.settings.updateWhatsAppSupportMessages,
+  );
   const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
   const [addonDrafts, setAddonDrafts] = useState<Record<string, string>>({});
   const [catalogMessageEn, setCatalogMessageEn] = useState("");
   const [catalogMessageAr, setCatalogMessageAr] = useState("");
+  const [whatsAppMessageEn, setWhatsAppMessageEn] = useState("");
+  const [whatsAppMessageAr, setWhatsAppMessageAr] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savingToolId, setSavingToolId] = useState<string | null>(null);
   const [togglingToolId, setTogglingToolId] = useState<string | null>(null);
   const [isSavingCatalog, setIsSavingCatalog] = useState(false);
+  const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
 
   useEffect(() => {
     if (settings?.customInstructions !== undefined) {
@@ -76,6 +83,14 @@ const AssistantSettings = () => {
     setCatalogMessageEn(settings.coursesCatalog.messageEn);
     setCatalogMessageAr(settings.coursesCatalog.messageAr);
   }, [settings?.coursesCatalog]);
+
+  useEffect(() => {
+    if (!settings?.whatsAppSupport) {
+      return;
+    }
+    setWhatsAppMessageEn(settings.whatsAppSupport.messageEn);
+    setWhatsAppMessageAr(settings.whatsAppSupport.messageAr);
+  }, [settings?.whatsAppSupport]);
 
   if (settings === undefined) {
     return (
@@ -192,12 +207,51 @@ const AssistantSettings = () => {
     }
   };
 
+  const handleSaveWhatsAppMessages = async () => {
+    if (whatsAppMessageEn.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH) {
+      toast.error(
+        `English WhatsApp support message is too long by ${(whatsAppMessageEn.length - MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+    if (whatsAppMessageAr.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH) {
+      toast.error(
+        `Arabic WhatsApp support message is too long by ${(whatsAppMessageAr.length - MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+
+    setIsSavingWhatsApp(true);
+    try {
+      const result = await updateWhatsAppSupportMessages({
+        messageEn: whatsAppMessageEn,
+        messageAr: whatsAppMessageAr,
+      });
+      setWhatsAppMessageEn(result.whatsAppSupport.messageEn);
+      setWhatsAppMessageAr(result.whatsAppSupport.messageAr);
+      toast.success("WhatsApp support messages updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save WhatsApp support messages",
+      );
+    } finally {
+      setIsSavingWhatsApp(false);
+    }
+  };
+
   const catalogDefaults = settings.coursesCatalog;
   const catalogDirty =
     catalogMessageEn !== catalogDefaults.messageEn ||
     catalogMessageAr !== catalogDefaults.messageAr;
   const catalogEnOverLimit = catalogMessageEn.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH;
   const catalogArOverLimit = catalogMessageAr.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH;
+
+  const whatsAppDefaults = settings.whatsAppSupport;
+  const whatsAppDirty =
+    whatsAppMessageEn !== whatsAppDefaults.messageEn ||
+    whatsAppMessageAr !== whatsAppDefaults.messageAr;
+  const whatsAppEnOverLimit = whatsAppMessageEn.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
+  const whatsAppArOverLimit = whatsAppMessageAr.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -517,6 +571,121 @@ const AssistantSettings = () => {
                               onClick={() => {
                                 setCatalogMessageEn(catalogDefaults.defaultMessageEn);
                                 setCatalogMessageAr(catalogDefaults.defaultMessageAr);
+                              }}
+                            >
+                              Reset to default
+                            </Button>
+                          </div>
+                        </div>
+                      ) : null}
+                      {tool.toolId === "sendWhatsAppSupport" ? (
+                        <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium">Fixed WhatsApp support message</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Shown after the assistant reply with the WhatsApp button. Leave blank
+                              and save to use the built-in default. Button label and base URL are
+                              fixed. The model may optionally add a ?text= prefill.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Button: {whatsAppDefaults.buttonTextEn} /{" "}
+                              {whatsAppDefaults.buttonTextAr} · URL: {whatsAppDefaults.url}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-end justify-between gap-2">
+                              <Label htmlFor="whatsapp-message-en">English message</Label>
+                              <p
+                                className={cn(
+                                  "text-xs tabular-nums",
+                                  whatsAppEnOverLimit
+                                    ? "font-medium text-destructive"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {whatsAppMessageEn.length.toLocaleString()} /{" "}
+                                {MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH.toLocaleString()}
+                              </p>
+                            </div>
+                            <Textarea
+                              id="whatsapp-message-en"
+                              value={whatsAppMessageEn}
+                              onChange={(event) => setWhatsAppMessageEn(event.target.value)}
+                              rows={3}
+                              dir="ltr"
+                              aria-invalid={whatsAppEnOverLimit}
+                              placeholder={whatsAppDefaults.defaultMessageEn}
+                              className={cn(
+                                "text-sm",
+                                whatsAppEnOverLimit &&
+                                  "border-destructive focus-visible:ring-destructive",
+                              )}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-end justify-between gap-2">
+                              <Label htmlFor="whatsapp-message-ar">Arabic message</Label>
+                              <p
+                                className={cn(
+                                  "text-xs tabular-nums",
+                                  whatsAppArOverLimit
+                                    ? "font-medium text-destructive"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {whatsAppMessageAr.length.toLocaleString()} /{" "}
+                                {MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH.toLocaleString()}
+                              </p>
+                            </div>
+                            <Textarea
+                              id="whatsapp-message-ar"
+                              value={whatsAppMessageAr}
+                              onChange={(event) => setWhatsAppMessageAr(event.target.value)}
+                              rows={3}
+                              dir="rtl"
+                              aria-invalid={whatsAppArOverLimit}
+                              placeholder={whatsAppDefaults.defaultMessageAr}
+                              className={cn(
+                                "text-sm",
+                                whatsAppArOverLimit &&
+                                  "border-destructive focus-visible:ring-destructive",
+                              )}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void handleSaveWhatsAppMessages()}
+                              disabled={
+                                !whatsAppDirty ||
+                                isSavingWhatsApp ||
+                                whatsAppEnOverLimit ||
+                                whatsAppArOverLimit
+                              }
+                            >
+                              {isSavingWhatsApp ? "Saving..." : "Save messages"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={!whatsAppDirty || isSavingWhatsApp}
+                              onClick={() => {
+                                setWhatsAppMessageEn(whatsAppDefaults.messageEn);
+                                setWhatsAppMessageAr(whatsAppDefaults.messageAr);
+                              }}
+                            >
+                              Discard
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={isSavingWhatsApp}
+                              onClick={() => {
+                                setWhatsAppMessageEn(whatsAppDefaults.defaultMessageEn);
+                                setWhatsAppMessageAr(whatsAppDefaults.defaultMessageAr);
                               }}
                             >
                               Reset to default

@@ -67,6 +67,7 @@ export type ParsedToolResults = {
   billingPortalUrl: string | null;
   callToActions: Array<{ text: string; url: string }>;
   coursesCatalog: ShowCoursesCatalogResult | null;
+  whatsAppSupport: SendWhatsAppSupportResult | null;
 };
 
 export type ShowCoursesCatalogResult = {
@@ -76,4 +77,12 @@ export type ShowCoursesCatalogResult = {
   buttonTextAr: string;
   urlEn: string;
   urlAr: string;
+};
+
+export type SendWhatsAppSupportResult = {
+  messageEn: string;
+  messageAr: string;
+  buttonTextEn: string;
+  buttonTextAr: string;
+  url: string;
 };
