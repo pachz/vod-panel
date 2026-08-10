@@ -23,6 +23,7 @@ import { toast } from "sonner";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
+const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
 
 type AssistantSettingsData = FunctionReturnType<typeof api.assistant.settings.getAssistantSettings>;
 type ToolKnowledgeItem = AssistantSettingsData["tools"][number];
@@ -32,12 +33,18 @@ const AssistantSettings = () => {
   const settings = useQuery(api.assistant.settings.getAssistantSettings);
   const updateSettings = useMutation(api.assistant.settings.updateAssistantSettings);
   const updateToolKnowledge = useMutation(api.assistant.settings.updateAssistantToolKnowledge);
+  const updateCoursesCatalogMessages = useMutation(
+    api.assistant.settings.updateCoursesCatalogMessages,
+  );
   const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
   const [addonDrafts, setAddonDrafts] = useState<Record<string, string>>({});
+  const [catalogMessageEn, setCatalogMessageEn] = useState("");
+  const [catalogMessageAr, setCatalogMessageAr] = useState("");
   const [isSaving, setIsSaving] = useState(false);
   const [savingToolId, setSavingToolId] = useState<string | null>(null);
   const [togglingToolId, setTogglingToolId] = useState<string | null>(null);
+  const [isSavingCatalog, setIsSavingCatalog] = useState(false);
 
   useEffect(() => {
     if (settings?.customInstructions !== undefined) {
@@ -61,6 +68,14 @@ const AssistantSettings = () => {
       return changed ? next : previous;
     });
   }, [settings?.tools]);
+
+  useEffect(() => {
+    if (!settings?.coursesCatalog) {
+      return;
+    }
+    setCatalogMessageEn(settings.coursesCatalog.messageEn);
+    setCatalogMessageAr(settings.coursesCatalog.messageAr);
+  }, [settings?.coursesCatalog]);
 
   if (settings === undefined) {
     return (
@@ -144,6 +159,45 @@ const AssistantSettings = () => {
       setSavingToolId(null);
     }
   };
+
+  const handleSaveCatalogMessages = async () => {
+    if (catalogMessageEn.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH) {
+      toast.error(
+        `English catalog message is too long by ${(catalogMessageEn.length - MAX_COURSES_CATALOG_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+    if (catalogMessageAr.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH) {
+      toast.error(
+        `Arabic catalog message is too long by ${(catalogMessageAr.length - MAX_COURSES_CATALOG_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+
+    setIsSavingCatalog(true);
+    try {
+      const result = await updateCoursesCatalogMessages({
+        messageEn: catalogMessageEn,
+        messageAr: catalogMessageAr,
+      });
+      setCatalogMessageEn(result.coursesCatalog.messageEn);
+      setCatalogMessageAr(result.coursesCatalog.messageAr);
+      toast.success("Courses catalog messages updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save catalog messages",
+      );
+    } finally {
+      setIsSavingCatalog(false);
+    }
+  };
+
+  const catalogDefaults = settings.coursesCatalog;
+  const catalogDirty =
+    catalogMessageEn !== catalogDefaults.messageEn ||
+    catalogMessageAr !== catalogDefaults.messageAr;
+  const catalogEnOverLimit = catalogMessageEn.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH;
+  const catalogArOverLimit = catalogMessageAr.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -353,6 +407,122 @@ const AssistantSettings = () => {
                       </div>
                       {tool.toolId === "getNamedInstructions" ? (
                         <NamedInstructionsSection />
+                      ) : null}
+                      {tool.toolId === "showCoursesCatalog" ? (
+                        <div className="space-y-4 rounded-lg border border-border/60 bg-muted/20 p-4">
+                          <div className="space-y-1">
+                            <h4 className="text-sm font-medium">Fixed catalog message</h4>
+                            <p className="text-sm text-muted-foreground">
+                              Shown after the assistant reply with the All courses button. Leave
+                              blank and save to use the built-in default. Button labels and URLs are
+                              fixed.
+                            </p>
+                            <p className="text-xs text-muted-foreground">
+                              Button: {catalogDefaults.buttonTextEn} /{" "}
+                              {catalogDefaults.buttonTextAr} · URLs: {catalogDefaults.urlEn} ·{" "}
+                              {catalogDefaults.urlAr}
+                            </p>
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-end justify-between gap-2">
+                              <Label htmlFor="catalog-message-en">English message</Label>
+                              <p
+                                className={cn(
+                                  "text-xs tabular-nums",
+                                  catalogEnOverLimit
+                                    ? "font-medium text-destructive"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {catalogMessageEn.length.toLocaleString()} /{" "}
+                                {MAX_COURSES_CATALOG_MESSAGE_LENGTH.toLocaleString()}
+                              </p>
+                            </div>
+                            <Textarea
+                              id="catalog-message-en"
+                              value={catalogMessageEn}
+                              onChange={(event) => setCatalogMessageEn(event.target.value)}
+                              rows={3}
+                              dir="ltr"
+                              aria-invalid={catalogEnOverLimit}
+                              placeholder={catalogDefaults.defaultMessageEn}
+                              className={cn(
+                                "text-sm",
+                                catalogEnOverLimit &&
+                                  "border-destructive focus-visible:ring-destructive",
+                              )}
+                            />
+                          </div>
+                          <div className="space-y-2">
+                            <div className="flex flex-wrap items-end justify-between gap-2">
+                              <Label htmlFor="catalog-message-ar">Arabic message</Label>
+                              <p
+                                className={cn(
+                                  "text-xs tabular-nums",
+                                  catalogArOverLimit
+                                    ? "font-medium text-destructive"
+                                    : "text-muted-foreground",
+                                )}
+                              >
+                                {catalogMessageAr.length.toLocaleString()} /{" "}
+                                {MAX_COURSES_CATALOG_MESSAGE_LENGTH.toLocaleString()}
+                              </p>
+                            </div>
+                            <Textarea
+                              id="catalog-message-ar"
+                              value={catalogMessageAr}
+                              onChange={(event) => setCatalogMessageAr(event.target.value)}
+                              rows={3}
+                              dir="rtl"
+                              aria-invalid={catalogArOverLimit}
+                              placeholder={catalogDefaults.defaultMessageAr}
+                              className={cn(
+                                "text-sm",
+                                catalogArOverLimit &&
+                                  "border-destructive focus-visible:ring-destructive",
+                              )}
+                            />
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            <Button
+                              type="button"
+                              size="sm"
+                              onClick={() => void handleSaveCatalogMessages()}
+                              disabled={
+                                !catalogDirty ||
+                                isSavingCatalog ||
+                                catalogEnOverLimit ||
+                                catalogArOverLimit
+                              }
+                            >
+                              {isSavingCatalog ? "Saving..." : "Save messages"}
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={!catalogDirty || isSavingCatalog}
+                              onClick={() => {
+                                setCatalogMessageEn(catalogDefaults.messageEn);
+                                setCatalogMessageAr(catalogDefaults.messageAr);
+                              }}
+                            >
+                              Discard
+                            </Button>
+                            <Button
+                              type="button"
+                              size="sm"
+                              variant="outline"
+                              disabled={isSavingCatalog}
+                              onClick={() => {
+                                setCatalogMessageEn(catalogDefaults.defaultMessageEn);
+                                setCatalogMessageAr(catalogDefaults.defaultMessageAr);
+                              }}
+                            >
+                              Reset to default
+                            </Button>
+                          </div>
+                        </div>
                       ) : null}
                     </AccordionContent>
                   </AccordionItem>

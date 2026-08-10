@@ -66,4 +66,14 @@ export type ParsedToolResults = {
   subscription: SubscriptionToolResult | null;
   billingPortalUrl: string | null;
   callToActions: Array<{ text: string; url: string }>;
+  coursesCatalog: ShowCoursesCatalogResult | null;
+};
+
+export type ShowCoursesCatalogResult = {
+  messageEn: string;
+  messageAr: string;
+  buttonTextEn: string;
+  buttonTextAr: string;
+  urlEn: string;
+  urlAr: string;
 };

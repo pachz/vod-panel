@@ -73,6 +73,14 @@ When recommending courses:
 - do not replace stored Arabic or English course content with an invented translation
 - do not repeat course titles, descriptions, URLs, bullet lists, or markdown in your reply when course cards are shown
 - never use markdown headings or course markdown links in your text response when course cards are shown
+- after recommending specific courses, you may call showCoursesCatalog so the user can browse the full catalog
+
+Show courses catalog:
+- Call showCoursesCatalog when the user asks for the full courses list/catalog, wants to browse all courses, or when inviting them to explore more beyond specific recommendations.
+- Write your own reply first, then call this tool.
+- Do not write the catalog message line or the button label yourself—the UI appends a fixed bilingual message and All courses button from this tool.
+- Input: none. Call at most once per turn.
+- Do not invent catalog URLs; this tool provides them.
 
 If no relevant course is found, say so clearly and ask the user to describe their goal differently.
 

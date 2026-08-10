@@ -11,6 +11,7 @@ import {
 import {
   ASSISTANT_TOOL_CATALOG,
   ASSISTANT_TOOL_IDS,
+  COURSES_CATALOG_DEFAULTS,
   assistantToolIdValidator,
   isAssistantToolId,
   type AssistantToolId,
@@ -22,10 +23,15 @@ import {
   buildNamedInstructionsToolDescription,
   type NamedInstructionsToolContext,
 } from "./namedInstructions";
+import { showCoursesCatalogResultValidator } from "./validators";
+import type { Infer } from "convex/values";
 
 const SETTINGS_KEY = "global" as const;
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
+const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
+
+type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
 
 const toolKnowledgeItemValidator = v.object({
   toolId: assistantToolIdValidator,
@@ -36,6 +42,44 @@ const toolKnowledgeItemValidator = v.object({
   descriptionAddon: v.string(),
   effectiveDescription: v.string(),
 });
+
+const coursesCatalogSettingsValidator = v.object({
+  messageEn: v.string(),
+  messageAr: v.string(),
+  defaultMessageEn: v.string(),
+  defaultMessageAr: v.string(),
+  buttonTextEn: v.string(),
+  buttonTextAr: v.string(),
+  urlEn: v.string(),
+  urlAr: v.string(),
+});
+
+function resolveCoursesCatalogMessages(settings: {
+  coursesCatalogMessageEn?: string;
+  coursesCatalogMessageAr?: string;
+} | null): { messageEn: string; messageAr: string } {
+  const messageEn = settings?.coursesCatalogMessageEn?.trim();
+  const messageAr = settings?.coursesCatalogMessageAr?.trim();
+  return {
+    messageEn: messageEn || COURSES_CATALOG_DEFAULTS.messageEn,
+    messageAr: messageAr || COURSES_CATALOG_DEFAULTS.messageAr,
+  };
+}
+
+export function buildShowCoursesCatalogResult(settings: {
+  coursesCatalogMessageEn?: string;
+  coursesCatalogMessageAr?: string;
+} | null): ShowCoursesCatalogResult {
+  const messages = resolveCoursesCatalogMessages(settings);
+  return {
+    messageEn: messages.messageEn,
+    messageAr: messages.messageAr,
+    buttonTextEn: COURSES_CATALOG_DEFAULTS.buttonTextEn,
+    buttonTextAr: COURSES_CATALOG_DEFAULTS.buttonTextAr,
+    urlEn: COURSES_CATALOG_DEFAULTS.urlEn,
+    urlAr: COURSES_CATALOG_DEFAULTS.urlAr,
+  };
+}
 
 async function getSettingsDoc(ctx: QueryCtx | MutationCtx) {
   return await ctx.db
@@ -124,6 +168,15 @@ export const getToolOverridesInternal = internalQuery({
   },
 });
 
+export const getShowCoursesCatalogInternal = internalQuery({
+  args: {},
+  returns: showCoursesCatalogResultValidator,
+  handler: async (ctx): Promise<ShowCoursesCatalogResult> => {
+    const settings = await getSettingsDoc(ctx);
+    return buildShowCoursesCatalogResult(settings);
+  },
+});
+
 export const getAssistantSettings = query({
   args: {},
   returns: v.object({
@@ -131,6 +184,7 @@ export const getAssistantSettings = query({
     fixedInstructions: v.string(),
     defaultCustomInstructions: v.string(),
     tools: v.array(toolKnowledgeItemValidator),
+    coursesCatalog: coursesCatalogSettingsValidator,
     updatedAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
@@ -138,6 +192,7 @@ export const getAssistantSettings = query({
 
     const settings = await getSettingsDoc(ctx);
     const overrides = normalizeToolOverrides(settings?.toolOverrides);
+    const catalogResult = buildShowCoursesCatalogResult(settings);
 
     const activeFiles = await ctx.db
       .query("assistantKnowledgeFiles")
@@ -203,6 +258,16 @@ export const getAssistantSettings = query({
         knowledgeRuntimeDescription,
         namedInstructionsRuntimeDescription,
       ),
+      coursesCatalog: {
+        messageEn: catalogResult.messageEn,
+        messageAr: catalogResult.messageAr,
+        defaultMessageEn: COURSES_CATALOG_DEFAULTS.messageEn,
+        defaultMessageAr: COURSES_CATALOG_DEFAULTS.messageAr,
+        buttonTextEn: catalogResult.buttonTextEn,
+        buttonTextAr: catalogResult.buttonTextAr,
+        urlEn: catalogResult.urlEn,
+        urlAr: catalogResult.urlAr,
+      },
       updatedAt: settings?.updatedAt,
     };
   },
@@ -327,5 +392,76 @@ export const updateAssistantToolKnowledge = mutation({
     }
 
     return { updatedAt: now, tool };
+  },
+});
+
+export const updateCoursesCatalogMessages = mutation({
+  args: {
+    messageEn: v.string(),
+    messageAr: v.string(),
+  },
+  returns: v.object({
+    updatedAt: v.number(),
+    coursesCatalog: coursesCatalogSettingsValidator,
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    if (args.messageEn.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH) {
+      throw new Error(
+        `English catalog message is too long (${args.messageEn.length.toLocaleString()} characters). Please shorten it to ${MAX_COURSES_CATALOG_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+    if (args.messageAr.length > MAX_COURSES_CATALOG_MESSAGE_LENGTH) {
+      throw new Error(
+        `Arabic catalog message is too long (${args.messageAr.length.toLocaleString()} characters). Please shorten it to ${MAX_COURSES_CATALOG_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+
+    const now = Date.now();
+    const existing = await getSettingsDoc(ctx);
+    const coursesCatalogMessageEn = args.messageEn.trim();
+    const coursesCatalogMessageAr = args.messageAr.trim();
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        coursesCatalogMessageEn,
+        coursesCatalogMessageAr,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    } else {
+      await ctx.db.insert("assistantSettings", {
+        key: SETTINGS_KEY,
+        customInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+        coursesCatalogMessageEn,
+        coursesCatalogMessageAr,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    }
+
+    const catalogResult = buildShowCoursesCatalogResult({
+      coursesCatalogMessageEn,
+      coursesCatalogMessageAr,
+    });
+
+    return {
+      updatedAt: now,
+      coursesCatalog: {
+        messageEn: catalogResult.messageEn,
+        messageAr: catalogResult.messageAr,
+        defaultMessageEn: COURSES_CATALOG_DEFAULTS.messageEn,
+        defaultMessageAr: COURSES_CATALOG_DEFAULTS.messageAr,
+        buttonTextEn: catalogResult.buttonTextEn,
+        buttonTextAr: catalogResult.buttonTextAr,
+        urlEn: catalogResult.urlEn,
+        urlAr: catalogResult.urlAr,
+      },
+    };
   },
 });

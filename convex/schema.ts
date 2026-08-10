@@ -470,6 +470,10 @@ export default defineSchema({
         }),
       ),
     ),
+    /** Optional overrides for the showCoursesCatalog fixed message (English). */
+    coursesCatalogMessageEn: v.optional(v.string()),
+    /** Optional overrides for the showCoursesCatalog fixed message (Arabic). */
+    coursesCatalogMessageAr: v.optional(v.string()),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),

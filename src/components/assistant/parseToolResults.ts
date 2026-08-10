@@ -4,6 +4,7 @@ import type {
   ActiveSubscriptionPlan,
   CourseSearchResult,
   ParsedToolResults,
+  ShowCoursesCatalogResult,
   SubscriptionToolResult,
 } from "./types";
 
@@ -61,6 +62,19 @@ function isRenderUiCardsResult(value: unknown): value is {
   );
 }
 
+function isShowCoursesCatalogResult(value: unknown): value is ShowCoursesCatalogResult {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.messageEn === "string" &&
+    typeof record.messageAr === "string" &&
+    typeof record.buttonTextEn === "string" &&
+    typeof record.buttonTextAr === "string" &&
+    typeof record.urlEn === "string" &&
+    typeof record.urlAr === "string"
+  );
+}
+
 function emptyResults(): ParsedToolResults {
   return {
     courses: [],
@@ -68,6 +82,7 @@ function emptyResults(): ParsedToolResults {
     subscription: null,
     billingPortalUrl: null,
     callToActions: [],
+    coursesCatalog: null,
   };
 }
 
@@ -121,16 +136,22 @@ function getToolPartMeta(part: unknown): { toolName: string; output: unknown } |
   return { toolName, output };
 }
 
-/** Cards/buttons only come from renderUiCards — never from lookup tools. */
+/** Cards/buttons only come from renderUiCards / showCoursesCatalog — never from lookup tools. */
 export function parseToolResultsFromMessage(message: UIMessage): ParsedToolResults {
   const results = emptyResults();
 
   for (const part of message.parts ?? []) {
     const meta = getToolPartMeta(part);
-    if (!meta || meta.toolName !== "renderUiCards" || !isRenderUiCardsResult(meta.output)) {
+    if (!meta) continue;
+
+    if (meta.toolName === "renderUiCards" && isRenderUiCardsResult(meta.output)) {
+      applyRenderUiCardsOutput(meta.output, results);
       continue;
     }
-    applyRenderUiCardsOutput(meta.output, results);
+
+    if (meta.toolName === "showCoursesCatalog" && isShowCoursesCatalogResult(meta.output)) {
+      results.coursesCatalog = meta.output;
+    }
   }
 
   return results;

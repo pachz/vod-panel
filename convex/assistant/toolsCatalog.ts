@@ -8,6 +8,7 @@ export const ASSISTANT_TOOL_IDS = [
   "listActiveSubscriptionPlans",
   "createBillingPortalSession",
   "renderUiCards",
+  "showCoursesCatalog",
   "updateConversationTitle",
   "updateUserMemory",
 ] as const;
@@ -22,9 +23,22 @@ export const assistantToolIdValidator = v.union(
   v.literal("listActiveSubscriptionPlans"),
   v.literal("createBillingPortalSession"),
   v.literal("renderUiCards"),
+  v.literal("showCoursesCatalog"),
   v.literal("updateConversationTitle"),
   v.literal("updateUserMemory"),
 );
+
+/** Default catalog CTA copy. Admins may override messageEn / messageAr in settings. */
+export const COURSES_CATALOG_DEFAULTS = {
+  messageEn:
+    "For a complete list of courses, you can explore more in our courses catalog.",
+  messageAr:
+    "للحصول على قائمة كاملة بالدورات، يمكنك استكشاف المزيد في كتالوج الدورات لدينا.",
+  buttonTextEn: "All courses",
+  buttonTextAr: "جميع الدورات",
+  urlEn: "https://www.rehamdiva.com/en/courses",
+  urlAr: "https://www.rehamdiva.com/ar/courses",
+} as const;
 
 export const assistantToolOverrideValidator = v.object({
   enabled: v.boolean(),
@@ -87,6 +101,12 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     summary: "Show course, plan, subscription, billing, or CTA buttons in the chat.",
     defaultDescription:
       "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button), callToActions (array of { text, url } for large call-to-action buttons—use https URLs or site paths starting with /). Do not also put the same CTA url as a markdown link in your text reply; duplicated urls hide the CTA button. Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards or CTA buttons.",
+  },
+  showCoursesCatalog: {
+    label: "Show courses catalog",
+    summary: "Append a fixed catalog message and an All courses button after your reply.",
+    defaultDescription:
+      "Show a fixed courses-catalog message line and an All courses button after your text reply. Use when the user wants to browse the full courses list/catalog, or when inviting them to explore more courses beyond specific recommendations. Input: none. Do not write the catalog message line or the button label yourself—the UI appends them from this tool. Call at most once per turn. Prefer writing your reply, then calling this tool.",
   },
   updateConversationTitle: {
     label: "Update conversation title",

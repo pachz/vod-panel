@@ -28,13 +28,29 @@ function AssistantText({ message }: { message: UIMessage }) {
 }
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
-  const { t, isRTL } = useLanguage();
+  const { t, isRTL, language } = useLanguage();
   const isUser = message.role === "user";
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
   const visibleCallToActions =
     toolResults?.callToActions.length
       ? filterCallToActionsNotDuplicatedInText(toolResults.callToActions, message.text)
       : [];
+  const coursesCatalog = toolResults?.coursesCatalog
+    ? {
+        message:
+          language === "ar"
+            ? toolResults.coursesCatalog.messageAr
+            : toolResults.coursesCatalog.messageEn,
+        buttonText:
+          language === "ar"
+            ? toolResults.coursesCatalog.buttonTextAr
+            : toolResults.coursesCatalog.buttonTextEn,
+        url:
+          language === "ar"
+            ? toolResults.coursesCatalog.urlAr
+            : toolResults.coursesCatalog.urlEn,
+      }
+    : null;
 
   return (
     <div
@@ -89,6 +105,14 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                     url={cta.url}
                   />
                 ))}
+              </div>
+            ) : null}
+            {coursesCatalog ? (
+              <div className="grid min-w-0 gap-2 pt-1">
+                <p className="text-sm leading-relaxed text-muted-foreground">
+                  {coursesCatalog.message}
+                </p>
+                <AssistantCtaButton text={coursesCatalog.buttonText} url={coursesCatalog.url} />
               </div>
             ) : null}
           </>

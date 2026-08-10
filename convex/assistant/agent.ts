@@ -24,6 +24,7 @@ import type {
   courseSearchResultValidator,
   namedInstructionResultValidator,
   renderUiCardsResultValidator,
+  showCoursesCatalogResultValidator,
   subscriptionToolResultValidator,
   userMemoryUpdateResultValidator,
 } from "./validators";
@@ -35,6 +36,7 @@ type SubscriptionToolResult = Infer<typeof subscriptionToolResultValidator>;
 type ActiveSubscriptionPlan = Infer<typeof activeSubscriptionPlanValidator>;
 type BillingPortalResult = Infer<typeof billingPortalResultValidator>;
 type RenderUiCardsResult = Infer<typeof renderUiCardsResultValidator>;
+type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
 type ConversationTitleUpdateResult = Infer<typeof conversationTitleUpdateResultValidator>;
 type UserMemoryUpdateResult = Infer<typeof userMemoryUpdateResultValidator>;
 type NamedInstructionResult = Infer<typeof namedInstructionResultValidator>;
@@ -392,6 +394,18 @@ function createRenderUiCardsTool(description: string) {
   });
 }
 
+function createShowCoursesCatalogTool(description: string) {
+  return createTool({
+    description,
+    inputSchema: z.object({}),
+    execute: async (ctx): Promise<ShowCoursesCatalogResult> => {
+      return await withToolCallLogging("showCoursesCatalog", {}, async () => {
+        return await ctx.runQuery(internal.assistant.settings.getShowCoursesCatalogInternal, {});
+      });
+    },
+  });
+}
+
 function isSafeAssistantToolUrl(url: string): boolean {
   if (url.startsWith("/")) {
     return !url.startsWith("//") && !url.includes("://");
@@ -479,6 +493,7 @@ export function buildAssistantTools(
     listActiveSubscriptionPlans?: ReturnType<typeof createListActiveSubscriptionPlansTool>;
     createBillingPortalSession?: ReturnType<typeof createBillingPortalSessionTool>;
     renderUiCards?: ReturnType<typeof createRenderUiCardsTool>;
+    showCoursesCatalog?: ReturnType<typeof createShowCoursesCatalogTool>;
     updateConversationTitle?: ReturnType<typeof createUpdateConversationTitleTool>;
     updateUserMemory?: ReturnType<typeof createUpdateUserMemoryTool>;
   } = {};
@@ -537,6 +552,9 @@ export function buildAssistantTools(
         break;
       case "renderUiCards":
         tools.renderUiCards = createRenderUiCardsTool(description);
+        break;
+      case "showCoursesCatalog":
+        tools.showCoursesCatalog = createShowCoursesCatalogTool(description);
         break;
       case "updateConversationTitle":
         tools.updateConversationTitle = createUpdateConversationTitleTool(description);

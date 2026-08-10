@@ -80,6 +80,15 @@ export const renderUiCardsResultValidator = v.object({
   callToActions: v.array(assistantCtaButtonValidator),
 });
 
+export const showCoursesCatalogResultValidator = v.object({
+  messageEn: v.string(),
+  messageAr: v.string(),
+  buttonTextEn: v.string(),
+  buttonTextAr: v.string(),
+  urlEn: v.string(),
+  urlAr: v.string(),
+});
+
 export const conversationTitleUpdateResultValidator = v.object({
   success: v.boolean(),
   title: v.optional(v.string()),
