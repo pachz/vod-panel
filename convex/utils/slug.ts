@@ -1,13 +1,8 @@
+import { isUsableSlug, slugify } from "../../shared/slugify";
 import type { Id, TableNames } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-export const slugify = (value: string) =>
-  value
-    .toLowerCase()
-    .trim()
-    .replace(/[^\w\s-]/g, "")
-    .replace(/\s+/g, "-")
-    .replace(/-+/g, "-");
+export { isUsableSlug, slugify };
 
 type GenerateUniqueSlugOptions<TableName extends TableNames> = {
   excludeId?: Id<TableName>;
@@ -20,8 +15,13 @@ export const generateUniqueSlug = async <TableName extends TableNames>(
   baseSlug: string,
   { excludeId, fallbackSlug }: GenerateUniqueSlugOptions<TableName> = {},
 ) => {
-  const normalizedBase =
-    baseSlug.length > 0 ? baseSlug : slugify(fallbackSlug ?? tableName);
+  const slugifiedBase = slugify(baseSlug);
+  const slugifiedFallback = slugify(fallbackSlug ?? tableName);
+  const normalizedBase = isUsableSlug(slugifiedBase)
+    ? slugifiedBase
+    : isUsableSlug(slugifiedFallback)
+      ? slugifiedFallback
+      : "item";
 
   let candidate = normalizedBase;
   let counter = 1;
@@ -43,4 +43,3 @@ export const generateUniqueSlug = async <TableName extends TableNames>(
     counter += 1;
   }
 };
-

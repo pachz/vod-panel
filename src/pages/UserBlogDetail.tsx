@@ -108,8 +108,17 @@ const UserBlogDetail = () => {
           {title}
         </h1>
 
-        <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
-          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground">
+        <div
+          dir="ltr"
+          className={cn(
+            "flex w-full flex-col gap-4 sm:flex-row sm:items-center",
+            isRTL ? "items-end sm:flex-row-reverse" : "sm:justify-between",
+          )}
+        >
+          <div
+            dir={isRTL ? "rtl" : "ltr"}
+            className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1 text-sm text-muted-foreground"
+          >
             {authorImage ? (
               <img
                 src={authorImage}
@@ -137,7 +146,10 @@ const UserBlogDetail = () => {
             </span>
           </div>
 
-          <div className="flex items-center gap-2">
+          <div
+            dir={isRTL ? "rtl" : "ltr"}
+            className="flex items-center gap-2"
+          >
             <span className="text-sm text-muted-foreground">{t("share")}:</span>
             <ShareIconButton
               href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`}

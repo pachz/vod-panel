@@ -2,7 +2,7 @@ import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { buildCourseSearchFields } from "./lib/courseSearchText";
-import { generateUniqueSlug, slugify } from "./utils/slug";
+import { generateUniqueSlug, isUsableSlug, slugify } from "./utils/slug";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
@@ -135,14 +135,14 @@ export const assignLessonsToDefaultChapter = migrations.define({
 });
 
 /**
- * Backfill unique URL slugs for blogs from English titles.
+ * Backfill unique URL slugs for blogs from titles (transliterating Arabic).
  */
 export const backfillBlogSlugs = migrations.define({
   table: "blogs",
   migrateOne: async (ctx, blog) => {
-    if (blog.slug !== undefined && blog.slug.length > 0) return;
+    if (isUsableSlug(blog.slug)) return;
 
-    const baseSlug = slugify(blog.title);
+    const baseSlug = slugify(blog.title) || slugify(blog.title_ar);
     const slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
       excludeId: blog._id,
       fallbackSlug: "blog",

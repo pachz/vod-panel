@@ -42,6 +42,26 @@ import { cn } from "@/lib/utils";
 
 type FormattingAction = "bold" | "italic" | "list" | "quote" | "heading";
 
+/** One or more markdown (`-`, `*`, `+`) or pasted unicode bullet prefixes. */
+const LIST_PREFIX_RE = /^(?:(?:[-*+]|•)\s+)+/;
+
+function toBulletListLine(line: string): string {
+  const trimmed = line.trim();
+  if (!trimmed) {
+    return "- ";
+  }
+  if (LIST_PREFIX_RE.test(trimmed)) {
+    return trimmed.replace(LIST_PREFIX_RE, "- ");
+  }
+  return `- ${trimmed}`;
+}
+
+function lineRangeAt(value: string, cursor: number): { start: number; end: number } {
+  const start = value.lastIndexOf("\n", cursor - 1) + 1;
+  const newline = value.indexOf("\n", cursor);
+  return { start, end: newline === -1 ? value.length : newline };
+}
+
 type RichTextareaProps = {
   id: string;
   label: string;
@@ -213,25 +233,25 @@ export const RichTextarea = ({
       }
       case "list": {
         if (!selectedText) {
-          surroundSelection("- ");
+          // Prefix the current line once. `surroundSelection("- ")` would also
+          // append "- " (after defaults to before) and render as nested bullets.
+          const { start, end } = lineRangeAt(currentValue, selectionStart);
+          const formattedLine = toBulletListLine(currentValue.slice(start, end));
+          const newValue =
+            currentValue.slice(0, start) + formattedLine + currentValue.slice(end);
+          setEditingValue(newValue);
+          const cursor = start + formattedLine.length;
+          requestAnimationFrame(() => {
+            textarea.focus();
+            textarea.selectionStart = cursor;
+            textarea.selectionEnd = cursor;
+          });
           break;
         }
 
-        const lines = selectedText.split(/\r?\n/);
-        const formatted = lines
-          .map((line) => {
-            const trimmed = line.trim();
-            if (!trimmed) {
-              return "- ";
-            }
-            if (/^-{1,2}\s/.test(trimmed)) {
-              return trimmed;
-            }
-            return `- ${trimmed}`;
-          })
-          .join("\n");
-
-        surroundSelection("", "", () => formatted);
+        surroundSelection("", "", (input) =>
+          input.split(/\r?\n/).map(toBulletListLine).join("\n"),
+        );
         break;
       }
       default:
