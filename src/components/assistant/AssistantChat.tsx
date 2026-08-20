@@ -6,7 +6,7 @@ import {
   useState,
 } from "react";
 import { useMutation } from "convex/react";
-import { useUIMessages, optimisticallySendMessage } from "@convex-dev/agent/react";
+import { useUIMessages, optimisticallySendMessage, type UIMessage } from "@convex-dev/agent/react";
 import { Loader2, Send } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
 import { Button } from "@/components/ui/button";
@@ -26,6 +26,36 @@ const SUGGESTION_KEYS = [
   "assistantSuggestion2",
   "assistantSuggestion3",
 ] as const;
+
+/** True while Pass 1 / cleanup run before Pass 2 streams (no draft prose yet). */
+function isAwaitingAssistantReply(messages: UIMessage[]): boolean {
+  if (messages.length === 0) return false;
+
+  let lastUserIndex = -1;
+  for (let i = messages.length - 1; i >= 0; i -= 1) {
+    if (messages[i]?.role === "user") {
+      lastUserIndex = i;
+      break;
+    }
+  }
+  if (lastUserIndex === -1) return false;
+
+  const after = messages.slice(lastUserIndex + 1);
+  if (after.some((message) => message.status === "streaming" || message.status === "pending")) {
+    return true;
+  }
+  if (after.some((message) => message.status === "failed")) {
+    return false;
+  }
+
+  // Settled only once assistant prose exists for this turn (cleaned stream or fallback).
+  return !after.some(
+    (message) =>
+      message.role === "assistant" &&
+      message.status === "success" &&
+      message.text.trim().length > 0,
+  );
+}
 
 export function AssistantChat({
   threadId,
@@ -64,10 +94,17 @@ export function AssistantChat({
     [messages],
   );
 
+  const isAwaitingReply = useMemo(
+    () => isAwaitingAssistantReply(messages ?? []),
+    [messages],
+  );
+
+  const showThinking = isSending || isStreaming || isAwaitingReply;
+
   useEffect(() => {
     if (!autoScroll) return;
     bottomRef.current?.scrollIntoView({ behavior: "smooth" });
-  }, [messages, autoScroll, isStreaming]);
+  }, [messages, autoScroll, isStreaming, showThinking]);
 
   const handleScroll = useCallback(() => {
     const viewport = scrollAreaRef.current?.querySelector("[data-radix-scroll-area-viewport]");
@@ -144,7 +181,7 @@ export function AssistantChat({
             <AssistantMessage key={message.key} message={message} />
           ))}
 
-          {isSending || isStreaming ? (
+          {showThinking ? (
             <div className="flex items-center gap-2 text-sm text-muted-foreground">
               <Loader2 className="h-4 w-4 animate-spin" />
               {t("assistantThinking")}

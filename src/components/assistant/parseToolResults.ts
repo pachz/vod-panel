@@ -66,6 +66,7 @@ function isRenderUiCardsResult(value: unknown): value is {
 function isShowCoursesCatalogResult(value: unknown): value is ShowCoursesCatalogResult {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
+  if (record.suppressed === true) return false;
   return (
     typeof record.messageEn === "string" &&
     typeof record.messageAr === "string" &&
@@ -79,6 +80,7 @@ function isShowCoursesCatalogResult(value: unknown): value is ShowCoursesCatalog
 function isSendWhatsAppSupportResult(value: unknown): value is SendWhatsAppSupportResult {
   if (!value || typeof value !== "object") return false;
   const record = value as Record<string, unknown>;
+  if (record.suppressed === true) return false;
   return (
     typeof record.messageEn === "string" &&
     typeof record.messageAr === "string" &&

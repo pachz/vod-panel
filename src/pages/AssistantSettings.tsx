@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
@@ -25,6 +26,7 @@ const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
 const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
 const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
+const MAX_CLEANUP_PROMPT_LENGTH = 20_000;
 
 type AssistantSettingsData = FunctionReturnType<typeof api.assistant.settings.getAssistantSettings>;
 type ToolKnowledgeItem = AssistantSettingsData["tools"][number];
@@ -40,6 +42,7 @@ const AssistantSettings = () => {
   const updateWhatsAppSupportMessages = useMutation(
     api.assistant.settings.updateWhatsAppSupportMessages,
   );
+  const updateCleanupSettings = useMutation(api.assistant.settings.updateCleanupSettings);
   const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
   const [addonDrafts, setAddonDrafts] = useState<Record<string, string>>({});
@@ -47,11 +50,18 @@ const AssistantSettings = () => {
   const [catalogMessageAr, setCatalogMessageAr] = useState("");
   const [whatsAppMessageEn, setWhatsAppMessageEn] = useState("");
   const [whatsAppMessageAr, setWhatsAppMessageAr] = useState("");
+  const [cleanupCtaSystem, setCleanupCtaSystem] = useState("");
+  const [cleanupStreamSystem, setCleanupStreamSystem] = useState("");
+  const [cleanupCtaUserTemplate, setCleanupCtaUserTemplate] = useState("");
+  const [cleanupStreamUserTemplate, setCleanupStreamUserTemplate] = useState("");
+  const [cleanupModel, setCleanupModel] = useState("");
+  const [cleanupCtaTemperature, setCleanupCtaTemperature] = useState("0");
   const [isSaving, setIsSaving] = useState(false);
   const [savingToolId, setSavingToolId] = useState<string | null>(null);
   const [togglingToolId, setTogglingToolId] = useState<string | null>(null);
   const [isSavingCatalog, setIsSavingCatalog] = useState(false);
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+  const [isSavingCleanup, setIsSavingCleanup] = useState(false);
 
   useEffect(() => {
     if (settings?.customInstructions !== undefined) {
@@ -91,6 +101,18 @@ const AssistantSettings = () => {
     setWhatsAppMessageEn(settings.whatsAppSupport.messageEn);
     setWhatsAppMessageAr(settings.whatsAppSupport.messageAr);
   }, [settings?.whatsAppSupport]);
+
+  useEffect(() => {
+    if (!settings?.cleanup) {
+      return;
+    }
+    setCleanupCtaSystem(settings.cleanup.ctaSystemPrompt);
+    setCleanupStreamSystem(settings.cleanup.streamSystemPrompt);
+    setCleanupCtaUserTemplate(settings.cleanup.ctaUserPromptTemplate);
+    setCleanupStreamUserTemplate(settings.cleanup.streamUserPromptTemplate);
+    setCleanupModel(settings.cleanup.model);
+    setCleanupCtaTemperature(String(settings.cleanup.ctaTemperature));
+  }, [settings?.cleanup]);
 
   if (settings === undefined) {
     return (
@@ -239,6 +261,74 @@ const AssistantSettings = () => {
     }
   };
 
+  const parsedCleanupTemperature = Number(cleanupCtaTemperature);
+  const cleanupTemperatureValid =
+    Number.isFinite(parsedCleanupTemperature) &&
+    parsedCleanupTemperature >= 0 &&
+    parsedCleanupTemperature <= 2;
+
+  const handleSaveCleanup = async () => {
+    const prompts = [
+      ["CTA system prompt", cleanupCtaSystem],
+      ["Rewrite system prompt", cleanupStreamSystem],
+      ["CTA user prompt template", cleanupCtaUserTemplate],
+      ["Rewrite user prompt template", cleanupStreamUserTemplate],
+    ] as const;
+
+    for (const [label, value] of prompts) {
+      if (value.trim().length === 0) {
+        toast.error(`${label} cannot be empty.`);
+        return;
+      }
+      if (value.length > MAX_CLEANUP_PROMPT_LENGTH) {
+        toast.error(
+          `${label} is too long by ${(value.length - MAX_CLEANUP_PROMPT_LENGTH).toLocaleString()} characters.`,
+        );
+        return;
+      }
+    }
+
+    if (!cleanupCtaUserTemplate.includes("{{draftText}}")) {
+      toast.error("CTA user prompt template must include {{draftText}}.");
+      return;
+    }
+    if (!cleanupCtaUserTemplate.includes("{{inventoryJson}}")) {
+      toast.error("CTA user prompt template must include {{inventoryJson}}.");
+      return;
+    }
+    if (!cleanupStreamUserTemplate.includes("{{draftText}}")) {
+      toast.error("Rewrite user prompt template must include {{draftText}}.");
+      return;
+    }
+    if (!cleanupTemperatureValid) {
+      toast.error("CTA temperature must be a number between 0 and 2.");
+      return;
+    }
+
+    setIsSavingCleanup(true);
+    try {
+      const result = await updateCleanupSettings({
+        ctaSystemPrompt: cleanupCtaSystem,
+        streamSystemPrompt: cleanupStreamSystem,
+        ctaUserPromptTemplate: cleanupCtaUserTemplate,
+        streamUserPromptTemplate: cleanupStreamUserTemplate,
+        model: cleanupModel,
+        ctaTemperature: parsedCleanupTemperature,
+      });
+      setCleanupCtaSystem(result.cleanup.ctaSystemPrompt);
+      setCleanupStreamSystem(result.cleanup.streamSystemPrompt);
+      setCleanupCtaUserTemplate(result.cleanup.ctaUserPromptTemplate);
+      setCleanupStreamUserTemplate(result.cleanup.streamUserPromptTemplate);
+      setCleanupModel(result.cleanup.model);
+      setCleanupCtaTemperature(String(result.cleanup.ctaTemperature));
+      toast.success("Second-pass AI settings updated");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to save cleanup settings");
+    } finally {
+      setIsSavingCleanup(false);
+    }
+  };
+
   const catalogDefaults = settings.coursesCatalog;
   const catalogDirty =
     catalogMessageEn !== catalogDefaults.messageEn ||
@@ -252,6 +342,28 @@ const AssistantSettings = () => {
     whatsAppMessageAr !== whatsAppDefaults.messageAr;
   const whatsAppEnOverLimit = whatsAppMessageEn.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
   const whatsAppArOverLimit = whatsAppMessageAr.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
+
+  const cleanupDefaults = settings.cleanup;
+  const cleanupDirty =
+    cleanupCtaSystem !== cleanupDefaults.ctaSystemPrompt ||
+    cleanupStreamSystem !== cleanupDefaults.streamSystemPrompt ||
+    cleanupCtaUserTemplate !== cleanupDefaults.ctaUserPromptTemplate ||
+    cleanupStreamUserTemplate !== cleanupDefaults.streamUserPromptTemplate ||
+    cleanupModel !== cleanupDefaults.model ||
+    cleanupCtaTemperature !== String(cleanupDefaults.ctaTemperature);
+  const cleanupCtaSystemOver =
+    cleanupCtaSystem.length > MAX_CLEANUP_PROMPT_LENGTH;
+  const cleanupStreamSystemOver =
+    cleanupStreamSystem.length > MAX_CLEANUP_PROMPT_LENGTH;
+  const cleanupCtaUserOver =
+    cleanupCtaUserTemplate.length > MAX_CLEANUP_PROMPT_LENGTH;
+  const cleanupStreamUserOver =
+    cleanupStreamUserTemplate.length > MAX_CLEANUP_PROMPT_LENGTH;
+  const cleanupOverLimit =
+    cleanupCtaSystemOver ||
+    cleanupStreamSystemOver ||
+    cleanupCtaUserOver ||
+    cleanupStreamUserOver;
 
   return (
     <div className="mx-auto flex w-full max-w-5xl flex-col gap-6 p-6">
@@ -326,6 +438,210 @@ const AssistantSettings = () => {
               {isSaving ? "Saving..." : "Save changes"}
             </Button>
             <Button type="button" variant="outline" onClick={handleReset}>
+              Reset to default
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Second-pass cleanup AI</CardTitle>
+          <CardDescription>
+            After the main assistant drafts a reply with tools, a second model trims CTAs and rewrites
+            the user-facing text. Leave the model blank to use the env default (
+            {cleanupDefaults.defaultModel}). User prompt templates support{" "}
+            <code className="text-xs">{"{{draftText}}"}</code> and{" "}
+            <code className="text-xs">{"{{inventoryJson}}"}</code> (CTA step only).
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="cleanup-model">Model override</Label>
+              <Input
+                id="cleanup-model"
+                value={cleanupModel}
+                onChange={(event) => setCleanupModel(event.target.value)}
+                placeholder={cleanupDefaults.defaultModel}
+                className="font-mono text-sm"
+              />
+              <p className="text-xs text-muted-foreground">
+                Used for CTA decisions and the rewritten reply stream. Blank ={" "}
+                {cleanupDefaults.defaultModel}.
+              </p>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="cleanup-cta-temperature">CTA decision temperature</Label>
+              <Input
+                id="cleanup-cta-temperature"
+                type="number"
+                min={0}
+                max={2}
+                step={0.1}
+                value={cleanupCtaTemperature}
+                onChange={(event) => setCleanupCtaTemperature(event.target.value)}
+                aria-invalid={!cleanupTemperatureValid}
+                className={cn(
+                  "font-mono text-sm",
+                  !cleanupTemperatureValid && "border-destructive focus-visible:ring-destructive",
+                )}
+              />
+              <p className="text-xs text-muted-foreground">
+                0–2. Default {cleanupDefaults.defaultCtaTemperature}.
+              </p>
+            </div>
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="cleanup-cta-system">CTA system prompt</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  cleanupCtaSystemOver ? "font-medium text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {cleanupCtaSystem.length.toLocaleString()} /{" "}
+                {MAX_CLEANUP_PROMPT_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="cleanup-cta-system"
+              value={cleanupCtaSystem}
+              onChange={(event) => setCleanupCtaSystem(event.target.value)}
+              rows={8}
+              aria-invalid={cleanupCtaSystemOver}
+              className={cn(
+                "font-mono text-sm",
+                cleanupCtaSystemOver && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="cleanup-cta-user">CTA user prompt template</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  cleanupCtaUserOver ? "font-medium text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {cleanupCtaUserTemplate.length.toLocaleString()} /{" "}
+                {MAX_CLEANUP_PROMPT_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="cleanup-cta-user"
+              value={cleanupCtaUserTemplate}
+              onChange={(event) => setCleanupCtaUserTemplate(event.target.value)}
+              rows={8}
+              aria-invalid={cleanupCtaUserOver}
+              className={cn(
+                "font-mono text-sm",
+                cleanupCtaUserOver && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="cleanup-stream-system">Rewrite system prompt</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  cleanupStreamSystemOver
+                    ? "font-medium text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {cleanupStreamSystem.length.toLocaleString()} /{" "}
+                {MAX_CLEANUP_PROMPT_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="cleanup-stream-system"
+              value={cleanupStreamSystem}
+              onChange={(event) => setCleanupStreamSystem(event.target.value)}
+              rows={8}
+              aria-invalid={cleanupStreamSystemOver}
+              className={cn(
+                "font-mono text-sm",
+                cleanupStreamSystemOver && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="cleanup-stream-user">Rewrite user prompt template</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  cleanupStreamUserOver
+                    ? "font-medium text-destructive"
+                    : "text-muted-foreground",
+                )}
+              >
+                {cleanupStreamUserTemplate.length.toLocaleString()} /{" "}
+                {MAX_CLEANUP_PROMPT_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="cleanup-stream-user"
+              value={cleanupStreamUserTemplate}
+              onChange={(event) => setCleanupStreamUserTemplate(event.target.value)}
+              rows={6}
+              aria-invalid={cleanupStreamUserOver}
+              className={cn(
+                "font-mono text-sm",
+                cleanupStreamUserOver && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleSaveCleanup()}
+              disabled={
+                !cleanupDirty ||
+                isSavingCleanup ||
+                cleanupOverLimit ||
+                !cleanupTemperatureValid
+              }
+            >
+              {isSavingCleanup ? "Saving..." : "Save second-pass settings"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!cleanupDirty || isSavingCleanup}
+              onClick={() => {
+                setCleanupCtaSystem(cleanupDefaults.ctaSystemPrompt);
+                setCleanupStreamSystem(cleanupDefaults.streamSystemPrompt);
+                setCleanupCtaUserTemplate(cleanupDefaults.ctaUserPromptTemplate);
+                setCleanupStreamUserTemplate(cleanupDefaults.streamUserPromptTemplate);
+                setCleanupModel(cleanupDefaults.model);
+                setCleanupCtaTemperature(String(cleanupDefaults.ctaTemperature));
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSavingCleanup}
+              onClick={() => {
+                setCleanupCtaSystem(cleanupDefaults.defaultCtaSystemPrompt);
+                setCleanupStreamSystem(cleanupDefaults.defaultStreamSystemPrompt);
+                setCleanupCtaUserTemplate(cleanupDefaults.defaultCtaUserPromptTemplate);
+                setCleanupStreamUserTemplate(cleanupDefaults.defaultStreamUserPromptTemplate);
+                setCleanupModel("");
+                setCleanupCtaTemperature(String(cleanupDefaults.defaultCtaTemperature));
+              }}
+            >
               Reset to default
             </Button>
           </div>

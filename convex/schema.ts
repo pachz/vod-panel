@@ -478,6 +478,24 @@ export default defineSchema({
     whatsAppSupportMessageEn: v.optional(v.string()),
     /** Optional overrides for the sendWhatsAppSupport fixed message (Arabic). */
     whatsAppSupportMessageAr: v.optional(v.string()),
+    /** Second-pass (cleanup) AI: CTA decision system prompt override. */
+    cleanupCtaSystemPrompt: v.optional(v.string()),
+    /** Second-pass AI: reply rewrite system prompt override. */
+    cleanupStreamSystemPrompt: v.optional(v.string()),
+    /**
+     * Second-pass AI: CTA user prompt template.
+     * Placeholders: {{draftText}}, {{inventoryJson}}
+     */
+    cleanupCtaUserPromptTemplate: v.optional(v.string()),
+    /**
+     * Second-pass AI: stream rewrite user prompt template.
+     * Placeholder: {{draftText}}
+     */
+    cleanupStreamUserPromptTemplate: v.optional(v.string()),
+    /** Second-pass AI model id override (empty = env default). */
+    cleanupModel: v.optional(v.string()),
+    /** Second-pass CTA decision temperature (0–2). */
+    cleanupCtaTemperature: v.optional(v.number()),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),

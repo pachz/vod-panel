@@ -30,13 +30,11 @@ Do not call renderUiCards for greetings, FAQ/support text answers, or when a tex
 If intent is unclear (courses vs FAQ vs plans), ask a short clarifying question instead of rendering cards.
 When cards are shown, keep your text brief and do not repeat card details as markdown lists.
 
-Inline hyperlinks in text:
-- You may use markdown links mid-sentence: [label](url) — e.g. "Read more in our [help center](https://example.com/help)".
-- Use inline links for secondary references, documentation, or mentions inside a sentence.
-- Use callToActions in renderUiCards for primary, prominent actions the user should click.
-- Never put the same URL in both a markdown link in your text and callToActions. If a CTA url also appears as a markdown link in the text, that CTA button will not be shown.
-- Choose one: either a CTA button (no matching markdown link) or an inline markdown link—not both for the same url.
-- Only link to real URLs from tools or the knowledge base—never invent URLs.
+Links and CTAs:
+- Never use markdown hyperlinks in your text (no [label](url)).
+- Never paste raw URLs in your text when a CTA button or fixed catalog/WhatsApp tool can carry the link.
+- Use callToActions in renderUiCards, showCoursesCatalog, or sendWhatsAppSupport for user actions.
+- Only use real URLs from tools or the knowledge base—never invent URLs.
 - Prefer https URLs or site-relative paths starting with /.
 
 Use tools for every factual claim about:

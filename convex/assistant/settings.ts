@@ -9,6 +9,16 @@ import {
   loadCustomInstructions,
 } from "./promptData";
 import {
+  ASSISTANT_CLEANUP_CTA_SYSTEM,
+  ASSISTANT_CLEANUP_CTA_USER_PROMPT_TEMPLATE,
+  ASSISTANT_CLEANUP_DEFAULT_CTA_TEMPERATURE,
+  ASSISTANT_CLEANUP_STREAM_SYSTEM,
+  ASSISTANT_CLEANUP_STREAM_USER_PROMPT_TEMPLATE,
+  resolveCleanupCtaTemperature,
+  resolveCleanupModelId,
+  type CleanupRuntimeSettings,
+} from "./cleanup";
+import {
   ASSISTANT_TOOL_CATALOG,
   ASSISTANT_TOOL_IDS,
   COURSES_CATALOG_DEFAULTS,
@@ -36,6 +46,8 @@ const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
 const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
 const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
 const MAX_WHATSAPP_PREFILL_LENGTH = 300;
+const MAX_CLEANUP_PROMPT_LENGTH = 20_000;
+const MAX_CLEANUP_MODEL_LENGTH = 100;
 
 type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
 type SendWhatsAppSupportResult = Infer<typeof sendWhatsAppSupportResultValidator>;
@@ -70,6 +82,72 @@ const whatsAppSupportSettingsValidator = v.object({
   buttonTextAr: v.string(),
   url: v.string(),
 });
+
+const cleanupSettingsValidator = v.object({
+  ctaSystemPrompt: v.string(),
+  streamSystemPrompt: v.string(),
+  ctaUserPromptTemplate: v.string(),
+  streamUserPromptTemplate: v.string(),
+  model: v.string(),
+  ctaTemperature: v.number(),
+  defaultCtaSystemPrompt: v.string(),
+  defaultStreamSystemPrompt: v.string(),
+  defaultCtaUserPromptTemplate: v.string(),
+  defaultStreamUserPromptTemplate: v.string(),
+  defaultModel: v.string(),
+  defaultCtaTemperature: v.number(),
+});
+
+function resolveCleanupSettings(settings: {
+  cleanupCtaSystemPrompt?: string;
+  cleanupStreamSystemPrompt?: string;
+  cleanupCtaUserPromptTemplate?: string;
+  cleanupStreamUserPromptTemplate?: string;
+  cleanupModel?: string;
+  cleanupCtaTemperature?: number;
+} | null): CleanupRuntimeSettings {
+  return {
+    ctaSystemPrompt:
+      settings?.cleanupCtaSystemPrompt?.trim() || ASSISTANT_CLEANUP_CTA_SYSTEM,
+    streamSystemPrompt:
+      settings?.cleanupStreamSystemPrompt?.trim() || ASSISTANT_CLEANUP_STREAM_SYSTEM,
+    ctaUserPromptTemplate:
+      settings?.cleanupCtaUserPromptTemplate?.trim() ||
+      ASSISTANT_CLEANUP_CTA_USER_PROMPT_TEMPLATE,
+    streamUserPromptTemplate:
+      settings?.cleanupStreamUserPromptTemplate?.trim() ||
+      ASSISTANT_CLEANUP_STREAM_USER_PROMPT_TEMPLATE,
+    model: resolveCleanupModelId(settings?.cleanupModel),
+    ctaTemperature: resolveCleanupCtaTemperature(settings?.cleanupCtaTemperature),
+  };
+}
+
+function buildCleanupSettingsResponse(settings: {
+  cleanupCtaSystemPrompt?: string;
+  cleanupStreamSystemPrompt?: string;
+  cleanupCtaUserPromptTemplate?: string;
+  cleanupStreamUserPromptTemplate?: string;
+  cleanupModel?: string;
+  cleanupCtaTemperature?: number;
+} | null) {
+  const resolved = resolveCleanupSettings(settings);
+  const storedModel = settings?.cleanupModel?.trim() ?? "";
+  return {
+    ctaSystemPrompt: resolved.ctaSystemPrompt,
+    streamSystemPrompt: resolved.streamSystemPrompt,
+    ctaUserPromptTemplate: resolved.ctaUserPromptTemplate,
+    streamUserPromptTemplate: resolved.streamUserPromptTemplate,
+    // Expose stored override (may be empty) for the admin editor; runtime uses resolved.model.
+    model: storedModel,
+    ctaTemperature: resolved.ctaTemperature,
+    defaultCtaSystemPrompt: ASSISTANT_CLEANUP_CTA_SYSTEM,
+    defaultStreamSystemPrompt: ASSISTANT_CLEANUP_STREAM_SYSTEM,
+    defaultCtaUserPromptTemplate: ASSISTANT_CLEANUP_CTA_USER_PROMPT_TEMPLATE,
+    defaultStreamUserPromptTemplate: ASSISTANT_CLEANUP_STREAM_USER_PROMPT_TEMPLATE,
+    defaultModel: resolveCleanupModelId(null),
+    defaultCtaTemperature: ASSISTANT_CLEANUP_DEFAULT_CTA_TEMPERATURE,
+  };
+}
 
 function resolveCoursesCatalogMessages(settings: {
   coursesCatalogMessageEn?: string;
@@ -243,6 +321,22 @@ export const getSendWhatsAppSupportInternal = internalQuery({
   },
 });
 
+export const getCleanupSettingsInternal = internalQuery({
+  args: {},
+  returns: v.object({
+    ctaSystemPrompt: v.string(),
+    streamSystemPrompt: v.string(),
+    ctaUserPromptTemplate: v.string(),
+    streamUserPromptTemplate: v.string(),
+    model: v.string(),
+    ctaTemperature: v.number(),
+  }),
+  handler: async (ctx): Promise<CleanupRuntimeSettings> => {
+    const settings = await getSettingsDoc(ctx);
+    return resolveCleanupSettings(settings);
+  },
+});
+
 export const getAssistantSettings = query({
   args: {},
   returns: v.object({
@@ -252,6 +346,7 @@ export const getAssistantSettings = query({
     tools: v.array(toolKnowledgeItemValidator),
     coursesCatalog: coursesCatalogSettingsValidator,
     whatsAppSupport: whatsAppSupportSettingsValidator,
+    cleanup: cleanupSettingsValidator,
     updatedAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
@@ -345,6 +440,7 @@ export const getAssistantSettings = query({
         buttonTextAr: whatsAppResult.buttonTextAr,
         url: whatsAppResult.url,
       },
+      cleanup: buildCleanupSettingsResponse(settings),
       updatedAt: settings?.updatedAt,
     };
   },
@@ -609,6 +705,114 @@ export const updateWhatsAppSupportMessages = mutation({
         buttonTextAr: whatsAppResult.buttonTextAr,
         url: whatsAppResult.url,
       },
+    };
+  },
+});
+
+export const updateCleanupSettings = mutation({
+  args: {
+    ctaSystemPrompt: v.string(),
+    streamSystemPrompt: v.string(),
+    ctaUserPromptTemplate: v.string(),
+    streamUserPromptTemplate: v.string(),
+    model: v.string(),
+    ctaTemperature: v.number(),
+  },
+  returns: v.object({
+    updatedAt: v.number(),
+    cleanup: cleanupSettingsValidator,
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    const ctaSystemPrompt = args.ctaSystemPrompt.trim();
+    const streamSystemPrompt = args.streamSystemPrompt.trim();
+    const ctaUserPromptTemplate = args.ctaUserPromptTemplate.trim();
+    const streamUserPromptTemplate = args.streamUserPromptTemplate.trim();
+    const model = args.model.trim();
+
+    if (ctaSystemPrompt.length === 0) {
+      throw new Error("CTA system prompt cannot be empty");
+    }
+    if (streamSystemPrompt.length === 0) {
+      throw new Error("Rewrite system prompt cannot be empty");
+    }
+    if (ctaUserPromptTemplate.length === 0) {
+      throw new Error("CTA user prompt template cannot be empty");
+    }
+    if (streamUserPromptTemplate.length === 0) {
+      throw new Error("Rewrite user prompt template cannot be empty");
+    }
+    if (!ctaUserPromptTemplate.includes("{{draftText}}")) {
+      throw new Error("CTA user prompt template must include {{draftText}}");
+    }
+    if (!ctaUserPromptTemplate.includes("{{inventoryJson}}")) {
+      throw new Error("CTA user prompt template must include {{inventoryJson}}");
+    }
+    if (!streamUserPromptTemplate.includes("{{draftText}}")) {
+      throw new Error("Rewrite user prompt template must include {{draftText}}");
+    }
+
+    for (const [label, value] of [
+      ["CTA system prompt", ctaSystemPrompt],
+      ["Rewrite system prompt", streamSystemPrompt],
+      ["CTA user prompt template", ctaUserPromptTemplate],
+      ["Rewrite user prompt template", streamUserPromptTemplate],
+    ] as const) {
+      if (value.length > MAX_CLEANUP_PROMPT_LENGTH) {
+        throw new Error(
+          `${label} is too long (${value.length.toLocaleString()} characters). Please shorten it to ${MAX_CLEANUP_PROMPT_LENGTH.toLocaleString()} characters or fewer.`,
+        );
+      }
+    }
+
+    if (model.length > MAX_CLEANUP_MODEL_LENGTH) {
+      throw new Error(
+        `Model id is too long (${model.length.toLocaleString()} characters). Please shorten it to ${MAX_CLEANUP_MODEL_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+
+    if (!Number.isFinite(args.ctaTemperature) || args.ctaTemperature < 0 || args.ctaTemperature > 2) {
+      throw new Error("CTA temperature must be a number between 0 and 2");
+    }
+
+    const now = Date.now();
+    const existing = await getSettingsDoc(ctx);
+    const patch = {
+      cleanupCtaSystemPrompt: ctaSystemPrompt,
+      cleanupStreamSystemPrompt: streamSystemPrompt,
+      cleanupCtaUserPromptTemplate: ctaUserPromptTemplate,
+      cleanupStreamUserPromptTemplate: streamUserPromptTemplate,
+      cleanupModel: model,
+      cleanupCtaTemperature: args.ctaTemperature,
+      updatedAt: now,
+      updatedBy: userId,
+    };
+
+    if (existing) {
+      await ctx.db.patch(existing._id, patch);
+    } else {
+      await ctx.db.insert("assistantSettings", {
+        key: SETTINGS_KEY,
+        customInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+        ...patch,
+      });
+    }
+
+    return {
+      updatedAt: now,
+      cleanup: buildCleanupSettingsResponse({
+        cleanupCtaSystemPrompt: ctaSystemPrompt,
+        cleanupStreamSystemPrompt: streamSystemPrompt,
+        cleanupCtaUserPromptTemplate: ctaUserPromptTemplate,
+        cleanupStreamUserPromptTemplate: streamUserPromptTemplate,
+        cleanupModel: model,
+        cleanupCtaTemperature: args.ctaTemperature,
+      }),
     };
   },
 });
