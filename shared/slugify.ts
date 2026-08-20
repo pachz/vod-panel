@@ -96,7 +96,33 @@ export function slugify(value: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
-/** True when the slug contains at least one alphanumeric character. */
-export function isUsableSlug(slug: string | undefined): boolean {
-  return Boolean(slug && /[a-z0-9]/i.test(slug));
+const USABLE_SLUG = /^[a-z0-9]+(?:-[a-z0-9]+)*$/;
+
+/** True when the slug is URL-safe (no leading/trailing/doubled hyphens). */
+export function isUsableSlug(slug: string | undefined): slug is string {
+  return Boolean(slug && USABLE_SLUG.test(slug));
+}
+
+function hasLatinLetter(value: string): boolean {
+  return /[a-z]/i.test(value);
+}
+
+/**
+ * Prefer a value that already contains Latin letters (typical English title).
+ * Otherwise transliterate the first non-empty value, including Arabic.
+ */
+export function slugifyPreferringLatin(...values: string[]): string {
+  const latinSource = values.find((value) => hasLatinLetter(value));
+  if (latinSource) {
+    return slugify(latinSource);
+  }
+
+  for (const value of values) {
+    const slug = slugify(value);
+    if (slug) {
+      return slug;
+    }
+  }
+
+  return "";
 }

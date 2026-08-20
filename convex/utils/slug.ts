@@ -1,8 +1,8 @@
-import { isUsableSlug, slugify } from "../../shared/slugify";
+import { isUsableSlug, slugify, slugifyPreferringLatin } from "../../shared/slugify";
 import type { Id, TableNames } from "../_generated/dataModel";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 
-export { isUsableSlug, slugify };
+export { isUsableSlug, slugify, slugifyPreferringLatin };
 
 type GenerateUniqueSlugOptions<TableName extends TableNames> = {
   excludeId?: Id<TableName>;

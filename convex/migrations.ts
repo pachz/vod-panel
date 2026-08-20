@@ -2,7 +2,7 @@ import { Migrations } from "@convex-dev/migrations";
 import { components, internal } from "./_generated/api.js";
 import type { DataModel } from "./_generated/dataModel.js";
 import { buildCourseSearchFields } from "./lib/courseSearchText";
-import { generateUniqueSlug, isUsableSlug, slugify } from "./utils/slug";
+import { generateUniqueSlug, isUsableSlug, slugifyPreferringLatin } from "./utils/slug";
 
 export const migrations = new Migrations<DataModel>(components.migrations);
 export const run = migrations.runner();
@@ -142,7 +142,7 @@ export const backfillBlogSlugs = migrations.define({
   migrateOne: async (ctx, blog) => {
     if (isUsableSlug(blog.slug)) return;
 
-    const baseSlug = slugify(blog.title) || slugify(blog.title_ar);
+    const baseSlug = slugifyPreferringLatin(blog.title, blog.title_ar);
     const slug = await generateUniqueSlug(ctx, "blogs", baseSlug, {
       excludeId: blog._id,
       fallbackSlug: "blog",

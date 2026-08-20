@@ -10,7 +10,7 @@ import {
   type BlogUpdateInput,
 } from "../shared/validation/blog";
 import { requireUser } from "./utils/auth";
-import { generateUniqueSlug, isUsableSlug, slugify } from "./utils/slug";
+import { generateUniqueSlug, isUsableSlug, slugifyPreferringLatin } from "./utils/slug";
 import { getBlogViewCounts, blogViewCountsValidator } from "./blogViews";
 
 type BlogSnapshot = {
@@ -32,7 +32,7 @@ function buildTitleSearch(title: string, titleAr: string) {
 }
 
 function blogBaseSlug(title: string, titleAr: string) {
-  return slugify(title) || slugify(titleAr);
+  return slugifyPreferringLatin(title, titleAr);
 }
 
 function validateCreateInput(input: BlogCreateInput) {
@@ -543,20 +543,20 @@ export const updateBlog = mutation({
 
     await markUnpublishedChanges(ctx, blog);
 
-    // Keep existing slug stable for SEO; regenerate only if missing or unusable
-    // (e.g. hyphen-only slugs from Arabic titles).
-    let slug = blog.slug;
-    if (!isUsableSlug(slug)) {
-      slug = await generateUniqueSlug(
-        ctx,
-        "blogs",
-        blogBaseSlug(data.title, data.titleAr),
-        {
-          excludeId: args.blogId,
-          fallbackSlug: "blog",
-        },
-      );
-    }
+    // Keep published slugs stable for SEO. Refresh drafts, and any slug that is
+    // missing or malformed (e.g. "--2" from Arabic in the English title).
+    const slug =
+      blog.status === "published" && isUsableSlug(blog.slug)
+        ? blog.slug
+        : await generateUniqueSlug(
+            ctx,
+            "blogs",
+            blogBaseSlug(data.title, data.titleAr),
+            {
+              excludeId: args.blogId,
+              fallbackSlug: "blog",
+            },
+          );
 
     await ctx.db.patch("blogs", args.blogId, {
       title: data.title,
@@ -585,18 +585,17 @@ export const publishBlog = mutation({
     const blog = await getBlogOrThrow(ctx, blogId);
     validatePublishable(blog);
 
-    let slug = blog.slug;
-    if (!isUsableSlug(slug)) {
-      slug = await generateUniqueSlug(
-        ctx,
-        "blogs",
-        blogBaseSlug(blog.title, blog.title_ar),
-        {
-          excludeId: blogId,
-          fallbackSlug: "blog",
-        },
-      );
-    }
+    const slug = isUsableSlug(blog.slug)
+      ? blog.slug
+      : await generateUniqueSlug(
+          ctx,
+          "blogs",
+          blogBaseSlug(blog.title, blog.title_ar),
+          {
+            excludeId: blogId,
+            fallbackSlug: "blog",
+          },
+        );
 
     const now = Date.now();
     const snapshot = buildSnapshot(blog);
