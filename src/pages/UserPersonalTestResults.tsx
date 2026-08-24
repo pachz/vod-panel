@@ -6,7 +6,8 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
-import { cn, markdownToPlainText } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { PersonalTestResultView } from "@/components/PersonalTests/PersonalTestResultView";
 import { formatSubmissionDuration } from "../../shared/validation/personalTestAnalytics";
 
 function formatCompletedAt(timestamp: number, language: "en" | "ar") {
@@ -52,15 +53,14 @@ const UserPersonalTestResults = () => {
   }
 
   const testTitle = language === "ar" ? results.testNameAr : results.testName;
-
-  const getCourseDescription = (course: (typeof results.recommendedCourses)[number]) => {
-    const raw =
-      language === "ar"
-        ? course.short_description_ar ?? course.short_description
-        : course.short_description ?? course.short_description_ar;
-    if (!raw) return undefined;
-    return markdownToPlainText(raw);
-  };
+  const resultCourses = results.recommendedCourses.map((course) => ({
+    _id: course.courseId,
+    name: course.name,
+    name_ar: course.name_ar,
+    thumbnail_image_url: course.thumbnail_image_url,
+    short_description: course.short_description,
+    short_description_ar: course.short_description_ar,
+  }));
 
   return (
     <div className="mx-auto max-w-3xl space-y-6" dir={isRTL ? "rtl" : "ltr"}>
@@ -85,64 +85,68 @@ const UserPersonalTestResults = () => {
         </div>
       </div>
 
-      <div className="space-y-4">
-        <h2 className="text-lg font-semibold">{t("topRecommendedCourses")}</h2>
-        {results.recommendedCourses.length === 0 ? (
-          <div className="rounded-xl border bg-card p-6 shadow-sm">
-            <p className="text-sm text-muted-foreground">{t("noCourseRecommendations")}</p>
-          </div>
-        ) : (
-          <ul className="space-y-4">
-            {results.recommendedCourses.map((course) => {
-              const courseName = language === "ar" ? course.name_ar : course.name;
-              const description = getCourseDescription(course);
-
-              return (
-                <li
-                  key={course.courseId}
-                  className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
-                >
-                  <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
-                    {course.thumbnail_image_url ? (
-                      <img
-                        src={course.thumbnail_image_url}
-                        alt=""
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
-                    ) : (
-                      <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                        {t("noImage")}
-                      </div>
-                    )}
-                  </div>
-                  <div className="min-w-0 flex-1 space-y-1 text-start">
-                    <p className="font-semibold leading-snug">{courseName}</p>
-                    {description && (
-                      <p className="text-sm text-muted-foreground line-clamp-2">
-                        {description}
-                      </p>
-                    )}
-                  </div>
-                  <Button
-                    variant="outline"
-                    className="shrink-0 border-cta text-cta hover:bg-cta/5 hover:text-cta"
-                    asChild
+      {results.result ? (
+        <PersonalTestResultView
+          result={results.result}
+          courses={resultCourses}
+          isArabic={language === "ar"}
+          recommendedCoursesLabel={t("recommendedCourses")}
+          viewCourseLabel={t("viewCourse")}
+          getCourseHref={(courseId) => localizedPath(`/courses/preview/${courseId}`)}
+        />
+      ) : (
+        <div className="space-y-4">
+          <h2 className="text-lg font-semibold">{t("topRecommendedCourses")}</h2>
+          {results.recommendedCourses.length === 0 ? (
+            <div className="rounded-xl border bg-card p-6 shadow-sm">
+              <p className="text-sm text-muted-foreground">{t("noCourseRecommendations")}</p>
+            </div>
+          ) : (
+            <ul className="space-y-4">
+              {results.recommendedCourses.map((course) => {
+                const courseName = language === "ar" ? course.name_ar : course.name;
+                return (
+                  <li
+                    key={course.courseId}
+                    className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
                   >
-                    <a
-                      href={localizedPath(`/courses/preview/${course.courseId}`)}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
+                      {course.thumbnail_image_url ? (
+                        <img
+                          src={course.thumbnail_image_url}
+                          alt=""
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                        />
+                      ) : (
+                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                          {t("noImage")}
+                        </div>
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1 space-y-1 text-start">
+                      <p className="font-semibold leading-snug">{courseName}</p>
+                    </div>
+                    <Button
+                      variant="outline"
+                      className="shrink-0 border-cta text-cta hover:bg-cta/5 hover:text-cta"
+                      asChild
                     >
-                      {t("viewCourse")}
-                    </a>
-                  </Button>
-                </li>
-              );
-            })}
-          </ul>
-        )}
-      </div>
+                      <a
+                        href={localizedPath(`/courses/preview/${course.courseId}`)}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        {t("viewCourse")}
+                      </a>
+                    </Button>
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        </div>
+      )}
 
       <div className="rounded-xl border bg-card p-6 space-y-4 shadow-sm">
         <h2 className="font-semibold">{t("yourAnswers")}</h2>

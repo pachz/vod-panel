@@ -77,6 +77,7 @@ import {
 import { PersonalTestAnalyticsPanel } from "@/components/PersonalTests/PersonalTestAnalyticsPanel";
 import { ImageDropzone, type ImageUploadState } from "@/components/ImageDropzone";
 import { TableFilters, type TableFilter } from "@/components/TableFilters";
+import { isResultColor } from "@/components/PersonalTests/resultColor";
 
 const getErrorMessage = (error: unknown) => {
   if (error instanceof Error) {
@@ -108,8 +109,6 @@ function formatAttemptDate(timestamp: number) {
     timeStyle: "short",
   }).format(new Date(timestamp));
 }
-
-const RECOMMENDED_COURSES_PREVIEW_COUNT = 5;
 
 type AttemptStatus = "in_progress" | "completed" | "abandoned" | "expired";
 
@@ -271,6 +270,7 @@ const PersonalTestDetail = () => {
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
   const generateImageUploadUrl = useMutation(api.personalTest.generatePersonalTestImageUploadUrl);
   const updatePersonalTestThumbnail = useMutation(api.personalTest.updatePersonalTestThumbnail);
+  const updatePersonalTestCover = useMutation(api.personalTest.updatePersonalTestCover);
   const deleteResult = useMutation(api.personalTest.deletePersonalTestResult);
 
   const [activeTab, setActiveTab] = useState(() => {
@@ -347,6 +347,15 @@ const PersonalTestDetail = () => {
     progress: 0,
   });
   const tempThumbnailUrlRef = useRef<string | null>(null);
+  const [coverPreviewUrl, setCoverPreviewUrl] = useState<string | null>(null);
+  const [coverUploadState, setCoverUploadState] = useState<ImageUploadState>({
+    status: "idle",
+    progress: 0,
+  });
+  const tempCoverUrlRef = useRef<string | null>(null);
+  const [startButtonColor, setStartButtonColor] = useState("");
+  const [startButtonText, setStartButtonText] = useState("");
+  const [startButtonTextAr, setStartButtonTextAr] = useState("");
 
   const [questionDialogOpen, setQuestionDialogOpen] = useState(false);
   const [editingQuestion, setEditingQuestion] = useState<QuestionRow | null>(null);
@@ -355,7 +364,6 @@ const PersonalTestDetail = () => {
   const [isDeletingQuestion, setIsDeletingQuestion] = useState(false);
 
   const [orderedQuestions, setOrderedQuestions] = useState<QuestionRow[]>([]);
-  const [showAllRecommendedCourses, setShowAllRecommendedCourses] = useState(false);
 
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [editingResult, setEditingResult] = useState<ResultRow | null>(null);
@@ -385,6 +393,12 @@ const PersonalTestDetail = () => {
     setIsEnabled(data.test.status === "published");
     setOrderedQuestions(data.questions);
     setThumbnailPreviewUrl(data.test.thumbnail_image_url ?? null);
+    setCoverPreviewUrl(data.test.cover_image_url ?? null);
+    setStartButtonColor(
+      isResultColor(data.test.start_button_color) ? data.test.start_button_color : "",
+    );
+    setStartButtonText(data.test.start_button_text ?? "");
+    setStartButtonTextAr(data.test.start_button_text_ar ?? "");
   }, [data]);
 
   const courseMap = useMemo(() => {
@@ -401,25 +415,6 @@ const PersonalTestDetail = () => {
     }
     return map;
   }, [courses]);
-
-  const recommendedCourses = useMemo(() => {
-    if (!data) return [];
-    return data.recommendedCourseIds
-      .map((courseId) => {
-        const course = courseMap.get(courseId);
-        return course ? { _id: courseId, ...course } : null;
-      })
-      .filter(Boolean) as Array<{
-      _id: Id<"courses">;
-      name: string;
-      name_ar: string;
-      imageUrl?: string;
-    }>;
-  }, [data, courseMap]);
-
-  useEffect(() => {
-    setShowAllRecommendedCourses(false);
-  }, [testId, recommendedCourses.length]);
 
   useEffect(() => {
     setAttemptCursor(null);
@@ -514,12 +509,6 @@ const PersonalTestDetail = () => {
     [attemptStatusFilter, handleAttemptStatusFilterChange],
   );
 
-  const visibleRecommendedCourses = showAllRecommendedCourses
-    ? recommendedCourses
-    : recommendedCourses.slice(0, RECOMMENDED_COURSES_PREVIEW_COUNT);
-  const hiddenRecommendedCount =
-    recommendedCourses.length - RECOMMENDED_COURSES_PREVIEW_COUNT;
-
   const questionFormInitial = useMemo<QuestionFormValues | undefined>(() => {
     if (!editingQuestion) return undefined;
     return {
@@ -538,6 +527,13 @@ const PersonalTestDetail = () => {
     if (tempThumbnailUrlRef.current) {
       URL.revokeObjectURL(tempThumbnailUrlRef.current);
       tempThumbnailUrlRef.current = null;
+    }
+  };
+
+  const resetTempCoverPreview = () => {
+    if (tempCoverUrlRef.current) {
+      URL.revokeObjectURL(tempCoverUrlRef.current);
+      tempCoverUrlRef.current = null;
     }
   };
 
@@ -642,6 +638,69 @@ const PersonalTestDetail = () => {
     }
   };
 
+  const handleCoverSelect = async (file: File) => {
+    if (!data) return;
+
+    resetTempCoverPreview();
+    const previewUrl = URL.createObjectURL(file);
+    tempCoverUrlRef.current = previewUrl;
+    setCoverPreviewUrl(previewUrl);
+    setCoverUploadState({ status: "uploading", progress: 0 });
+
+    try {
+      const uploadUrl = await generateImageUploadUrl();
+      const { storageId } = await uploadFileWithProgress(uploadUrl, file, (progress) => {
+        setCoverUploadState({ status: "uploading", progress: progress * 0.8 });
+      });
+
+      setCoverUploadState({ status: "uploading", progress: 0.9 });
+
+      const result = await updatePersonalTestCover({
+        testId,
+        coverStorageId: storageId as Id<"_storage">,
+      });
+
+      resetTempCoverPreview();
+      setCoverPreviewUrl(result.coverImageUrl);
+      setCoverUploadState({ status: "success", progress: 1 });
+      toast.success("Cover image updated.");
+
+      setTimeout(() => {
+        setCoverUploadState({ status: "idle", progress: 0 });
+      }, 1200);
+    } catch (error) {
+      console.error(error);
+      resetTempCoverPreview();
+      setCoverPreviewUrl(data.test.cover_image_url ?? null);
+      setCoverUploadState({
+        status: "error",
+        progress: 0,
+        errorMessage: getErrorMessage(error),
+      });
+      toast.error(getErrorMessage(error));
+    }
+  };
+
+  const handleCoverRemove = async () => {
+    if (!data) return;
+
+    setCoverUploadState({ status: "uploading", progress: 0.5 });
+    try {
+      await updatePersonalTestCover({ testId, clearCover: true });
+      resetTempCoverPreview();
+      setCoverPreviewUrl(null);
+      setCoverUploadState({ status: "idle", progress: 0 });
+      toast.success("Cover image removed.");
+    } catch (error) {
+      setCoverUploadState({
+        status: "error",
+        progress: 0,
+        errorMessage: getErrorMessage(error),
+      });
+      toast.error(getErrorMessage(error));
+    }
+  };
+
   const handleSaveInfo = async (event?: FormEvent) => {
     event?.preventDefault();
     if (!data) return;
@@ -658,6 +717,9 @@ const PersonalTestDetail = () => {
         showAll: showAllResults,
         maxCourses: showAllResults ? undefined : parsedMax,
       },
+      startButtonColor: startButtonColor || undefined,
+      startButtonText: startButtonText || undefined,
+      startButtonTextAr: startButtonTextAr || undefined,
     });
 
     if (!result.success) {
@@ -679,7 +741,10 @@ const PersonalTestDetail = () => {
       nameAr !== test.name_ar ||
       result.data.displayOrder !== test.displayOrder ||
       (description || "") !== (test.description ?? "") ||
-      (descriptionAr || "") !== (test.description_ar ?? "");
+      (descriptionAr || "") !== (test.description_ar ?? "") ||
+      (startButtonColor || "") !== (test.start_button_color ?? "") ||
+      (startButtonText || "") !== (test.start_button_text ?? "") ||
+      (startButtonTextAr || "") !== (test.start_button_text_ar ?? "");
 
     const resultChanged =
       result.data.resultSettings.showAll !== test.resultSettings.showAll ||
@@ -704,7 +769,13 @@ const PersonalTestDetail = () => {
           displayOrder: result.data.displayOrder,
           description: result.data.description,
           descriptionAr: result.data.descriptionAr,
-          resultSettings: result.data.resultSettings,
+          resultSettings: {
+            showAll: result.data.resultSettings.showAll ?? showAllResults,
+            maxCourses: result.data.resultSettings.maxCourses,
+          },
+          startButtonColor: result.data.startButtonColor,
+          startButtonText: result.data.startButtonText,
+          startButtonTextAr: result.data.startButtonTextAr,
         });
       }
 
@@ -888,6 +959,12 @@ const PersonalTestDetail = () => {
           )}
         </div>
       </div>
+      {!canPublish && (isDraft || test.hasUnpublishedChanges) && (
+        <p className="text-sm text-muted-foreground">
+          Add questions with answers, at least one result, and answer–result
+          correlations before publishing.
+        </p>
+      )}
 
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
@@ -991,7 +1068,7 @@ const PersonalTestDetail = () => {
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
             <h2 className="font-medium">Card thumbnail</h2>
             <p className="text-sm text-muted-foreground">
-              Shown on the take-test page. Landscape image recommended (16:9).
+              Shown on the test listing card. Landscape image recommended (16:9).
             </p>
             <ImageDropzone
               id="personal-test-thumbnail"
@@ -1003,6 +1080,90 @@ const PersonalTestDetail = () => {
               uploadState={thumbnailUploadState}
               disabled={isSavingInfo}
             />
+          </div>
+
+          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
+            <h2 className="font-medium">Cover page</h2>
+            <p className="text-sm text-muted-foreground">
+              Shown before the quiz starts. All fields are optional. Landscape image
+              recommended (16:9).
+            </p>
+            <ImageDropzone
+              id="personal-test-cover"
+              label="Cover image (optional)"
+              helperText="Click to browse or drop an image file."
+              aspectRatioClass="aspect-video"
+              value={coverPreviewUrl}
+              onSelectFile={handleCoverSelect}
+              uploadState={coverUploadState}
+              disabled={isSavingInfo}
+            />
+            {coverPreviewUrl && (
+              <Button
+                type="button"
+                variant="ghost"
+                size="sm"
+                onClick={handleCoverRemove}
+                disabled={isSavingInfo || coverUploadState.status === "uploading"}
+              >
+                Remove cover
+              </Button>
+            )}
+
+            <div className="space-y-2">
+              <Label>Start button color (optional)</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="color"
+                  value={startButtonColor || "#E91E8C"}
+                  onChange={(event) => setStartButtonColor(event.target.value)}
+                  className="h-10 w-12 cursor-pointer p-1"
+                  aria-label="Start button color"
+                />
+                <Input
+                  value={startButtonColor}
+                  onChange={(event) => setStartButtonColor(event.target.value)}
+                  placeholder="#E91E8C"
+                  className="font-mono"
+                />
+                {startButtonColor && (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setStartButtonColor("")}
+                  >
+                    Clear
+                  </Button>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Used on the start quiz button. Leave empty to use the default button.
+              </p>
+            </div>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="start-button-text">Start button text (optional)</Label>
+                <Input
+                  id="start-button-text"
+                  value={startButtonText}
+                  onChange={(event) => setStartButtonText(event.target.value)}
+                  placeholder="Start Test"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="start-button-text-ar">
+                  Start button text (Arabic, optional)
+                </Label>
+                <Input
+                  id="start-button-text-ar"
+                  value={startButtonTextAr}
+                  dir="rtl"
+                  onChange={(event) => setStartButtonTextAr(event.target.value)}
+                />
+              </div>
+            </div>
           </div>
 
           <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
@@ -1045,8 +1206,8 @@ const PersonalTestDetail = () => {
         </TabsContent>
 
         <TabsContent value="questions" className="mt-6">
-          <div className="grid gap-x-6 gap-y-4 lg:grid-cols-[1fr_min(100%,320px)]">
-            <div className="flex items-center justify-between lg:col-start-1 lg:row-start-1">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
               <h2 className="font-medium">Questions</h2>
               <Button
                 variant="cta"
@@ -1060,14 +1221,7 @@ const PersonalTestDetail = () => {
               </Button>
             </div>
 
-            <div className="lg:col-start-2 lg:row-start-1">
-              <h2 className="font-medium">Recommended courses</h2>
-              <p className="mt-1 text-xs text-muted-foreground">
-                Courses linked through result recommendations in this test.
-              </p>
-            </div>
-
-            <div className="rounded-xl border bg-card overflow-hidden lg:col-start-1 lg:row-start-2">
+            <div className="rounded-xl border bg-card overflow-hidden">
               <DndContext
                 sensors={sensors}
                 collisionDetection={closestCenter}
@@ -1114,62 +1268,6 @@ const PersonalTestDetail = () => {
                 </Table>
               </DndContext>
             </div>
-
-            <aside className="rounded-xl border bg-card p-4 h-fit lg:col-start-2 lg:row-start-2">
-              {recommendedCourses.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No courses yet.</p>
-              ) : (
-                <div className="space-y-2">
-                  <ul className="space-y-2">
-                    {visibleRecommendedCourses.map((course) => (
-                      <li
-                        key={course._id}
-                        className="flex gap-3 rounded-md border p-2"
-                      >
-                        <div className="h-14 w-[4.5rem] shrink-0 overflow-hidden rounded-md bg-muted">
-                          {course.imageUrl ? (
-                            <img
-                              src={course.imageUrl}
-                              alt=""
-                              className="h-full w-full object-cover"
-                              loading="lazy"
-                            />
-                          ) : (
-                            <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                              No image
-                            </div>
-                          )}
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <span className="block text-sm font-medium leading-snug line-clamp-2">
-                            {course.name}
-                          </span>
-                          <span
-                            className="mt-0.5 block text-xs text-muted-foreground line-clamp-2"
-                            dir="rtl"
-                          >
-                            {course.name_ar}
-                          </span>
-                        </div>
-                      </li>
-                    ))}
-                  </ul>
-                  {hiddenRecommendedCount > 0 && (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="sm"
-                      className="w-full"
-                      onClick={() => setShowAllRecommendedCourses((current) => !current)}
-                    >
-                      {showAllRecommendedCourses
-                        ? "Show less"
-                        : `Show ${hiddenRecommendedCount} more`}
-                    </Button>
-                  )}
-                </div>
-              )}
-            </aside>
           </div>
         </TabsContent>
 

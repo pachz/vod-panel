@@ -3,6 +3,7 @@ import type { QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
 import { requireUser } from "./utils/auth";
+import { matchedPersonalTestResultValidator } from "./lib/personalTestScoring";
 import {
   enumerateDayKeys,
   formatDayKey,
@@ -296,6 +297,7 @@ const submissionDetailValidator = v.object({
   ...submissionRowValidator.fields,
   testName: v.string(),
   testNameAr: v.string(),
+  result: v.union(matchedPersonalTestResultValidator, v.null()),
 });
 
 const DEFAULT_PAGE_SIZE = 10;

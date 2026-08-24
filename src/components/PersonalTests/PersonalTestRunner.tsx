@@ -10,7 +10,11 @@ import type { Language } from "@/hooks/use-language";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
-import { cn, markdownToPlainText } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import {
+  PersonalTestResultView,
+  type PersonalTestResultContent,
+} from "./PersonalTestResultView";
 
 function CelebrationIcon() {
   return (
@@ -65,6 +69,7 @@ export type PersonalTestQuestion = {
 
 type CompletedResults = {
   durationSeconds: number;
+  result: PersonalTestResultContent | null;
   courses: Array<{
     _id: Id<"courses">;
     name: string;
@@ -172,6 +177,9 @@ export function PersonalTestRunner({
   const [showResults, setShowResults] = useState(false);
   const [completedResults, setCompletedResults] = useState<CompletedResults | null>(null);
   const [isFinalizing, setIsFinalizing] = useState(false);
+  const [resultLanguage, setResultLanguage] = useState<"en" | "ar">(
+    language === "ar" ? "ar" : "en",
+  );
 
   const attemptIdRef = useRef<Id<"personalTestAttempts"> | null>(null);
   const startedAtRef = useRef<number | null>(null);
@@ -196,27 +204,12 @@ export function PersonalTestRunner({
   const getAnswerSubtitle = (answer: PersonalTestQuestion["answers"][number]) =>
     !isSingleLanguage && showAnswerArabic ? answer.text_ar : undefined;
 
-  const getCourseName = (course: CompletedResults["courses"][number]) =>
-    isSingleLanguage ? (isArabic ? course.name_ar : course.name) : course.name;
-
-  const getCourseSubtitle = (course: CompletedResults["courses"][number]) =>
-    !isSingleLanguage && showAnswerArabic ? course.name_ar : undefined;
-
-  const getCourseDescription = (course: CompletedResults["courses"][number]) => {
-    const raw = isSingleLanguage
-      ? isArabic
-        ? course.short_description_ar ?? course.short_description
-        : course.short_description ?? course.short_description_ar
-      : course.short_description;
-    if (!raw) return undefined;
-    return markdownToPlainText(raw);
-  };
-
   const completionTitle = testCompletedTitle ?? resultsSubtitle ?? "You've completed the test!";
   const completionSubtitle =
     testCompletedSubtitle ??
-    "Based on your answers, here are the courses that can help you the most.";
+    "Based on your answers, here is your result.";
   const recommendedSectionTitle = topRecommendedLabel ?? resultsSubtitle ?? "Recommended courses";
+  const resultIsArabic = language !== undefined ? isArabic : resultLanguage === "ar";
 
   const allSelectedAnswerIds = useMemo(
     () => Object.values(selectedAnswers).flat(),
@@ -299,6 +292,7 @@ export function PersonalTestRunner({
       setIsFinalizing(false);
       setCompletedResults({
         durationSeconds: getElapsedSeconds(),
+        result: previewResults.result,
         courses: previewResults.courses,
       });
       return;
@@ -324,6 +318,7 @@ export function PersonalTestRunner({
         attemptFinishedRef.current = true;
         setCompletedResults({
           durationSeconds: result.durationSeconds,
+          result: result.result,
           courses: result.courses,
         });
       })
@@ -615,62 +610,44 @@ export function PersonalTestRunner({
 
           {isFinalizing || completedResults === null ? (
             <p className="text-center text-muted-foreground">{savingResultsLabel}</p>
-          ) : completedResults.courses.length === 0 ? (
-            <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
-              <p className="text-muted-foreground">{noRecommendationsLabel}</p>
+          ) : completedResults.result ? (
+            <div className="space-y-3">
+              {language === undefined && (
+                <div className="flex justify-end">
+                  <div className="flex rounded-md border p-0.5">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={resultLanguage === "en" ? "secondary" : "ghost"}
+                      className="h-7 px-2.5"
+                      onClick={() => setResultLanguage("en")}
+                    >
+                      EN
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant={resultLanguage === "ar" ? "secondary" : "ghost"}
+                      className="h-7 px-2.5"
+                      onClick={() => setResultLanguage("ar")}
+                    >
+                      AR
+                    </Button>
+                  </div>
+                </div>
+              )}
+              <PersonalTestResultView
+                result={completedResults.result}
+                courses={completedResults.courses}
+                isArabic={resultIsArabic}
+                recommendedCoursesLabel={recommendedSectionTitle}
+                viewCourseLabel={viewCourseLabel}
+                getCourseHref={getCourseHref}
+              />
             </div>
           ) : (
-            <div className="space-y-4">
-              <h3 className="text-lg font-semibold">{recommendedSectionTitle}</h3>
-              <ul className="space-y-4">
-                {completedResults.courses.map((course) => (
-                  <li
-                    key={course._id}
-                    className="flex flex-col gap-4 rounded-xl border bg-card p-4 shadow-sm sm:flex-row sm:items-center"
-                  >
-                    <div className="h-20 w-20 shrink-0 overflow-hidden rounded-lg bg-muted sm:h-24 sm:w-24">
-                      {course.thumbnail_image_url ? (
-                        <img
-                          src={course.thumbnail_image_url}
-                          alt=""
-                          className="h-full w-full object-cover"
-                          loading="lazy"
-                        />
-                      ) : (
-                        <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-                          —
-                        </div>
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1 space-y-1 text-start">
-                      <p className="font-semibold leading-snug">{getCourseName(course)}</p>
-                      {getCourseDescription(course) && (
-                        <p className="text-sm text-muted-foreground line-clamp-2">
-                          {getCourseDescription(course)}
-                        </p>
-                      )}
-                      {getCourseSubtitle(course) && (
-                        <p className="text-sm text-muted-foreground" dir="rtl">
-                          {getCourseSubtitle(course)}
-                        </p>
-                      )}
-                    </div>
-                    <Button
-                      variant="outline"
-                      className="shrink-0 border-cta text-cta hover:bg-cta/5 hover:text-cta"
-                      asChild
-                    >
-                      <a
-                        href={getCourseHref(course._id)}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                      >
-                        {viewCourseLabel}
-                      </a>
-                    </Button>
-                  </li>
-                ))}
-              </ul>
+            <div className="rounded-2xl border bg-card p-8 text-center shadow-sm">
+              <p className="text-muted-foreground">{noRecommendationsLabel}</p>
             </div>
           )}
 

@@ -53,7 +53,7 @@ const PersonalTestPreview = () => {
       backLabel="Back to test"
       headerExtra={<Badge variant="secondary">Preview</Badge>}
       testCompletedTitle="You've completed the preview!"
-      testCompletedSubtitle="Based on your answers, here are the courses that can help you the most."
+      testCompletedSubtitle="Based on your answers, here is your result."
       topRecommendedLabel="Top Recommended Courses For You"
       viewCourseLabel="View Course"
       getCourseHref={(courseId) => `/courses/preview/${courseId}`}

@@ -13,6 +13,15 @@ export const personalTestCreateSchema = z.object({
     .max(120, "Arabic name must be 120 characters or less."),
 });
 
+const optionalHexColor = z
+  .string()
+  .trim()
+  .transform((value) => (value.length === 0 ? undefined : value))
+  .refine(
+    (value) => value === undefined || /^#[0-9A-Fa-f]{6}$/.test(value),
+    "Use a hex color like #E91E8C.",
+  );
+
 export const personalTestUpdateSchema = z.object({
   name: z
     .string()
@@ -43,6 +52,19 @@ export const personalTestUpdateSchema = z.object({
     showAll: z.boolean(),
     maxCourses: z.number().int().min(1).max(100).optional(),
   }),
+  startButtonColor: optionalHexColor.optional(),
+  startButtonText: z
+    .string()
+    .trim()
+    .max(80, "Start button text must be 80 characters or less.")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
+  startButtonTextAr: z
+    .string()
+    .trim()
+    .max(80, "Arabic start button text must be 80 characters or less.")
+    .optional()
+    .transform((value) => (value ? value : undefined)),
 });
 
 export const personalTestQuestionSchema = z.object({
@@ -66,15 +88,6 @@ export const personalTestQuestionSchema = z.object({
     )
     .min(1, "At least one answer is required."),
 });
-
-const optionalHexColor = z
-  .string()
-  .trim()
-  .transform((value) => (value.length === 0 ? undefined : value))
-  .refine(
-    (value) => value === undefined || /^#[0-9A-Fa-f]{6}$/.test(value),
-    "Use a hex color like #E91E8C.",
-  );
 
 export const personalTestResultSchema = z
   .object({

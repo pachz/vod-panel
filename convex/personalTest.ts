@@ -13,7 +13,10 @@ import {
   type PersonalTestUpdateInput,
 } from "../shared/validation/personalTest";
 import { requireUser } from "./utils/auth";
-import { computeRecommendedCourses } from "./lib/personalTestScoring";
+import {
+  computeRecommendedCourses,
+  matchedPersonalTestResultValidator,
+} from "./lib/personalTestScoring";
 
 const defaultResultSettings = {
   showAll: true,
@@ -256,6 +259,10 @@ async function buildSnapshot(ctx: MutationCtx, testId: Id<"personalTests">) {
     name_ar: test.name_ar,
     description: test.description,
     description_ar: test.description_ar,
+    cover_image_url: test.cover_image_url,
+    start_button_color: test.start_button_color,
+    start_button_text: test.start_button_text,
+    start_button_text_ar: test.start_button_text_ar,
     resultSettings: test.resultSettings,
     questions: qa.map(({ question, answers }) => ({
       id: question._id,
@@ -321,6 +328,22 @@ async function validatePublishable(ctx: MutationCtx, testId: Id<"personalTests">
         message: `Question "${question.title}" needs at least one answer.`,
       });
     }
+  }
+
+  const results = await loadResults(ctx, testId);
+  if (results.length === 0) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: "Add at least one result before publishing.",
+    });
+  }
+
+  const correlations = await loadCorrelations(ctx, testId);
+  if (correlations.length === 0) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: "Set at least one answer–result correlation before publishing.",
+    });
   }
 }
 
@@ -499,6 +522,10 @@ export const getPersonalTest = query({
         description: v.optional(v.string()),
         description_ar: v.optional(v.string()),
         thumbnail_image_url: v.optional(v.string()),
+        cover_image_url: v.optional(v.string()),
+        start_button_color: v.optional(v.string()),
+        start_button_text: v.optional(v.string()),
+        start_button_text_ar: v.optional(v.string()),
         status: v.union(
           v.literal("draft"),
           v.literal("published"),
@@ -545,7 +572,7 @@ export const getPersonalTest = query({
       resultIdsByAnswer.set(row.answerId, existing);
     }
 
-    let canPublish = qa.length > 0;
+    let canPublish = qa.length > 0 && results.length > 0 && correlations.length > 0;
     for (const { answers } of qa) {
       if (answers.length === 0) {
         canPublish = false;
@@ -569,6 +596,10 @@ export const getPersonalTest = query({
         description: test.description,
         description_ar: test.description_ar,
         thumbnail_image_url: test.thumbnail_image_url,
+        cover_image_url: test.cover_image_url,
+        start_button_color: test.start_button_color,
+        start_button_text: test.start_button_text,
+        start_button_text_ar: test.start_button_text_ar,
         status: test.status,
         displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
         questionCount: test.questionCount,
@@ -667,6 +698,9 @@ export const updatePersonalTest = mutation({
       showAll: v.boolean(),
       maxCourses: v.optional(v.number()),
     }),
+    startButtonColor: v.optional(v.string()),
+    startButtonText: v.optional(v.string()),
+    startButtonTextAr: v.optional(v.string()),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
@@ -679,6 +713,9 @@ export const updatePersonalTest = mutation({
       descriptionAr: args.descriptionAr,
       displayOrder: args.displayOrder,
       resultSettings: args.resultSettings,
+      startButtonColor: args.startButtonColor,
+      startButtonText: args.startButtonText,
+      startButtonTextAr: args.startButtonTextAr,
     });
 
     await markUnpublishedChanges(ctx, test);
@@ -691,6 +728,9 @@ export const updatePersonalTest = mutation({
       description_ar: data.descriptionAr || undefined,
       displayOrder: data.displayOrder,
       resultSettings: data.resultSettings,
+      start_button_color: data.startButtonColor || undefined,
+      start_button_text: data.startButtonText || undefined,
+      start_button_text_ar: data.startButtonTextAr || undefined,
       updatedAt: Date.now(),
     });
     return null;
@@ -1005,6 +1045,10 @@ type PublishedSnapshot = {
   name_ar: string;
   description?: string;
   description_ar?: string;
+  cover_image_url?: string;
+  start_button_color?: string;
+  start_button_text?: string;
+  start_button_text_ar?: string;
   resultSettings: { showAll: boolean; maxCourses?: number };
   questions: Array<{
     id: Id<"personalTestQuestions">;
@@ -1076,18 +1120,19 @@ export const previewPersonalTestResults = query({
     selectedAnswerIds: v.array(v.id("personalTestAnswers")),
   },
   returns: v.object({
+    result: v.union(matchedPersonalTestResultValidator, v.null()),
     courses: v.array(previewCourseResultValidator),
   }),
   handler: async (ctx, args) => {
     await requireUser(ctx);
     const test = await getTestOrThrow(ctx, args.testId);
-    const { courses } = await computeRecommendedCourses(
+    const { result, courses } = await computeRecommendedCourses(
       ctx,
       args.testId,
       args.selectedAnswerIds,
       test.resultSettings,
     );
-    return { courses };
+    return { result, courses };
   },
 });
 
@@ -1396,6 +1441,65 @@ export const updatePersonalTestThumbnail = mutation({
   },
 });
 
+export const updatePersonalTestCover = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    coverStorageId: v.optional(v.id("_storage")),
+    clearCover: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    coverImageUrl: v.union(v.string(), v.null()),
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const test = await getTestOrThrow(ctx, args.testId);
+
+    if (args.clearCover) {
+      const {
+        _id,
+        _creationTime,
+        cover_image_url: _cover,
+        ...rest
+      } = test;
+      await ctx.db.replace(_id, {
+        ...rest,
+        updatedAt: Date.now(),
+        ...(test.publishedSnapshot !== undefined
+          ? {
+              hasUnpublishedChanges: true,
+              ...(test.status === "draft" ? { status: "published" as const } : {}),
+            }
+          : {}),
+      });
+      return { coverImageUrl: null };
+    }
+
+    if (!args.coverStorageId) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "Choose a cover image or clear the current one.",
+      });
+    }
+
+    const url = await ctx.storage.getUrl(args.coverStorageId);
+    if (!url) {
+      throw new ConvexError({
+        code: "STORAGE_ERROR",
+        message: "Could not generate cover image URL.",
+      });
+    }
+
+    await markUnpublishedChanges(ctx, test);
+
+    await ctx.db.patch(args.testId, {
+      cover_image_url: url,
+      updatedAt: Date.now(),
+    });
+
+    return { coverImageUrl: url };
+  },
+});
+
 export const getPublishedPersonalTest = query({
   args: { testId: v.id("personalTests") },
   returns: v.union(
@@ -1406,6 +1510,10 @@ export const getPublishedPersonalTest = query({
         name_ar: v.string(),
         description: v.optional(v.string()),
         description_ar: v.optional(v.string()),
+        cover_image_url: v.optional(v.string()),
+        start_button_color: v.optional(v.string()),
+        start_button_text: v.optional(v.string()),
+        start_button_text_ar: v.optional(v.string()),
         questionCount: v.number(),
       }),
       questions: v.array(publishedTestQuestionValidator),
@@ -1452,6 +1560,10 @@ export const getPublishedPersonalTest = query({
         name_ar: snapshot.name_ar,
         description: snapshot.description ?? test.description,
         description_ar: snapshot.description_ar ?? test.description_ar,
+        cover_image_url: snapshot.cover_image_url,
+        start_button_color: snapshot.start_button_color,
+        start_button_text: snapshot.start_button_text,
+        start_button_text_ar: snapshot.start_button_text_ar,
         questionCount: questions.length,
       },
       questions,
@@ -1465,6 +1577,8 @@ export const computePersonalTestResults = query({
     selectedAnswerIds: v.array(v.id("personalTestAnswers")),
   },
   returns: v.object({
+    result: v.union(matchedPersonalTestResultValidator, v.null()),
+    resultId: v.union(v.id("personalTestResults"), v.null()),
     courseIds: v.array(v.id("courses")),
     courses: v.array(
       v.object({

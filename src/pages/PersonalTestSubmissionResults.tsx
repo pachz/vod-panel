@@ -6,6 +6,7 @@ import { api } from "../../convex/_generated/api";
 import type { Id } from "../../convex/_generated/dataModel";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { PersonalTestResultView } from "@/components/PersonalTests/PersonalTestResultView";
 import { Button } from "@/components/ui/button";
 import {
   formatAnalyticsDateTime,
@@ -92,6 +93,24 @@ const PersonalTestSubmissionResults = () => {
         </div>
       </div>
 
+      {submission.result ? (
+        <div className="max-w-3xl">
+          <PersonalTestResultView
+            result={submission.result}
+            courses={submission.recommendedCourses.map((course) => ({
+              _id: course.courseId,
+              name: course.name,
+              name_ar: course.name_ar,
+              thumbnail_image_url: course.thumbnail_image_url,
+              short_description: course.short_description,
+              short_description_ar: course.short_description_ar,
+            }))}
+            isArabic={false}
+            recommendedCoursesLabel="Recommended courses"
+          />
+        </div>
+      ) : null}
+
       <div className="rounded-xl border bg-card p-6 space-y-4 max-w-3xl">
         <h2 className="font-medium">Questions &amp; answers</h2>
         {submission.responses.length === 0 ? (
@@ -137,6 +156,7 @@ const PersonalTestSubmissionResults = () => {
         )}
       </div>
 
+      {submission.result ? null : (
       <div className="rounded-xl border bg-card p-6 space-y-4 max-w-3xl">
         <div className="flex items-center justify-between gap-2">
           <h2 className="font-medium">Recommended courses</h2>
@@ -176,6 +196,7 @@ const PersonalTestSubmissionResults = () => {
           </ul>
         )}
       </div>
+      )}
     </div>
   );
 };

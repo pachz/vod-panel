@@ -5,6 +5,10 @@ import {
   kuwaitDayStartMs,
   parseAnalyticsDate,
 } from "../../shared/validation/personalTestAnalytics";
+import {
+  toMatchedPersonalTestResult,
+  type MatchedPersonalTestResult,
+} from "./personalTestScoring";
 
 const MAX_SUBMISSION_ROWS = 10_000;
 
@@ -47,6 +51,7 @@ export type SubmissionRow = {
 export type SubmissionDetail = SubmissionRow & {
   testName: string;
   testNameAr: string;
+  result: MatchedPersonalTestResult | null;
 };
 
 type TestQuestionStructure = Array<{
@@ -195,6 +200,20 @@ function buildSubmissionRow(
   };
 }
 
+async function loadMatchedResult(
+  ctx: QueryCtx,
+  resultId: Id<"personalTestResults"> | undefined,
+): Promise<MatchedPersonalTestResult | null> {
+  if (!resultId) {
+    return null;
+  }
+  const result = await ctx.db.get("personalTestResults", resultId);
+  if (!result) {
+    return null;
+  }
+  return toMatchedPersonalTestResult(result);
+}
+
 export async function loadPersonalTestSubmissions(
   ctx: QueryCtx,
   args: {
@@ -302,6 +321,7 @@ export async function loadPersonalTestSubmissionById(
     ...row,
     testName: test.name,
     testNameAr: test.name_ar,
+    result: await loadMatchedResult(ctx, attempt.resultId),
   };
 }
 

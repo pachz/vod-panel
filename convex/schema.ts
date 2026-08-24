@@ -378,6 +378,11 @@ export default defineSchema({
     description: v.optional(v.string()),
     description_ar: v.optional(v.string()),
     thumbnail_image_url: v.optional(v.string()),
+    /** Intro/cover image shown before the quiz starts. Distinct from the listing thumbnail. */
+    cover_image_url: v.optional(v.string()),
+    start_button_color: v.optional(v.string()),
+    start_button_text: v.optional(v.string()),
+    start_button_text_ar: v.optional(v.string()),
     status: v.union(
       v.literal("draft"),
       v.literal("published"),
@@ -475,6 +480,8 @@ export default defineSchema({
     durationSeconds: v.optional(v.number()),
     selectedAnswerIds: v.optional(v.array(v.id("personalTestAnswers"))),
     recommendedCourseIds: v.optional(v.array(v.id("courses"))),
+    /** Winning result page for this attempt, scored from answer correlations. */
+    resultId: v.optional(v.id("personalTestResults")),
     /** Admin preview runs; excluded from user analytics by default. */
     isPreview: v.optional(v.boolean()),
   })

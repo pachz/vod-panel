@@ -12,6 +12,7 @@ import {
   getExpiredAttemptDurationSeconds,
   getResultSettingsForAttempt,
   isAttemptExpired,
+  matchedPersonalTestResultValidator,
   validateDurationAgainstStartedAt,
 } from "./lib/personalTestScoring";
 import {
@@ -89,6 +90,7 @@ const myAttemptResultsValidator = v.object({
   questionCount: v.number(),
   recommendedCourses: v.array(myAttemptCourseValidator),
   responses: v.array(myAttemptResponseValidator),
+  result: v.union(matchedPersonalTestResultValidator, v.null()),
   testName: v.string(),
   testNameAr: v.string(),
 });
@@ -275,6 +277,7 @@ export const completePersonalTestAttempt = mutation({
     durationSeconds: v.number(),
     recommendedCourseIds: v.array(v.id("courses")),
     courses: v.array(courseResultValidator),
+    result: v.union(matchedPersonalTestResultValidator, v.null()),
   }),
   handler: async (ctx, args) => {
     const userId = await getUserIdOrThrow(ctx);
@@ -296,7 +299,7 @@ export const completePersonalTestAttempt = mutation({
       });
     }
 
-    const { courseIds, courses } = await computeRecommendedCourses(
+    const { courseIds, courses, result, resultId } = await computeRecommendedCourses(
       ctx,
       attempt.testId,
       args.selectedAnswerIds,
@@ -310,6 +313,7 @@ export const completePersonalTestAttempt = mutation({
       durationSeconds: args.durationSeconds,
       selectedAnswerIds: args.selectedAnswerIds,
       recommendedCourseIds: courseIds,
+      ...(resultId ? { resultId } : {}),
     });
 
     const completedAttempt = await ctx.db.get("personalTestAttempts", args.attemptId);
@@ -326,6 +330,7 @@ export const completePersonalTestAttempt = mutation({
       durationSeconds: args.durationSeconds,
       recommendedCourseIds: courseIds,
       courses,
+      result,
     };
   },
 });
