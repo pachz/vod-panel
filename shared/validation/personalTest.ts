@@ -62,7 +62,6 @@ export const personalTestQuestionSchema = z.object({
       z.object({
         text: z.string().trim().min(1, "Answer text is required.").max(500),
         textAr: z.string().trim().min(1, "Arabic answer text is required.").max(500),
-        recommendedCourseIds: z.array(z.string()).default([]),
       }),
     )
     .min(1, "At least one answer is required."),

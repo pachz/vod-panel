@@ -77,18 +77,36 @@ export async function computeRecommendedCourses(
   selectedAnswerIds: Array<Id<"personalTestAnswers">>,
   resultSettings: { showAll: boolean; maxCourses?: number },
 ) {
-  const scoreMap = new Map<Id<"courses">, number>();
+  const resultVotes = new Map<Id<"personalTestResults">, number>();
   for (const answerId of selectedAnswerIds) {
     const answer = await ctx.db.get("personalTestAnswers", answerId);
     if (!answer || answer.testId !== testId) {
       continue;
     }
-    for (const courseId of answer.recommendedCourseIds) {
-      scoreMap.set(courseId, (scoreMap.get(courseId) ?? 0) + 1);
+    const correlations = await ctx.db
+      .query("personalTestResultCorrelations")
+      .withIndex("by_answerId", (q) => q.eq("answerId", answerId))
+      .collect();
+    for (const row of correlations) {
+      resultVotes.set(row.resultId, (resultVotes.get(row.resultId) ?? 0) + 1);
     }
   }
 
-  let ranked = Array.from(scoreMap.entries()).sort((a, b) => b[1] - a[1]);
+  const courseScore = new Map<Id<"courses">, number>();
+  const rankedResults = Array.from(resultVotes.entries()).sort(
+    (a, b) => b[1] - a[1],
+  );
+  for (const [resultId, votes] of rankedResults) {
+    const result = await ctx.db.get("personalTestResults", resultId);
+    if (!result || result.testId !== testId) {
+      continue;
+    }
+    for (const courseId of result.recommendedCourseIds ?? []) {
+      courseScore.set(courseId, (courseScore.get(courseId) ?? 0) + votes);
+    }
+  }
+
+  let ranked = Array.from(courseScore.entries()).sort((a, b) => b[1] - a[1]);
   if (!resultSettings.showAll && resultSettings.maxCourses) {
     ranked = ranked.slice(0, resultSettings.maxCourses);
   }

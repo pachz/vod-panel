@@ -18,7 +18,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { CourseMultiPicker } from "./CourseMultiPicker";
 import { personalTestQuestionSchema } from "../../../shared/validation/personalTest";
 
 export type QuestionFormValues = {
@@ -29,14 +28,12 @@ export type QuestionFormValues = {
     answerId?: Id<"personalTestAnswers">;
     text: string;
     textAr: string;
-    recommendedCourseIds: Id<"courses">[];
   }>;
 };
 
 const emptyAnswer = () => ({
   text: "",
   textAr: "",
-  recommendedCourseIds: [] as Id<"courses">[],
 });
 
 const initialValues: QuestionFormValues = {
@@ -94,7 +91,6 @@ export function QuestionFormDialog({
       answers: values.answers.map((a) => ({
         text: a.text,
         textAr: a.textAr,
-        recommendedCourseIds: a.recommendedCourseIds.map(String),
       })),
     });
 
@@ -209,13 +205,6 @@ export function QuestionFormDialog({
                       onChange={(e) => updateAnswer(index, { textAr: e.target.value })}
                     />
                   </div>
-                </div>
-                <div className="space-y-2">
-                  <Label>Recommended courses</Label>
-                  <CourseMultiPicker
-                    selectedCourseIds={answer.recommendedCourseIds}
-                    onChange={(ids) => updateAnswer(index, { recommendedCourseIds: ids })}
-                  />
                 </div>
               </div>
             ))}

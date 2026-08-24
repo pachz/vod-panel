@@ -150,7 +150,6 @@ type QuestionRow = {
     _id: Id<"personalTestAnswers">;
     text: string;
     text_ar: string;
-    recommendedCourseIds: Id<"courses">[];
     resultIds: Id<"personalTestResults">[];
   }>;
 };
@@ -531,7 +530,6 @@ const PersonalTestDetail = () => {
         answerId: a._id,
         text: a.text,
         textAr: a.text_ar,
-        recommendedCourseIds: a.recommendedCourseIds,
       })),
     };
   }, [editingQuestion]);
@@ -747,7 +745,6 @@ const PersonalTestDetail = () => {
           answerId: a.answerId,
           text: a.text,
           textAr: a.textAr,
-          recommendedCourseIds: a.recommendedCourseIds,
         })),
       });
       toast.success(editingQuestion ? "Question updated." : "Question added.");
@@ -1066,7 +1063,7 @@ const PersonalTestDetail = () => {
             <div className="lg:col-start-2 lg:row-start-1">
               <h2 className="font-medium">Recommended courses</h2>
               <p className="mt-1 text-xs text-muted-foreground">
-                Courses linked through answer recommendations in this test.
+                Courses linked through result recommendations in this test.
               </p>
             </div>
 

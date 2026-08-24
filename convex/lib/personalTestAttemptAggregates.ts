@@ -46,14 +46,14 @@ export async function getRecommendedCourseIdsForTest(
   ctx: QueryCtx | MutationCtx,
   testId: Id<"personalTests">,
 ): Promise<Array<Id<"courses">>> {
-  const answers = await ctx.db
-    .query("personalTestAnswers")
+  const results = await ctx.db
+    .query("personalTestResults")
     .withIndex("by_testId", (q) => q.eq("testId", testId))
     .collect();
 
   const courseIds = new Set<Id<"courses">>();
-  for (const answer of answers) {
-    for (const courseId of answer.recommendedCourseIds) {
+  for (const result of results) {
+    for (const courseId of result.recommendedCourseIds ?? []) {
       courseIds.add(courseId);
     }
   }

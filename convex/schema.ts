@@ -421,7 +421,7 @@ export default defineSchema({
     questionId: v.id("personalTestQuestions"),
     text: v.string(),
     text_ar: v.string(),
-    recommendedCourseIds: v.array(v.id("courses")),
+    recommendedCourseIds: v.optional(v.array(v.id("courses"))),
     displayOrder: v.number(),
     createdAt: v.number(),
   })

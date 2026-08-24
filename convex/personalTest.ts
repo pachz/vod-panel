@@ -267,7 +267,6 @@ async function buildSnapshot(ctx: MutationCtx, testId: Id<"personalTests">) {
         id: answer._id,
         text: answer.text,
         text_ar: answer.text_ar,
-        recommendedCourseIds: answer.recommendedCourseIds,
         displayOrder: answer.displayOrder,
       })),
     })),
@@ -356,7 +355,6 @@ const answerValidator = v.object({
   questionId: v.id("personalTestQuestions"),
   text: v.string(),
   text_ar: v.string(),
-  recommendedCourseIds: v.array(v.id("courses")),
   resultIds: v.array(v.id("personalTestResults")),
   displayOrder: v.number(),
   createdAt: v.number(),
@@ -556,11 +554,9 @@ export const getPersonalTest = query({
     }
 
     const courseIdSet = new Set<Id<"courses">>();
-    for (const { answers } of qa) {
-      for (const answer of answers) {
-        for (const courseId of answer.recommendedCourseIds) {
-          courseIdSet.add(courseId);
-        }
+    for (const result of results) {
+      for (const courseId of result.recommendedCourseIds ?? []) {
+        courseIdSet.add(courseId);
       }
     }
 
@@ -598,7 +594,6 @@ export const getPersonalTest = query({
           questionId: answer.questionId,
           text: answer.text,
           text_ar: answer.text_ar,
-          recommendedCourseIds: answer.recommendedCourseIds,
           resultIds: resultIdsByAnswer.get(answer._id) ?? [],
           displayOrder: answer.displayOrder,
           createdAt: answer.createdAt,
@@ -801,7 +796,6 @@ export const savePersonalTestQuestion = mutation({
         answerId: v.optional(v.id("personalTestAnswers")),
         text: v.string(),
         textAr: v.string(),
-        recommendedCourseIds: v.array(v.id("courses")),
       }),
     ),
   },
@@ -816,23 +810,16 @@ export const savePersonalTestQuestion = mutation({
       answers: args.answers.map((a) => ({
         text: a.text,
         textAr: a.textAr,
-        recommendedCourseIds: a.recommendedCourseIds.map(String),
       })),
     });
 
     await markUnpublishedChanges(ctx, test);
 
-    const validatedAnswers = await Promise.all(
-      data.answers.map(async (answer, index) => ({
-        answerId: args.answers[index]?.answerId,
-        text: answer.text,
-        text_ar: answer.textAr,
-        recommendedCourseIds: await validateCourseIds(
-          ctx,
-          answer.recommendedCourseIds,
-        ),
-      })),
-    );
+    const validatedAnswers = data.answers.map((answer, index) => ({
+      answerId: args.answers[index]?.answerId,
+      text: answer.text,
+      text_ar: answer.textAr,
+    }));
 
     const now = Date.now();
     let questionId = args.questionId;
@@ -867,7 +854,7 @@ export const savePersonalTestQuestion = mutation({
           await ctx.db.patch(existingAnswer._id, {
             text: answer.text,
             text_ar: answer.text_ar,
-            recommendedCourseIds: answer.recommendedCourseIds,
+            recommendedCourseIds: [],
             displayOrder: i,
           });
           keptIds.add(existingAnswer._id);
@@ -877,7 +864,7 @@ export const savePersonalTestQuestion = mutation({
             questionId,
             text: answer.text,
             text_ar: answer.text_ar,
-            recommendedCourseIds: answer.recommendedCourseIds,
+            recommendedCourseIds: [],
             displayOrder: i,
             createdAt: now,
           });
@@ -916,7 +903,7 @@ export const savePersonalTestQuestion = mutation({
           questionId,
           text: answer.text,
           text_ar: answer.text_ar,
-          recommendedCourseIds: answer.recommendedCourseIds,
+          recommendedCourseIds: [],
           displayOrder: i,
           createdAt: now,
         });
@@ -1029,7 +1016,6 @@ type PublishedSnapshot = {
       id: Id<"personalTestAnswers">;
       text: string;
       text_ar: string;
-      recommendedCourseIds: Array<Id<"courses">>;
       displayOrder: number;
     }>;
   }>;
