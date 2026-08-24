@@ -5,9 +5,11 @@ import type { Doc, Id } from "./_generated/dataModel";
 import {
   personalTestCreateSchema,
   personalTestQuestionSchema,
+  personalTestResultSchema,
   personalTestUpdateSchema,
   type PersonalTestCreateInput,
   type PersonalTestQuestionInput,
+  type PersonalTestResultInput,
   type PersonalTestUpdateInput,
 } from "../shared/validation/personalTest";
 import { requireUser } from "./utils/auth";
@@ -91,6 +93,17 @@ function validateQuestionInput(input: PersonalTestQuestionInput) {
   return result.data;
 }
 
+function validateResultInput(input: PersonalTestResultInput) {
+  const result = personalTestResultSchema.safeParse(input);
+  if (!result.success) {
+    throw new ConvexError({
+      code: "INVALID_INPUT",
+      message: result.error.errors[0]?.message ?? "Invalid result input.",
+    });
+  }
+  return result.data;
+}
+
 async function getTestOrThrow(
   ctx: QueryCtx | MutationCtx,
   testId: Id<"personalTests">,
@@ -158,9 +171,85 @@ async function loadQuestionsWithAnswers(
   );
 }
 
+async function loadResults(
+  ctx: QueryCtx | MutationCtx,
+  testId: Id<"personalTests">,
+) {
+  const results = await ctx.db
+    .query("personalTestResults")
+    .withIndex("by_testId_displayOrder", (q) => q.eq("testId", testId))
+    .collect();
+  return results;
+}
+
+async function loadCorrelations(
+  ctx: QueryCtx | MutationCtx,
+  testId: Id<"personalTests">,
+) {
+  return await ctx.db
+    .query("personalTestResultCorrelations")
+    .withIndex("by_testId", (q) => q.eq("testId", testId))
+    .collect();
+}
+
+async function deleteCorrelationsForAnswer(
+  ctx: MutationCtx,
+  answerId: Id<"personalTestAnswers">,
+) {
+  const rows = await ctx.db
+    .query("personalTestResultCorrelations")
+    .withIndex("by_answerId", (q) => q.eq("answerId", answerId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete("personalTestResultCorrelations", row._id);
+  }
+}
+
+async function deleteCorrelationsForQuestion(
+  ctx: MutationCtx,
+  questionId: Id<"personalTestQuestions">,
+) {
+  const rows = await ctx.db
+    .query("personalTestResultCorrelations")
+    .withIndex("by_questionId", (q) => q.eq("questionId", questionId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete("personalTestResultCorrelations", row._id);
+  }
+}
+
+async function deleteCorrelationsForResult(
+  ctx: MutationCtx,
+  resultId: Id<"personalTestResults">,
+) {
+  const rows = await ctx.db
+    .query("personalTestResultCorrelations")
+    .withIndex("by_resultId", (q) => q.eq("resultId", resultId))
+    .collect();
+  for (const row of rows) {
+    await ctx.db.delete("personalTestResultCorrelations", row._id);
+  }
+}
+
+async function deleteResultsForTest(
+  ctx: MutationCtx,
+  testId: Id<"personalTests">,
+) {
+  const correlations = await loadCorrelations(ctx, testId);
+  for (const row of correlations) {
+    await ctx.db.delete("personalTestResultCorrelations", row._id);
+  }
+  const results = await loadResults(ctx, testId);
+  for (const result of results) {
+    await ctx.db.delete("personalTestResults", result._id);
+  }
+}
+
 async function buildSnapshot(ctx: MutationCtx, testId: Id<"personalTests">) {
   const test = await getTestOrThrow(ctx, testId);
   const qa = await loadQuestionsWithAnswers(ctx, testId);
+  const results = await loadResults(ctx, testId);
+  const correlations = await loadCorrelations(ctx, testId);
 
   return JSON.stringify({
     name: test.name,
@@ -181,6 +270,25 @@ async function buildSnapshot(ctx: MutationCtx, testId: Id<"personalTests">) {
         recommendedCourseIds: answer.recommendedCourseIds,
         displayOrder: answer.displayOrder,
       })),
+    })),
+    results: results.map((result) => ({
+      id: result._id,
+      title: result.title,
+      title_ar: result.title_ar,
+      description: result.description,
+      description_ar: result.description_ar,
+      cover_image_url: result.cover_image_url,
+      color: result.color,
+      recommendedCourseIds: result.recommendedCourseIds ?? [],
+      ctaText: result.ctaText,
+      ctaText_ar: result.ctaText_ar,
+      ctaUrl: result.ctaUrl,
+      displayOrder: result.displayOrder,
+    })),
+    correlations: correlations.map((row) => ({
+      questionId: row.questionId,
+      answerId: row.answerId,
+      resultId: row.resultId,
     })),
   });
 }
@@ -249,6 +357,24 @@ const answerValidator = v.object({
   text: v.string(),
   text_ar: v.string(),
   recommendedCourseIds: v.array(v.id("courses")),
+  resultIds: v.array(v.id("personalTestResults")),
+  displayOrder: v.number(),
+  createdAt: v.number(),
+});
+
+const resultValidator = v.object({
+  _id: v.id("personalTestResults"),
+  testId: v.id("personalTests"),
+  title: v.string(),
+  title_ar: v.string(),
+  description: v.optional(v.string()),
+  description_ar: v.optional(v.string()),
+  cover_image_url: v.optional(v.string()),
+  color: v.optional(v.string()),
+  recommendedCourseIds: v.array(v.id("courses")),
+  ctaText: v.optional(v.string()),
+  ctaText_ar: v.optional(v.string()),
+  ctaUrl: v.optional(v.string()),
   displayOrder: v.number(),
   createdAt: v.number(),
 });
@@ -397,6 +523,7 @@ export const getPersonalTest = query({
           answers: v.array(answerValidator),
         }),
       ),
+      results: v.array(resultValidator),
       canPublish: v.boolean(),
       recommendedCourseIds: v.array(v.id("courses")),
     }),
@@ -411,6 +538,15 @@ export const getPersonalTest = query({
     }
 
     const qa = await loadQuestionsWithAnswers(ctx, testId);
+    const results = await loadResults(ctx, testId);
+    const correlations = await loadCorrelations(ctx, testId);
+    const resultIdsByAnswer = new Map<Id<"personalTestAnswers">, Array<Id<"personalTestResults">>>();
+    for (const row of correlations) {
+      const existing = resultIdsByAnswer.get(row.answerId) ?? [];
+      existing.push(row.resultId);
+      resultIdsByAnswer.set(row.answerId, existing);
+    }
+
     let canPublish = qa.length > 0;
     for (const { answers } of qa) {
       if (answers.length === 0) {
@@ -463,9 +599,26 @@ export const getPersonalTest = query({
           text: answer.text,
           text_ar: answer.text_ar,
           recommendedCourseIds: answer.recommendedCourseIds,
+          resultIds: resultIdsByAnswer.get(answer._id) ?? [],
           displayOrder: answer.displayOrder,
           createdAt: answer.createdAt,
         })),
+      })),
+      results: results.map((result) => ({
+        _id: result._id,
+        testId: result.testId,
+        title: result.title,
+        title_ar: result.title_ar,
+        description: result.description,
+        description_ar: result.description_ar,
+        cover_image_url: result.cover_image_url,
+        color: result.color,
+        recommendedCourseIds: result.recommendedCourseIds ?? [],
+        ctaText: result.ctaText,
+        ctaText_ar: result.ctaText_ar,
+        ctaUrl: result.ctaUrl,
+        displayOrder: result.displayOrder,
+        createdAt: result.createdAt,
       })),
       canPublish,
       recommendedCourseIds: Array.from(courseIdSet),
@@ -626,6 +779,8 @@ export const deletePersonalTest = mutation({
       await ctx.db.delete("personalTestQuestions", question._id);
     }
 
+    await deleteResultsForTest(ctx, testId);
+
     await ctx.db.patch(testId, {
       deletedAt: Date.now(),
       updatedAt: Date.now(),
@@ -643,6 +798,7 @@ export const savePersonalTestQuestion = mutation({
     answerType: v.union(v.literal("single"), v.literal("multi")),
     answers: v.array(
       v.object({
+        answerId: v.optional(v.id("personalTestAnswers")),
         text: v.string(),
         textAr: v.string(),
         recommendedCourseIds: v.array(v.id("courses")),
@@ -667,7 +823,8 @@ export const savePersonalTestQuestion = mutation({
     await markUnpublishedChanges(ctx, test);
 
     const validatedAnswers = await Promise.all(
-      data.answers.map(async (answer) => ({
+      data.answers.map(async (answer, index) => ({
+        answerId: args.answers[index]?.answerId,
         text: answer.text,
         text_ar: answer.textAr,
         recommendedCourseIds: await validateCourseIds(
@@ -699,8 +856,39 @@ export const savePersonalTestQuestion = mutation({
         .query("personalTestAnswers")
         .withIndex("by_questionId", (q) => q.eq("questionId", questionId!))
         .collect();
-      for (const answer of oldAnswers) {
-        await ctx.db.delete("personalTestAnswers", answer._id);
+      const oldById = new Map(oldAnswers.map((answer) => [answer._id, answer]));
+      const keptIds = new Set<Id<"personalTestAnswers">>();
+
+      for (let i = 0; i < validatedAnswers.length; i++) {
+        const answer = validatedAnswers[i]!;
+        const existingAnswer =
+          answer.answerId !== undefined ? oldById.get(answer.answerId) : undefined;
+        if (existingAnswer && existingAnswer.questionId === questionId) {
+          await ctx.db.patch(existingAnswer._id, {
+            text: answer.text,
+            text_ar: answer.text_ar,
+            recommendedCourseIds: answer.recommendedCourseIds,
+            displayOrder: i,
+          });
+          keptIds.add(existingAnswer._id);
+        } else {
+          await ctx.db.insert("personalTestAnswers", {
+            testId: args.testId,
+            questionId,
+            text: answer.text,
+            text_ar: answer.text_ar,
+            recommendedCourseIds: answer.recommendedCourseIds,
+            displayOrder: i,
+            createdAt: now,
+          });
+        }
+      }
+
+      for (const oldAnswer of oldAnswers) {
+        if (!keptIds.has(oldAnswer._id)) {
+          await deleteCorrelationsForAnswer(ctx, oldAnswer._id);
+          await ctx.db.delete("personalTestAnswers", oldAnswer._id);
+        }
       }
     } else {
       const existingQuestions = await ctx.db
@@ -720,19 +908,19 @@ export const savePersonalTestQuestion = mutation({
         displayOrder: nextOrder,
         createdAt: now,
       });
-    }
 
-    for (let i = 0; i < validatedAnswers.length; i++) {
-      const answer = validatedAnswers[i]!;
-      await ctx.db.insert("personalTestAnswers", {
-        testId: args.testId,
-        questionId: questionId!,
-        text: answer.text,
-        text_ar: answer.text_ar,
-        recommendedCourseIds: answer.recommendedCourseIds,
-        displayOrder: i,
-        createdAt: now,
-      });
+      for (let i = 0; i < validatedAnswers.length; i++) {
+        const answer = validatedAnswers[i]!;
+        await ctx.db.insert("personalTestAnswers", {
+          testId: args.testId,
+          questionId,
+          text: answer.text,
+          text_ar: answer.text_ar,
+          recommendedCourseIds: answer.recommendedCourseIds,
+          displayOrder: i,
+          createdAt: now,
+        });
+      }
     }
 
     await recalculateQuestionCount(ctx, args.testId);
@@ -758,6 +946,8 @@ export const deletePersonalTestQuestion = mutation({
     }
 
     await markUnpublishedChanges(ctx, test);
+
+    await deleteCorrelationsForQuestion(ctx, questionId);
 
     const answers = await ctx.db
       .query("personalTestAnswers")
@@ -968,6 +1158,215 @@ export const listPublishedPersonalTests = query({
         displayOrder: test.displayOrder ?? DEFAULT_DISPLAY_ORDER,
       }))
       .sort(comparePersonalTestsByDisplayOrder);
+  },
+});
+
+export const savePersonalTestResult = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    resultId: v.optional(v.id("personalTestResults")),
+    title: v.string(),
+    titleAr: v.string(),
+    description: v.optional(v.string()),
+    descriptionAr: v.optional(v.string()),
+    color: v.optional(v.string()),
+    recommendedCourseIds: v.array(v.id("courses")),
+    ctaEnabled: v.boolean(),
+    ctaText: v.optional(v.string()),
+    ctaTextAr: v.optional(v.string()),
+    ctaUrl: v.optional(v.string()),
+    coverStorageId: v.optional(v.id("_storage")),
+    clearCover: v.optional(v.boolean()),
+  },
+  returns: v.id("personalTestResults"),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const test = await getTestOrThrow(ctx, args.testId);
+    const data = validateResultInput({
+      title: args.title,
+      titleAr: args.titleAr,
+      description: args.description,
+      descriptionAr: args.descriptionAr,
+      color: args.color,
+      recommendedCourseIds: args.recommendedCourseIds.map(String),
+      ctaEnabled: args.ctaEnabled,
+      ctaText: args.ctaText,
+      ctaTextAr: args.ctaTextAr,
+      ctaUrl: args.ctaUrl,
+    });
+    const recommendedCourseIds = await validateCourseIds(
+      ctx,
+      data.recommendedCourseIds,
+    );
+
+    await markUnpublishedChanges(ctx, test);
+
+    let coverUrl: string | undefined;
+    if (args.resultId) {
+      const existing = await ctx.db.get("personalTestResults", args.resultId);
+      if (!existing || existing.testId !== args.testId) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Result not found.",
+        });
+      }
+      coverUrl = existing.cover_image_url;
+    }
+    if (args.clearCover) {
+      coverUrl = undefined;
+    }
+    if (args.coverStorageId) {
+      const url = await ctx.storage.getUrl(args.coverStorageId);
+      if (!url) {
+        throw new ConvexError({
+          code: "STORAGE_ERROR",
+          message: "Could not generate cover image URL.",
+        });
+      }
+      coverUrl = url;
+    }
+
+    const fields = {
+      testId: args.testId,
+      title: data.title,
+      title_ar: data.titleAr,
+      ...(data.description ? { description: data.description } : {}),
+      ...(data.descriptionAr ? { description_ar: data.descriptionAr } : {}),
+      ...(data.color ? { color: data.color } : {}),
+      recommendedCourseIds,
+      ...(coverUrl ? { cover_image_url: coverUrl } : {}),
+      ...(data.ctaEnabled
+        ? {
+            ctaText: data.ctaText,
+            ctaText_ar: data.ctaTextAr,
+            ctaUrl: data.ctaUrl,
+          }
+        : {}),
+    };
+
+    if (args.resultId) {
+      const existing = await ctx.db.get("personalTestResults", args.resultId);
+      if (!existing || existing.testId !== args.testId) {
+        throw new ConvexError({
+          code: "NOT_FOUND",
+          message: "Result not found.",
+        });
+      }
+      await ctx.db.replace(args.resultId, {
+        ...fields,
+        displayOrder: existing.displayOrder,
+        createdAt: existing.createdAt,
+      });
+      return args.resultId;
+    }
+
+    const existingResults = await loadResults(ctx, args.testId);
+    const nextOrder =
+      existingResults.length > 0
+        ? Math.max(...existingResults.map((result) => result.displayOrder)) + 1
+        : 0;
+
+    return await ctx.db.insert("personalTestResults", {
+      ...fields,
+      displayOrder: nextOrder,
+      createdAt: Date.now(),
+    });
+  },
+});
+
+export const deletePersonalTestResult = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    resultId: v.id("personalTestResults"),
+  },
+  returns: v.null(),
+  handler: async (ctx, { testId, resultId }) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const test = await getTestOrThrow(ctx, testId);
+    const result = await ctx.db.get("personalTestResults", resultId);
+    if (!result || result.testId !== testId) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Result not found.",
+      });
+    }
+
+    await markUnpublishedChanges(ctx, test);
+    await deleteCorrelationsForResult(ctx, resultId);
+    await ctx.db.delete("personalTestResults", resultId);
+
+    const remaining = await loadResults(ctx, testId);
+    for (let i = 0; i < remaining.length; i++) {
+      await ctx.db.patch(remaining[i]!._id, { displayOrder: i });
+    }
+    return null;
+  },
+});
+
+export const savePersonalTestQuestionResultCorrelations = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    questionId: v.id("personalTestQuestions"),
+    mappings: v.array(
+      v.object({
+        answerId: v.id("personalTestAnswers"),
+        resultIds: v.array(v.id("personalTestResults")),
+      }),
+    ),
+  },
+  returns: v.null(),
+  handler: async (ctx, { testId, questionId, mappings }) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const test = await getTestOrThrow(ctx, testId);
+    const question = await ctx.db.get("personalTestQuestions", questionId);
+    if (!question || question.testId !== testId) {
+      throw new ConvexError({
+        code: "NOT_FOUND",
+        message: "Question not found.",
+      });
+    }
+
+    const answers = await ctx.db
+      .query("personalTestAnswers")
+      .withIndex("by_questionId", (q) => q.eq("questionId", questionId))
+      .collect();
+    const answerIds = new Set(answers.map((answer) => answer._id));
+    const results = await loadResults(ctx, testId);
+    const resultIds = new Set(results.map((result) => result._id));
+
+    for (const mapping of mappings) {
+      if (!answerIds.has(mapping.answerId)) {
+        throw new ConvexError({
+          code: "INVALID_INPUT",
+          message: "Answer does not belong to this question.",
+        });
+      }
+      for (const resultId of mapping.resultIds) {
+        if (!resultIds.has(resultId)) {
+          throw new ConvexError({
+            code: "INVALID_INPUT",
+            message: "Result does not belong to this test.",
+          });
+        }
+      }
+    }
+
+    await markUnpublishedChanges(ctx, test);
+    await deleteCorrelationsForQuestion(ctx, questionId);
+
+    for (const mapping of mappings) {
+      const uniqueResultIds = Array.from(new Set(mapping.resultIds));
+      for (const resultId of uniqueResultIds) {
+        await ctx.db.insert("personalTestResultCorrelations", {
+          testId,
+          questionId,
+          answerId: mapping.answerId,
+          resultId,
+        });
+      }
+    }
+
+    return null;
   },
 });
 

@@ -428,6 +428,38 @@ export default defineSchema({
     .index("by_questionId", ["questionId"])
     .index("by_testId", ["testId"]),
 
+  /** Outcome pages shown to a test taker based on their answers. */
+  personalTestResults: defineTable({
+    testId: v.id("personalTests"),
+    title: v.string(),
+    title_ar: v.string(),
+    description: v.optional(v.string()),
+    description_ar: v.optional(v.string()),
+    cover_image_url: v.optional(v.string()),
+    color: v.optional(v.string()),
+    recommendedCourseIds: v.optional(v.array(v.id("courses"))),
+    ctaText: v.optional(v.string()),
+    ctaText_ar: v.optional(v.string()),
+    ctaUrl: v.optional(v.string()),
+    displayOrder: v.number(),
+    createdAt: v.number(),
+  })
+    .index("by_testId", ["testId"])
+    .index("by_testId_displayOrder", ["testId", "displayOrder"]),
+
+  /** Many-to-many mapping from question answers to test results. */
+  personalTestResultCorrelations: defineTable({
+    testId: v.id("personalTests"),
+    questionId: v.id("personalTestQuestions"),
+    answerId: v.id("personalTestAnswers"),
+    resultId: v.id("personalTestResults"),
+  })
+    .index("by_testId", ["testId"])
+    .index("by_questionId", ["questionId"])
+    .index("by_answerId", ["answerId"])
+    .index("by_resultId", ["resultId"])
+    .index("by_answerId_resultId", ["answerId", "resultId"]),
+
   personalTestAttempts: defineTable({
     testId: v.id("personalTests"),
     userId: v.id("users"),

@@ -26,6 +26,7 @@ export type QuestionFormValues = {
   titleAr: string;
   answerType: "single" | "multi";
   answers: Array<{
+    answerId?: Id<"personalTestAnswers">;
     text: string;
     textAr: string;
     recommendedCourseIds: Id<"courses">[];

@@ -20,6 +20,7 @@ import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
   Eye,
+  GitBranch,
   GripVertical,
   Pencil,
   Plus,
@@ -60,6 +61,14 @@ import {
   QuestionFormDialog,
   type QuestionFormValues,
 } from "@/components/PersonalTests/QuestionFormDialog";
+import { ResultFormDialog } from "@/components/PersonalTests/ResultFormDialog";
+import { ResultCorrelationsDialog } from "@/components/PersonalTests/ResultCorrelationsDialog";
+import { ResultPreviewDialog } from "@/components/PersonalTests/ResultPreviewDialog";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import { personalTestUpdateSchema } from "../../shared/validation/personalTest";
 import {
   defaultAnalyticsEndDate,
@@ -142,7 +151,23 @@ type QuestionRow = {
     text: string;
     text_ar: string;
     recommendedCourseIds: Id<"courses">[];
+    resultIds: Id<"personalTestResults">[];
   }>;
+};
+
+type ResultRow = {
+  _id: Id<"personalTestResults">;
+  title: string;
+  title_ar: string;
+  description?: string;
+  description_ar?: string;
+  cover_image_url?: string;
+  color?: string;
+  recommendedCourseIds: Id<"courses">[];
+  ctaText?: string;
+  ctaText_ar?: string;
+  ctaUrl?: string;
+  displayOrder: number;
 };
 
 type SortableQuestionRowProps = {
@@ -150,6 +175,7 @@ type SortableQuestionRowProps = {
   index: number;
   onEdit: (item: QuestionRow) => void;
   onDelete: (item: QuestionRow) => void;
+  onCorrelate: (item: QuestionRow) => void;
 };
 
 const SortableQuestionRow = ({
@@ -157,6 +183,7 @@ const SortableQuestionRow = ({
   index,
   onEdit,
   onDelete,
+  onCorrelate,
 }: SortableQuestionRowProps) => {
   const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
     useSortable({ id: item.question._id });
@@ -198,6 +225,19 @@ const SortableQuestionRow = ({
       </TableCell>
       <TableCell>
         <div className="flex gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onCorrelate(item)}
+                aria-label="Result correlations"
+              >
+                <GitBranch className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Result correlations</TooltipContent>
+          </Tooltip>
           <Button variant="ghost" size="icon" onClick={() => onEdit(item)}>
             <Pencil className="h-4 w-4" />
           </Button>
@@ -232,11 +272,13 @@ const PersonalTestDetail = () => {
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
   const generateImageUploadUrl = useMutation(api.personalTest.generatePersonalTestImageUploadUrl);
   const updatePersonalTestThumbnail = useMutation(api.personalTest.updatePersonalTestThumbnail);
+  const deleteResult = useMutation(api.personalTest.deletePersonalTestResult);
 
   const [activeTab, setActiveTab] = useState(() => {
     const tab = searchParams.get("tab");
     return tab === "analytics" ||
       tab === "questions" ||
+      tab === "results" ||
       tab === "attempts" ||
       tab === "info"
       ? tab
@@ -315,6 +357,13 @@ const PersonalTestDetail = () => {
 
   const [orderedQuestions, setOrderedQuestions] = useState<QuestionRow[]>([]);
   const [showAllRecommendedCourses, setShowAllRecommendedCourses] = useState(false);
+
+  const [resultDialogOpen, setResultDialogOpen] = useState(false);
+  const [editingResult, setEditingResult] = useState<ResultRow | null>(null);
+  const [previewingResult, setPreviewingResult] = useState<ResultRow | null>(null);
+  const [resultToDelete, setResultToDelete] = useState<ResultRow | null>(null);
+  const [isDeletingResult, setIsDeletingResult] = useState(false);
+  const [correlatingQuestion, setCorrelatingQuestion] = useState<QuestionRow | null>(null);
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -479,6 +528,7 @@ const PersonalTestDetail = () => {
       titleAr: editingQuestion.question.title_ar,
       answerType: editingQuestion.question.answerType,
       answers: editingQuestion.answers.map((a) => ({
+        answerId: a._id,
         text: a.text,
         textAr: a.text_ar,
         recommendedCourseIds: a.recommendedCourseIds,
@@ -694,6 +744,7 @@ const PersonalTestDetail = () => {
         titleAr: values.titleAr,
         answerType: values.answerType,
         answers: values.answers.map((a) => ({
+          answerId: a.answerId,
           text: a.text,
           textAr: a.textAr,
           recommendedCourseIds: a.recommendedCourseIds,
@@ -723,6 +774,23 @@ const PersonalTestDetail = () => {
       toast.error(error instanceof Error ? error.message : "Failed to delete question.");
     } finally {
       setIsDeletingQuestion(false);
+    }
+  };
+
+  const handleDeleteResult = async () => {
+    if (!resultToDelete) return;
+    setIsDeletingResult(true);
+    try {
+      await deleteResult({
+        testId,
+        resultId: resultToDelete._id,
+      });
+      toast.success("Result deleted.");
+      setResultToDelete(null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to delete result.");
+    } finally {
+      setIsDeletingResult(false);
     }
   };
 
@@ -768,7 +836,7 @@ const PersonalTestDetail = () => {
     );
   }
 
-  const { test, canPublish } = data;
+  const { test, canPublish, results } = data;
   const effectiveStatus =
     test.status === "draft" && test.publishedSnapshot !== undefined
       ? "published"
@@ -831,6 +899,12 @@ const PersonalTestDetail = () => {
             Questions
             <Badge variant="secondary" className="ml-2">
               {test.questionCount}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="results">
+            Results
+            <Badge variant="secondary" className="ml-2">
+              {results.length}
             </Badge>
           </TabsTrigger>
           <TabsTrigger value="attempts">Attempts</TabsTrigger>
@@ -1009,7 +1083,7 @@ const PersonalTestDetail = () => {
                       <TableHead className="w-12 text-center">#</TableHead>
                       <TableHead>Question title</TableHead>
                       <TableHead>Type</TableHead>
-                      <TableHead className="w-24">Actions</TableHead>
+                      <TableHead className="w-36">Actions</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -1034,6 +1108,7 @@ const PersonalTestDetail = () => {
                               setQuestionDialogOpen(true);
                             }}
                             onDelete={setQuestionToDelete}
+                            onCorrelate={setCorrelatingQuestion}
                           />
                         ))}
                       </SortableContext>
@@ -1098,6 +1173,166 @@ const PersonalTestDetail = () => {
                 </div>
               )}
             </aside>
+          </div>
+        </TabsContent>
+
+        <TabsContent value="results" className="mt-6">
+          <div className="space-y-4">
+            <div className="flex items-center justify-between">
+              <div>
+                <h2 className="font-medium">Results</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Outcome pages for this test. Map answers to them from the
+                  questions table. Test takers will see these in a later update.
+                </p>
+              </div>
+              <Button
+                variant="cta"
+                onClick={() => {
+                  setEditingResult(null);
+                  setResultDialogOpen(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Add result
+              </Button>
+            </div>
+
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-20">Cover</TableHead>
+                    <TableHead>Title</TableHead>
+                    <TableHead>Call to action</TableHead>
+                    <TableHead className="w-32">Actions</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {results.length === 0 ? (
+                    <TableRow>
+                      <TableCell
+                        colSpan={4}
+                        className="py-8 text-center text-muted-foreground"
+                      >
+                        No results yet. Add your first result.
+                      </TableCell>
+                    </TableRow>
+                  ) : (
+                    results.map((result) => (
+                      <TableRow key={result._id}>
+                        <TableCell>
+                          <div className="h-10 w-16 overflow-hidden rounded-md bg-muted">
+                            {result.cover_image_url ? (
+                              <img
+                                src={result.cover_image_url}
+                                alt=""
+                                className="h-full w-full object-cover"
+                              />
+                            ) : (
+                              <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+                                None
+                              </div>
+                            )}
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-start gap-2">
+                            {result.color ? (
+                              <span
+                                className="mt-1 h-3 w-3 shrink-0 rounded-full border"
+                                style={{ backgroundColor: result.color }}
+                                title={result.color}
+                              />
+                            ) : null}
+                            <div className="min-w-0">
+                              <span
+                                className="font-medium"
+                                style={
+                                  result.color ? { color: result.color } : undefined
+                                }
+                              >
+                                {result.title}
+                              </span>
+                              <span
+                                className="mt-0.5 block text-xs text-muted-foreground"
+                                dir="rtl"
+                              >
+                                {result.title_ar}
+                              </span>
+                              {result.recommendedCourseIds.length > 0 ? (
+                                <span className="mt-1 block text-xs text-muted-foreground">
+                                  {result.recommendedCourseIds.length} recommended
+                                  {result.recommendedCourseIds.length === 1
+                                    ? " course"
+                                    : " courses"}
+                                </span>
+                              ) : null}
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          {result.ctaText && result.ctaUrl ? (
+                            <div>
+                              <span
+                                className="text-sm font-medium"
+                                style={
+                                  result.color ? { color: result.color } : undefined
+                                }
+                              >
+                                {result.ctaText}
+                              </span>
+                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+                                {result.ctaUrl}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex gap-1">
+                            <Tooltip>
+                              <TooltipTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  onClick={() => setPreviewingResult(result)}
+                                  aria-label="Preview result"
+                                >
+                                  <Eye className="h-4 w-4" />
+                                </Button>
+                              </TooltipTrigger>
+                              <TooltipContent>Preview result</TooltipContent>
+                            </Tooltip>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              onClick={() => {
+                                setEditingResult(result);
+                                setResultDialogOpen(true);
+                              }}
+                              aria-label="Edit result"
+                            >
+                              <Pencil className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="text-destructive"
+                              onClick={() => setResultToDelete(result)}
+                              aria-label="Delete result"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </div>
         </TabsContent>
 
@@ -1251,6 +1486,89 @@ const PersonalTestDetail = () => {
               className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             >
               {isDeletingQuestion ? "Deleting…" : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <ResultFormDialog
+        open={resultDialogOpen}
+        onOpenChange={(open) => {
+          setResultDialogOpen(open);
+          if (!open) setEditingResult(null);
+        }}
+        testId={testId}
+        initial={editingResult ?? undefined}
+        mode={editingResult ? "edit" : "create"}
+      />
+
+      <ResultPreviewDialog
+        open={previewingResult !== null}
+        onOpenChange={(open) => {
+          if (!open) setPreviewingResult(null);
+        }}
+        result={previewingResult}
+        courses={
+          previewingResult
+            ? previewingResult.recommendedCourseIds
+                .map((courseId) => {
+                  const course = courseMap.get(courseId);
+                  return course ? { _id: courseId, ...course } : null;
+                })
+                .filter(Boolean) as Array<{
+                _id: Id<"courses">;
+                name: string;
+                name_ar: string;
+                imageUrl?: string;
+              }>
+            : []
+        }
+      />
+
+      {correlatingQuestion && (
+        <ResultCorrelationsDialog
+          open
+          onOpenChange={(open) => {
+            if (!open) setCorrelatingQuestion(null);
+          }}
+          testId={testId}
+          questionId={correlatingQuestion.question._id}
+          questionNumber={
+            orderedQuestions.findIndex(
+              (item) => item.question._id === correlatingQuestion.question._id,
+            ) + 1
+          }
+          questionTitle={correlatingQuestion.question.title}
+          answers={correlatingQuestion.answers.map((answer) => ({
+            _id: answer._id,
+            text: answer.text,
+            resultIds: answer.resultIds,
+          }))}
+          results={results.map((result) => ({
+            _id: result._id,
+            title: result.title,
+            color: result.color,
+          }))}
+        />
+      )}
+
+      <AlertDialog open={!!resultToDelete} onOpenChange={() => setResultToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete result?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove &ldquo;{resultToDelete?.title}&rdquo; and any answer
+              correlations that point to it.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeletingResult}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteResult}
+              disabled={isDeletingResult}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeletingResult ? "Deleting…" : "Delete"}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

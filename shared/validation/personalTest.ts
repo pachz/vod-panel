@@ -68,9 +68,102 @@ export const personalTestQuestionSchema = z.object({
     .min(1, "At least one answer is required."),
 });
 
+const optionalHexColor = z
+  .string()
+  .trim()
+  .transform((value) => (value.length === 0 ? undefined : value))
+  .refine(
+    (value) => value === undefined || /^#[0-9A-Fa-f]{6}$/.test(value),
+    "Use a hex color like #E91E8C.",
+  );
+
+export const personalTestResultSchema = z
+  .object({
+    title: z
+      .string({ required_error: "Result title is required." })
+      .trim()
+      .min(1, "Result title is required.")
+      .max(200, "Result title must be 200 characters or less."),
+    titleAr: z
+      .string({ required_error: "Arabic result title is required." })
+      .trim()
+      .min(1, "Arabic result title is required.")
+      .max(200, "Arabic result title must be 200 characters or less."),
+    description: z
+      .string()
+      .trim()
+      .max(2000, "Description must be 2000 characters or less.")
+      .optional()
+      .transform((value) => (value ? value : undefined)),
+    descriptionAr: z
+      .string()
+      .trim()
+      .max(2000, "Arabic description must be 2000 characters or less.")
+      .optional()
+      .transform((value) => (value ? value : undefined)),
+    color: optionalHexColor.optional(),
+    recommendedCourseIds: z.array(z.string()).default([]),
+    ctaEnabled: z.boolean(),
+    ctaText: z
+      .string()
+      .trim()
+      .max(80, "Button text must be 80 characters or less.")
+      .optional(),
+    ctaTextAr: z
+      .string()
+      .trim()
+      .max(80, "Arabic button text must be 80 characters or less.")
+      .optional(),
+    ctaUrl: z
+      .string()
+      .trim()
+      .max(500, "Button link must be 500 characters or less.")
+      .optional(),
+  })
+  .superRefine((data, ctx) => {
+    if (!data.ctaEnabled) {
+      return;
+    }
+    if (!data.ctaText) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ctaText"],
+        message: "Button text is required.",
+      });
+    }
+    if (!data.ctaTextAr) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ctaTextAr"],
+        message: "Arabic button text is required.",
+      });
+    }
+    if (!data.ctaUrl) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        path: ["ctaUrl"],
+        message: "Button link is required.",
+      });
+    } else {
+      try {
+        const parsed = new URL(data.ctaUrl);
+        if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+          throw new Error("Invalid protocol");
+        }
+      } catch {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["ctaUrl"],
+          message: "Enter a valid URL starting with http:// or https://.",
+        });
+      }
+    }
+  });
+
 export type PersonalTestCreateInput = z.infer<typeof personalTestCreateSchema>;
 export type PersonalTestUpdateInput = z.infer<typeof personalTestUpdateSchema>;
 export type PersonalTestQuestionInput = z.infer<typeof personalTestQuestionSchema>;
+export type PersonalTestResultInput = z.infer<typeof personalTestResultSchema>;
 
 export const MIN_TEST_DURATION_SECONDS = 1;
 /** Maximum time allowed on a single test attempt (6 hours). */
