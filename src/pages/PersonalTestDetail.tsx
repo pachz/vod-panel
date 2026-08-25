@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type ReactNode } from "react";
 import { Link, useNavigate, useParams, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import {
@@ -19,6 +19,8 @@ import {
 import { CSS } from "@dnd-kit/utilities";
 import {
   ArrowLeft,
+  Check,
+  Copy,
   Eye,
   GitBranch,
   GripVertical,
@@ -121,6 +123,31 @@ const attemptStatusLabel: Record<AttemptStatus, string> = {
 };
 
 const ATTEMPTS_PAGE_SIZE = 20;
+
+const ShareIconButton = ({
+  href,
+  label,
+  className,
+  children,
+}: {
+  href: string;
+  label: string;
+  className: string;
+  children: ReactNode;
+}) => (
+  <a
+    href={href}
+    target="_blank"
+    rel="noopener noreferrer"
+    aria-label={label}
+    className={cn(
+      "flex h-9 w-9 items-center justify-center rounded-full text-white transition-opacity hover:opacity-90",
+      className,
+    )}
+  >
+    {children}
+  </a>
+);
 
 type AttemptListItem = {
   _id: Id<"personalTestAttempts">;
@@ -342,6 +369,7 @@ const PersonalTestDetail = () => {
   const [isEnabled, setIsEnabled] = useState(true);
   const [isSavingInfo, setIsSavingInfo] = useState(false);
   const [isPublishing, setIsPublishing] = useState(false);
+  const [linkCopied, setLinkCopied] = useState(false);
   const [thumbnailPreviewUrl, setThumbnailPreviewUrl] = useState<string | null>(null);
   const [thumbnailUploadState, setThumbnailUploadState] = useState<ImageUploadState>({
     status: "idle",
@@ -804,6 +832,18 @@ const PersonalTestDetail = () => {
     }
   };
 
+  const handleCopyLink = async () => {
+    const url = `${window.location.origin}/my-tests/${testId}`;
+    try {
+      await navigator.clipboard.writeText(url);
+      setLinkCopied(true);
+      toast.success("Link copied.");
+      setTimeout(() => setLinkCopied(false), 2000);
+    } catch {
+      toast.error("Could not copy link.");
+    }
+  };
+
   const handleSaveQuestion = async (values: QuestionFormValues) => {
     setIsSavingQuestion(true);
     try {
@@ -916,6 +956,9 @@ const PersonalTestDetail = () => {
   const canToggleAvailability = hasBeenPublished && !isDraft;
   const showPublishButton =
     canPublish && (isDraft || test.hasUnpublishedChanges);
+  const publicUrl = `${window.location.origin}/my-tests/${testId}`;
+  const encodedUrl = encodeURIComponent(publicUrl);
+  const encodedTitle = encodeURIComponent(test.name);
 
   return (
     <div className="space-y-6">
@@ -1104,6 +1147,80 @@ const PersonalTestDetail = () => {
                         placeholder="e.g. 5"
                       />
                     </div>
+                  )}
+                </div>
+
+                <div className="space-y-4 rounded-xl border bg-card p-6">
+                  <h3 className="font-medium">Share</h3>
+                  {isPublished ? (
+                    <>
+                      <p className="break-all text-xs text-muted-foreground">{publicUrl}</p>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        className="w-full"
+                        onClick={handleCopyLink}
+                      >
+                        {linkCopied ? (
+                          <>
+                            <Check className="mr-2 h-4 w-4" />
+                            Copied
+                          </>
+                        ) : (
+                          <>
+                            <Copy className="mr-2 h-4 w-4" />
+                            Copy link
+                          </>
+                        )}
+                      </Button>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <ShareIconButton
+                          href={`https://www.facebook.com/sharer/sharer.php?u=${encodedUrl}`}
+                          label="Share on Facebook"
+                          className="bg-[#1877F2]"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                            <path d="M14 8.2h2.4V5H14c-2.3 0-3.8 1.6-3.8 4v1.7H8.2V14h2V19h2.8v-5h2.2l.4-3.3h-2.6V9.2c0-.6.3-1 1-1z" />
+                          </svg>
+                        </ShareIconButton>
+                        <ShareIconButton
+                          href={`https://twitter.com/intent/tweet?url=${encodedUrl}&text=${encodedTitle}`}
+                          label="Share on X"
+                          className="bg-[#1DA1F2]"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+                            <path d="M22 5.8c-.7.3-1.5.5-2.3.6A4 4 0 0 0 21.4 4c-.8.5-1.7.8-2.6 1a4 4 0 0 0-6.8 3.6A11.3 11.3 0 0 1 3.1 4.7a4 4 0 0 0 1.2 5.3 4 4 0 0 1-1.8-.5v.1a4 4 0 0 0 3.2 3.9 4 4 0 0 1-1.8.1 4 4 0 0 0 3.7 2.8A8 8 0 0 1 2 18.1a11.3 11.3 0 0 0 6.1 1.8c7.3 0 11.3-6.1 11.3-11.3v-.5A8 8 0 0 0 22 5.8z" />
+                          </svg>
+                        </ShareIconButton>
+                        <ShareIconButton
+                          href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodedUrl}`}
+                          label="Share on LinkedIn"
+                          className="bg-[#0A66C2]"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 fill-current" aria-hidden="true">
+                            <path d="M6.5 9H3.7v11.3h2.8V9zM5.1 3.7a1.6 1.6 0 1 0 0 3.2 1.6 1.6 0 0 0 0-3.2zM20.3 13.2c0-2.4-1.3-4-3.7-4-1.3 0-2.2.7-2.6 1.4h-.1V9H11.3c0 .8 0 11.3 0 11.3h2.8v-6.3c0-.3 0-.7.1-1 .3-.7.9-1.4 2-1.4 1.4 0 2 1.1 2 2.6v6.1h2.8v-6.3z" />
+                          </svg>
+                        </ShareIconButton>
+                        <ShareIconButton
+                          href={`https://wa.me/?text=${encodedTitle}%20${encodedUrl}`}
+                          label="Share on WhatsApp"
+                          className="bg-[#25D366]"
+                        >
+                          <svg viewBox="0 0 24 24" className="h-4 w-4 fill-current" aria-hidden="true">
+                            <path d="M12 2.1A9.9 9.9 0 0 0 3.4 17l-1.1 4 4.1-1.1A9.9 9.9 0 1 0 12 2.1zm5.7 14.1c-.2.7-1.3 1.2-1.8 1.3-.5.1-1 .2-3.4-.7-3-1.1-5-4.4-5.1-4.6-.2-.2-1.3-1.8-1.3-3.4 0-1.6.8-2.4 1.1-2.7.3-.3.7-.4 1-.4h.7c.2 0 .5 0 .7.6l1 2.4c.1.2.1.4 0 .6l-.4.7c-.1.2-.3.4-.1.7.2.3.7 1.2 1.5 1.9 1 .9 1.9 1.2 2.2 1.3.3.1.5.1.7-.1l.8-1.1c.2-.2.4-.2.7-.1l2.1 1c.2.1.4.2.5.3.1.2.1.8-.2 1.5z" />
+                          </svg>
+                        </ShareIconButton>
+                      </div>
+                      <Button variant="ghost" size="sm" className="w-full" asChild>
+                        <a href={publicUrl} target="_blank" rel="noopener noreferrer">
+                          Open public page
+                        </a>
+                      </Button>
+                    </>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Publish this test to get a public link for sharing.
+                    </p>
                   )}
                 </div>
               </div>
