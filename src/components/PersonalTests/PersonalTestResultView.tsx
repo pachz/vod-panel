@@ -55,6 +55,15 @@ export function PersonalTestResultView({
       className={cn("overflow-hidden rounded-xl border bg-card shadow-sm", className)}
       dir={isArabic ? "rtl" : "ltr"}
     >
+      <div className="space-y-2 p-5">
+        <h2
+          className="text-2xl font-bold tracking-tight sm:text-3xl"
+          style={accent ? { color: accent } : undefined}
+        >
+          {title}
+        </h2>
+      </div>
+
       {result.cover_image_url ? (
         <div className="aspect-video overflow-hidden bg-muted">
           <img
@@ -65,40 +74,11 @@ export function PersonalTestResultView({
         </div>
       ) : null}
 
-      <div className="space-y-4 p-5">
-        <div className="space-y-2">
-          <h2
-            className="text-xl font-semibold tracking-tight"
-            style={accent ? { color: accent } : undefined}
-          >
-            {title}
-          </h2>
-          {description ? (
-            <p className="whitespace-pre-wrap text-sm text-muted-foreground">
-              {description}
-            </p>
-          ) : null}
-        </div>
-
-        {hasCta ? (
-          <Button
-            asChild
-            variant={accent ? "default" : "cta"}
-            className="w-full"
-            style={
-              accent
-                ? {
-                    backgroundColor: accent,
-                    borderColor: accent,
-                    color: "#fff",
-                  }
-                : undefined
-            }
-          >
-            <a href={result.ctaUrl} target="_blank" rel="noopener noreferrer">
-              {ctaText}
-            </a>
-          </Button>
+      <div className="space-y-6 p-5">
+        {description ? (
+          <p className="whitespace-pre-wrap text-sm text-muted-foreground">
+            {description}
+          </p>
         ) : null}
 
         {courses.length > 0 ? (
@@ -154,6 +134,27 @@ export function PersonalTestResultView({
               })}
             </ul>
           </div>
+        ) : null}
+
+        {hasCta ? (
+          <Button
+            asChild
+            variant={accent ? "default" : "cta"}
+            className="w-full"
+            style={
+              accent
+                ? {
+                    backgroundColor: accent,
+                    borderColor: accent,
+                    color: "#fff",
+                  }
+                : undefined
+            }
+          >
+            <a href={result.ctaUrl} target="_blank" rel="noopener noreferrer">
+              {ctaText}
+            </a>
+          </Button>
         ) : null}
       </div>
     </div>

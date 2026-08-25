@@ -52,8 +52,6 @@ const PersonalTestPreview = () => {
       backHref={`/personal-tests/${testId}`}
       backLabel="Back to test"
       headerExtra={<Badge variant="secondary">Preview</Badge>}
-      testCompletedTitle="You've completed the preview!"
-      testCompletedSubtitle="Based on your answers, here is your result."
       topRecommendedLabel="Top Recommended Courses For You"
       viewCourseLabel="View Course"
       getCourseHref={(courseId) => `/courses/preview/${courseId}`}
@@ -62,7 +60,6 @@ const PersonalTestPreview = () => {
       seeResultsLabel="See results"
       savingResultsLabel="Loading results…"
       noRecommendationsLabel="No course recommendations matched your answers."
-      completedInLabel={(duration) => `Completed in ${duration}`}
       restartLabel="Restart preview"
       secondaryAction={{ href: `/personal-tests/${testId}`, label: "Edit test" }}
     />

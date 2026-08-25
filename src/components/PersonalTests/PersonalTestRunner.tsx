@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
-import { ArrowLeft, ArrowRight, Check, ChevronLeft, ChevronRight } from "lucide-react";
+import { ArrowLeft, ArrowRight, ChevronLeft, ChevronRight } from "lucide-react";
 import { toast } from "sonner";
 
 import { api } from "../../../convex/_generated/api";
@@ -15,34 +15,6 @@ import {
   PersonalTestResultView,
   type PersonalTestResultContent,
 } from "./PersonalTestResultView";
-
-function CelebrationIcon() {
-  return (
-    <div className="relative mx-auto flex h-24 w-24 items-center justify-center">
-      <span className="absolute left-0 top-1 text-xl select-none" aria-hidden>
-        🎉
-      </span>
-      <span className="absolute right-0 top-2 text-base select-none" aria-hidden>
-        ✨
-      </span>
-      <span
-        className="absolute bottom-3 left-1 h-2 w-2 rounded-full bg-amber-400/90"
-        aria-hidden
-      />
-      <span
-        className="absolute bottom-5 right-2 h-2.5 w-2.5 rounded-full bg-cta/70"
-        aria-hidden
-      />
-      <span
-        className="absolute right-5 top-0 h-1.5 w-1.5 rounded-full bg-orange-400/80"
-        aria-hidden
-      />
-      <div className="flex h-16 w-16 items-center justify-center rounded-full bg-cta shadow-[0_8px_24px_-4px_hsl(var(--cta)/0.45)]">
-        <Check className="h-8 w-8 text-white" strokeWidth={2.5} />
-      </div>
-    </div>
-  );
-}
 
 const answerControlClassName =
   "mt-0.5 h-5 w-5 shrink-0 border-muted-foreground/40 text-cta data-[state=checked]:border-cta";
@@ -80,20 +52,6 @@ type CompletedResults = {
   }>;
 };
 
-export function formatTestDuration(seconds: number) {
-  if (seconds < 60) {
-    return `${seconds}s`;
-  }
-  const minutes = Math.floor(seconds / 60);
-  const remainder = seconds % 60;
-  if (minutes < 60) {
-    return remainder > 0 ? `${minutes}m ${remainder}s` : `${minutes}m`;
-  }
-  const hours = Math.floor(minutes / 60);
-  const mins = minutes % 60;
-  return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
-}
-
 type PersonalTestRunnerProps = {
   testId: Id<"personalTests">;
   testName: string;
@@ -105,10 +63,6 @@ type PersonalTestRunnerProps = {
   backHref: string;
   backLabel: string;
   headerExtra?: React.ReactNode;
-  /** @deprecated Use testCompletedTitle instead */
-  resultsSubtitle?: string;
-  testCompletedTitle?: string;
-  testCompletedSubtitle?: string;
   topRecommendedLabel?: string;
   viewCourseLabel?: string;
   getCourseHref?: (courseId: Id<"courses">) => string;
@@ -117,7 +71,6 @@ type PersonalTestRunnerProps = {
   seeResultsLabel: string;
   savingResultsLabel: string;
   noRecommendationsLabel: string;
-  completedInLabel: (duration: string) => string;
   restartLabel: string;
   secondaryAction?: { href: string; label: string };
   /** When set, show a single language instead of bilingual content. */
@@ -140,9 +93,6 @@ export function PersonalTestRunner({
   backHref,
   backLabel,
   headerExtra,
-  resultsSubtitle,
-  testCompletedTitle,
-  testCompletedSubtitle,
   topRecommendedLabel,
   viewCourseLabel = "View Course",
   getCourseHref = (courseId) => `/courses/preview/${courseId}`,
@@ -151,7 +101,6 @@ export function PersonalTestRunner({
   seeResultsLabel,
   savingResultsLabel,
   noRecommendationsLabel,
-  completedInLabel,
   restartLabel,
   secondaryAction,
   language,
@@ -200,11 +149,7 @@ export function PersonalTestRunner({
   const getAnswerSubtitle = (answer: PersonalTestQuestion["answers"][number]) =>
     !isSingleLanguage && showAnswerArabic ? answer.text_ar : undefined;
 
-  const completionTitle = testCompletedTitle ?? resultsSubtitle ?? "You've completed the test!";
-  const completionSubtitle =
-    testCompletedSubtitle ??
-    "Based on your answers, here is your result.";
-  const recommendedSectionTitle = topRecommendedLabel ?? resultsSubtitle ?? "Recommended courses";
+  const recommendedSectionTitle = topRecommendedLabel ?? "Recommended courses";
   const resultIsArabic = language !== undefined ? isArabic : resultLanguage === "ar";
 
   const allSelectedAnswerIds = useMemo(
@@ -586,19 +531,6 @@ export function PersonalTestRunner({
         </div>
       ) : (
         <div className="space-y-8">
-          <div className="space-y-3 text-center">
-            <CelebrationIcon />
-            <h2 className="text-2xl font-bold tracking-tight sm:text-3xl">
-              {completionTitle}
-            </h2>
-            <p className="mx-auto max-w-lg text-muted-foreground">{completionSubtitle}</p>
-            {completedResults && (
-              <p className="text-sm text-muted-foreground">
-                {completedInLabel(formatTestDuration(completedResults.durationSeconds))}
-              </p>
-            )}
-          </div>
-
           {isFinalizing || completedResults === null ? (
             <p className="text-center text-muted-foreground">{savingResultsLabel}</p>
           ) : completedResults.result ? (

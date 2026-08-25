@@ -130,8 +130,6 @@ const UserPersonalTestTakeContent = () => {
       isRTL={isRTL}
       backHref={testsPath}
       backLabel={t("backToPersonalTests")}
-      testCompletedTitle={t("testCompletedTitle")}
-      testCompletedSubtitle={t("testCompletedSubtitle")}
       topRecommendedLabel={t("topRecommendedCourses")}
       viewCourseLabel={t("viewCourse")}
       getCourseHref={(courseId) => localizedPath(`/courses/preview/${courseId}`)}
@@ -147,9 +145,6 @@ const UserPersonalTestTakeContent = () => {
       }
       percentCompleteLabel={(percent) =>
         t("testProgressComplete").replace("{percent}", String(percent))
-      }
-      completedInLabel={(duration) =>
-        t("completedIn").replace("{duration}", duration)
       }
       restartLabel={t("retakeTest")}
       secondaryAction={{
