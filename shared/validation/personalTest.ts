@@ -41,12 +41,12 @@ export const personalTestUpdateSchema = z.object({
   description: z
     .string()
     .trim()
-    .max(2000, "Description must be 2000 characters or less.")
+    .max(4000, "Description must be 4000 characters or less.")
     .optional(),
   descriptionAr: z
     .string()
     .trim()
-    .max(2000, "Arabic description must be 2000 characters or less.")
+    .max(4000, "Arabic description must be 4000 characters or less.")
     .optional(),
   resultSettings: z.object({
     showAll: z.boolean(),
