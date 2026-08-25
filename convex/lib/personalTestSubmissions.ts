@@ -35,6 +35,13 @@ export type SubmissionRecommendedCourse = {
   short_description_ar?: string;
 };
 
+export type SubmissionResultSummary = {
+  _id: Id<"personalTestResults">;
+  title: string;
+  title_ar: string;
+  color?: string;
+};
+
 export type SubmissionRow = {
   attemptId: Id<"personalTestAttempts">;
   userName?: string;
@@ -44,11 +51,12 @@ export type SubmissionRow = {
   durationSeconds?: number;
   selectedAnswerCount: number;
   questionCount: number;
+  result: SubmissionResultSummary | null;
   recommendedCourses: SubmissionRecommendedCourse[];
   responses: SubmissionQuestionResponse[];
 };
 
-export type SubmissionDetail = SubmissionRow & {
+export type SubmissionDetail = Omit<SubmissionRow, "result"> & {
   testName: string;
   testNameAr: string;
   result: MatchedPersonalTestResult | null;
@@ -66,6 +74,22 @@ type CourseSummary = {
   short_description?: string;
   short_description_ar?: string;
 };
+
+type CachedResult = {
+  summary: SubmissionResultSummary;
+  matched: MatchedPersonalTestResult;
+  recommendedCourseIds: Array<Id<"courses">>;
+} | null;
+
+function courseIdsForAttempt(
+  attempt: Doc<"personalTestAttempts">,
+  result: { recommendedCourseIds: Array<Id<"courses">> } | null,
+) {
+  if (result) {
+    return result.recommendedCourseIds;
+  }
+  return attempt.recommendedCourseIds ?? [];
+}
 
 function matchesTestNameSearch(
   test: { name: string; name_ar: string },
@@ -183,6 +207,7 @@ function buildSubmissionRow(
   user: Doc<"users"> | null | undefined,
   questionStructure: TestQuestionStructure,
   recommendedCourses: SubmissionRecommendedCourse[],
+  result: SubmissionResultSummary | null,
 ): SubmissionRow {
   const questionCount = questionStructure.length;
 
@@ -195,23 +220,39 @@ function buildSubmissionRow(
     durationSeconds: attempt.durationSeconds,
     selectedAnswerCount: attempt.selectedAnswerIds?.length ?? 0,
     questionCount,
+    result,
     recommendedCourses,
     responses: buildQuestionResponses(questionStructure, attempt.selectedAnswerIds),
   };
 }
 
-async function loadMatchedResult(
+async function loadCachedResult(
   ctx: QueryCtx,
   resultId: Id<"personalTestResults"> | undefined,
-): Promise<MatchedPersonalTestResult | null> {
+  cache: Map<Id<"personalTestResults">, CachedResult>,
+): Promise<CachedResult> {
   if (!resultId) {
     return null;
   }
-  const result = await ctx.db.get("personalTestResults", resultId);
-  if (!result) {
-    return null;
+  if (!cache.has(resultId)) {
+    const result = await ctx.db.get("personalTestResults", resultId);
+    cache.set(
+      resultId,
+      result
+        ? {
+            summary: {
+              _id: result._id,
+              title: result.title,
+              title_ar: result.title_ar,
+              ...(result.color ? { color: result.color } : {}),
+            },
+            matched: toMatchedPersonalTestResult(result),
+            recommendedCourseIds: result.recommendedCourseIds ?? [],
+          }
+        : null,
+    );
   }
-  return toMatchedPersonalTestResult(result);
+  return cache.get(resultId) ?? null;
 }
 
 export async function loadPersonalTestSubmissions(
@@ -248,6 +289,7 @@ export async function loadPersonalTestSubmissions(
 
   const userCache = new Map<Id<"users">, Doc<"users"> | null>();
   const courseCache = new Map<Id<"courses">, CourseSummary | null>();
+  const resultCache = new Map<Id<"personalTestResults">, CachedResult>();
   const rows: SubmissionRow[] = [];
 
   for (const attempt of attempts) {
@@ -266,14 +308,21 @@ export async function loadPersonalTestSubmissions(
       continue;
     }
 
+    const cachedResult = await loadCachedResult(ctx, attempt.resultId, resultCache);
     const recommendedCourses = await loadRecommendedCourses(
       ctx,
-      attempt.recommendedCourseIds,
+      courseIdsForAttempt(attempt, cachedResult),
       courseCache,
     );
 
     rows.push(
-      buildSubmissionRow(attempt, user, questionStructure, recommendedCourses),
+      buildSubmissionRow(
+        attempt,
+        user,
+        questionStructure,
+        recommendedCourses,
+        cachedResult?.summary ?? null,
+      ),
     );
   }
 
@@ -304,9 +353,11 @@ export async function loadPersonalTestSubmissionById(
   const user = await ctx.db.get("users", attempt.userId);
   const questionStructure = await loadTestQuestionStructure(ctx, testId);
   const courseCache = new Map<Id<"courses">, CourseSummary | null>();
+  const resultCache = new Map<Id<"personalTestResults">, CachedResult>();
+  const cachedResult = await loadCachedResult(ctx, attempt.resultId, resultCache);
   const recommendedCourses = await loadRecommendedCourses(
     ctx,
-    attempt.recommendedCourseIds,
+    courseIdsForAttempt(attempt, cachedResult),
     courseCache,
   );
 
@@ -315,13 +366,14 @@ export async function loadPersonalTestSubmissionById(
     user,
     questionStructure,
     recommendedCourses,
+    cachedResult?.summary ?? null,
   );
 
   return {
     ...row,
     testName: test.name,
     testNameAr: test.name_ar,
-    result: await loadMatchedResult(ctx, attempt.resultId),
+    result: cachedResult?.matched ?? null,
   };
 }
 

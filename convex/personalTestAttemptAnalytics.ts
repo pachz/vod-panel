@@ -16,8 +16,11 @@ import {
   attemptStartsAggregate,
   courseAnalyticsNamespace,
   courseRecommendationsAggregate,
+  resultAnalyticsNamespace,
+  resultRecommendationsAggregate,
   dayBounds,
   getRecommendedCourseIdsForTest,
+  getResultIdsForTest,
   backfillAttemptAggregates,
 } from "./lib/personalTestAttemptAggregates";
 import {
@@ -32,12 +35,21 @@ const courseBreakdownItemValidator = v.object({
   percentage: v.number(),
 });
 
+const resultBreakdownItemValidator = v.object({
+  resultId: v.id("personalTestResults"),
+  name: v.string(),
+  color: v.optional(v.string()),
+  count: v.number(),
+  percentage: v.number(),
+});
+
 const analyticsResultValidator = v.object({
   startDate: v.string(),
   endDate: v.string(),
   totalAttempts: v.number(),
   completedAttempts: v.number(),
   totalRecommendations: v.number(),
+  totalResults: v.number(),
   completionRate: v.number(),
   previousPeriod: v.object({
     startDate: v.string(),
@@ -61,6 +73,7 @@ const analyticsResultValidator = v.object({
     v.null(),
   ),
   courseBreakdown: v.array(courseBreakdownItemValidator),
+  resultBreakdown: v.array(resultBreakdownItemValidator),
 });
 
 async function countAttemptsInRange(
@@ -147,6 +160,54 @@ async function buildCourseBreakdown(
   return { totalRecommendations, courseBreakdown, topCourse };
 }
 
+async function buildResultBreakdown(
+  ctx: QueryCtx,
+  testId: Id<"personalTests">,
+  startKey: number,
+  endKey: number,
+) {
+  const resultIds = await getResultIdsForTest(ctx, testId);
+  const bounds = dayBounds(startKey, endKey);
+
+  const resultCounts = await resultRecommendationsAggregate.countBatch(
+    ctx,
+    resultIds.map((resultId) => ({
+      namespace: resultAnalyticsNamespace(testId, resultId),
+      bounds,
+    })),
+  );
+
+  const ranked = resultIds
+    .map((resultId, index) => ({
+      resultId,
+      count: resultCounts[index] ?? 0,
+    }))
+    .filter((entry) => entry.count > 0)
+    .sort((a, b) => b.count - a.count);
+
+  const totalResults = ranked.reduce((sum, entry) => sum + entry.count, 0);
+  const resultBreakdown = [];
+
+  for (const entry of ranked) {
+    const result = await ctx.db.get("personalTestResults", entry.resultId);
+    if (!result) {
+      continue;
+    }
+    resultBreakdown.push({
+      resultId: entry.resultId,
+      name: result.title,
+      ...(result.color ? { color: result.color } : {}),
+      count: entry.count,
+      percentage:
+        totalResults > 0
+          ? Math.round((entry.count / totalResults) * 1000) / 10
+          : 0,
+    });
+  }
+
+  return { totalResults, resultBreakdown };
+}
+
 export const getPersonalTestAttemptAnalytics = query({
   args: {
     testId: v.id("personalTests"),
@@ -231,6 +292,12 @@ export const getPersonalTestAttemptAnalytics = query({
 
     const { totalRecommendations, courseBreakdown, topCourse } =
       await buildCourseBreakdown(ctx, args.testId, startKey, endKey);
+    const { totalResults, resultBreakdown } = await buildResultBreakdown(
+      ctx,
+      args.testId,
+      startKey,
+      endKey,
+    );
 
     const completionRate =
       totalAttempts > 0
@@ -243,6 +310,7 @@ export const getPersonalTestAttemptAnalytics = query({
       totalAttempts,
       completedAttempts,
       totalRecommendations,
+      totalResults,
       completionRate,
       previousPeriod: {
         startDate: previous.startDate,
@@ -253,6 +321,7 @@ export const getPersonalTestAttemptAnalytics = query({
       attemptsByDay,
       topCourse,
       courseBreakdown,
+      resultBreakdown,
     };
   },
 });
@@ -264,6 +333,13 @@ const submissionCourseValidator = v.object({
   thumbnail_image_url: v.optional(v.string()),
   short_description: v.optional(v.string()),
   short_description_ar: v.optional(v.string()),
+});
+
+const submissionResultSummaryValidator = v.object({
+  _id: v.id("personalTestResults"),
+  title: v.string(),
+  title_ar: v.string(),
+  color: v.optional(v.string()),
 });
 
 const submissionAnswerValidator = v.object({
@@ -289,6 +365,7 @@ const submissionRowValidator = v.object({
   durationSeconds: v.optional(v.number()),
   selectedAnswerCount: v.number(),
   questionCount: v.number(),
+  result: v.union(submissionResultSummaryValidator, v.null()),
   recommendedCourses: v.array(submissionCourseValidator),
   responses: v.array(submissionResponseValidator),
 });

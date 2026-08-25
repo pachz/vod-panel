@@ -193,5 +193,6 @@ export declare const components: {
   aggregatePersonalTestAttemptStarts: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestAttemptStarts">;
   aggregatePersonalTestAttemptCompletions: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestAttemptCompletions">;
   aggregatePersonalTestCourseRecommendations: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestCourseRecommendations">;
+  aggregatePersonalTestResultRecommendations: import("@convex-dev/aggregate/_generated/component.js").ComponentApi<"aggregatePersonalTestResultRecommendations">;
   migrations: import("@convex-dev/migrations/_generated/component.js").ComponentApi<"migrations">;
 };

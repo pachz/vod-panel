@@ -27,6 +27,7 @@ import {
   MAX_ANALYTICS_RANGE_DAYS,
   ANALYTICS_TIMEZONE,
 } from "../../../shared/validation/personalTestAnalytics";
+import { isResultColor } from "./resultColor";
 import { PersonalTestSubmissionsTable } from "./PersonalTestSubmissionsTable";
 
 const COURSE_CHART_COLORS = [
@@ -64,6 +65,91 @@ type KpiCardProps = {
     label: string;
   };
 };
+
+type BreakdownSlice = {
+  key: string;
+  name: string;
+  count: number;
+  percentage: number;
+  fill: string;
+};
+
+type BreakdownPieCardProps = {
+  title: string;
+  badge: string;
+  emptyMessage: string;
+  total: number;
+  data: BreakdownSlice[];
+};
+
+const BreakdownPieCard = ({
+  title,
+  badge,
+  emptyMessage,
+  total,
+  data,
+}: BreakdownPieCardProps) => (
+  <div className="rounded-xl border bg-card p-5 shadow-sm">
+    <div className="mb-4 flex items-center justify-between gap-3">
+      <h3 className="font-medium">{title}</h3>
+      <span className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
+        {badge}
+      </span>
+    </div>
+    {data.length === 0 ? (
+      <p className="py-16 text-center text-sm text-muted-foreground">{emptyMessage}</p>
+    ) : (
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,220px)_1fr] lg:items-center">
+        <div className="relative mx-auto h-[220px] w-[220px]">
+          <ChartContainer config={{}} className="h-full w-full">
+            <PieChart>
+              <Pie
+                data={data}
+                dataKey="count"
+                nameKey="name"
+                innerRadius={62}
+                outerRadius={92}
+                paddingAngle={2}
+                strokeWidth={0}
+              >
+                {data.map((entry) => (
+                  <Cell key={entry.key} fill={entry.fill} />
+                ))}
+              </Pie>
+            </PieChart>
+          </ChartContainer>
+          <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
+            <span className="text-2xl font-semibold">{total.toLocaleString()}</span>
+            <span className="text-xs text-muted-foreground">Total</span>
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          {data.map((item) => (
+            <div
+              key={item.key}
+              className="flex items-center justify-between gap-3 text-sm"
+            >
+              <div className="flex min-w-0 items-center gap-2.5">
+                <span
+                  className="h-2.5 w-2.5 shrink-0 rounded-full border"
+                  style={{ backgroundColor: item.fill }}
+                />
+                <span className="truncate">{item.name}</span>
+              </div>
+              <div className="shrink-0 text-right text-muted-foreground">
+                <span className="font-medium text-foreground">
+                  {item.percentage.toLocaleString()}%
+                </span>
+                <span className="ml-2">({item.count.toLocaleString()})</span>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    )}
+  </div>
+);
 
 const KpiCard = ({
   title,
@@ -132,17 +218,35 @@ export const PersonalTestAnalyticsPanel = ({
     [analytics?.attemptsByDay],
   );
 
-  const donutData = useMemo(() => {
+  const courseDonutData = useMemo(() => {
     if (!analytics?.courseBreakdown.length) {
       return [];
     }
 
     return analytics.courseBreakdown.map((item, index) => ({
-      ...item,
-      fill: COURSE_CHART_COLORS[index % COURSE_CHART_COLORS.length],
       key: item.courseId ?? "other",
+      name: item.name,
+      count: item.count,
+      percentage: item.percentage,
+      fill: COURSE_CHART_COLORS[index % COURSE_CHART_COLORS.length],
     }));
   }, [analytics?.courseBreakdown]);
+
+  const resultDonutData = useMemo(() => {
+    if (!analytics?.resultBreakdown.length) {
+      return [];
+    }
+
+    return analytics.resultBreakdown.map((item, index) => ({
+      key: item.resultId,
+      name: item.name,
+      count: item.count,
+      percentage: item.percentage,
+      fill: isResultColor(item.color)
+        ? item.color
+        : COURSE_CHART_COLORS[index % COURSE_CHART_COLORS.length],
+    }));
+  }, [analytics?.resultBreakdown]);
 
   const previousPeriodLabel = analytics
     ? `vs ${formatAnalyticsShortDate(analytics.previousPeriod.startDate)} – ${formatAnalyticsDateLabel(analytics.previousPeriod.endDate)}`
@@ -226,7 +330,7 @@ export const PersonalTestAnalyticsPanel = ({
           </div>
 
           <div className="grid gap-4 xl:grid-cols-2">
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
+            <div className="rounded-xl border bg-card p-5 shadow-sm xl:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-3">
                 <h3 className="font-medium">Test attempts over time</h3>
                 <span className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
@@ -234,13 +338,13 @@ export const PersonalTestAnalyticsPanel = ({
                 </span>
               </div>
               {lineChartData.every((day) => day.attempts === 0) ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">
+                <p className="py-10 text-center text-sm text-muted-foreground">
                   No attempts in this date range.
                 </p>
               ) : (
                 <ChartContainer
                   config={attemptsChartConfig}
-                  className="aspect-[16/9] w-full"
+                  className="aspect-auto h-[200px] w-full"
                 >
                   <AreaChart data={lineChartData} margin={{ left: 0, right: 8, top: 8 }}>
                     <defs>
@@ -286,70 +390,20 @@ export const PersonalTestAnalyticsPanel = ({
               )}
             </div>
 
-            <div className="rounded-xl border bg-card p-5 shadow-sm">
-              <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="font-medium">Top recommended courses</h3>
-                <span className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
-                  By course
-                </span>
-              </div>
-              {donutData.length === 0 ? (
-                <p className="py-16 text-center text-sm text-muted-foreground">
-                  No course recommendations in this date range.
-                </p>
-              ) : (
-                <div className="grid gap-6 lg:grid-cols-[minmax(0,220px)_1fr] lg:items-center">
-                  <div className="relative mx-auto h-[220px] w-[220px]">
-                    <ChartContainer config={{}} className="h-full w-full">
-                      <PieChart>
-                        <Pie
-                          data={donutData}
-                          dataKey="count"
-                          nameKey="name"
-                          innerRadius={62}
-                          outerRadius={92}
-                          paddingAngle={2}
-                          strokeWidth={0}
-                        >
-                          {donutData.map((entry) => (
-                            <Cell key={entry.key} fill={entry.fill} />
-                          ))}
-                        </Pie>
-                      </PieChart>
-                    </ChartContainer>
-                    <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center text-center">
-                      <span className="text-2xl font-semibold">
-                        {analytics.totalRecommendations.toLocaleString()}
-                      </span>
-                      <span className="text-xs text-muted-foreground">Total</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-3">
-                    {donutData.map((item) => (
-                      <div
-                        key={item.key}
-                        className="flex items-center justify-between gap-3 text-sm"
-                      >
-                        <div className="flex min-w-0 items-center gap-2.5">
-                          <span
-                            className="h-2.5 w-2.5 shrink-0 rounded-full"
-                            style={{ backgroundColor: item.fill }}
-                          />
-                          <span className="truncate">{item.name}</span>
-                        </div>
-                        <div className="shrink-0 text-right text-muted-foreground">
-                          <span className="font-medium text-foreground">
-                            {item.percentage.toLocaleString()}%
-                          </span>
-                          <span className="ml-2">({item.count.toLocaleString()})</span>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                </div>
-              )}
-            </div>
+            <BreakdownPieCard
+              title="Recommended results"
+              badge="By result"
+              emptyMessage="No recommended results in this date range."
+              total={analytics.totalResults}
+              data={resultDonutData}
+            />
+            <BreakdownPieCard
+              title="Top recommended courses"
+              badge="By course"
+              emptyMessage="No course recommendations in this date range."
+              total={analytics.totalRecommendations}
+              data={courseDonutData}
+            />
           </div>
 
           <PersonalTestSubmissionsTable

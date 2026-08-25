@@ -6,12 +6,20 @@ import { toAnalyticsDateKey } from "../../shared/validation/personalTestAnalytic
 
 type TestNamespace = Id<"personalTests">;
 type CourseNamespace = `${Id<"personalTests">}|${Id<"courses">}`;
+type ResultNamespace = `${Id<"personalTests">}|${Id<"personalTestResults">}`;
 
 export function courseAnalyticsNamespace(
   testId: Id<"personalTests">,
   courseId: Id<"courses">,
 ): CourseNamespace {
   return `${testId}|${courseId}`;
+}
+
+export function resultAnalyticsNamespace(
+  testId: Id<"personalTests">,
+  resultId: Id<"personalTestResults">,
+): ResultNamespace {
+  return `${testId}|${resultId}`;
 }
 
 /** Attempts started on a calendar day (Kuwait time), excluding preview runs. */
@@ -34,6 +42,13 @@ export const courseRecommendationsAggregate = new DirectAggregate<{
   Id: `${Id<"personalTestAttempts">}|${Id<"courses">}`;
   Namespace: CourseNamespace;
 }>(components.aggregatePersonalTestCourseRecommendations);
+
+/** Winning result by completion day, one entry per completed attempt. */
+export const resultRecommendationsAggregate = new DirectAggregate<{
+  Key: number;
+  Id: Id<"personalTestAttempts">;
+  Namespace: ResultNamespace;
+}>(components.aggregatePersonalTestResultRecommendations);
 
 export function dayBounds(startKey: number, endKey: number) {
   return {
@@ -59,6 +74,18 @@ export async function getRecommendedCourseIdsForTest(
   }
 
   return Array.from(courseIds);
+}
+
+export async function getResultIdsForTest(
+  ctx: QueryCtx | MutationCtx,
+  testId: Id<"personalTests">,
+): Promise<Array<Id<"personalTestResults">>> {
+  const results = await ctx.db
+    .query("personalTestResults")
+    .withIndex("by_testId", (q) => q.eq("testId", testId))
+    .collect();
+
+  return results.map((result) => result._id);
 }
 
 export async function syncAttemptStartAggregate(
@@ -101,6 +128,14 @@ export async function syncAttemptCompletionAggregates(
       id: `${attempt._id}|${courseId}`,
     });
   }
+
+  if (attempt.resultId) {
+    await resultRecommendationsAggregate.insertIfDoesNotExist(ctx, {
+      namespace: resultAnalyticsNamespace(attempt.testId, attempt.resultId),
+      key: dayKey,
+      id: attempt._id,
+    });
+  }
 }
 
 export async function backfillAttemptAggregates(
@@ -113,15 +148,11 @@ export async function backfillAttemptAggregates(
 
   await syncAttemptStartAggregate(ctx, attempt);
 
-  if (
-    attempt.status === "completed" &&
-    attempt.completedAt !== undefined &&
-    attempt.recommendedCourseIds !== undefined
-  ) {
+  if (attempt.status === "completed" && attempt.completedAt !== undefined) {
     await syncAttemptCompletionAggregates(
       ctx,
       attempt,
-      attempt.recommendedCourseIds,
+      attempt.recommendedCourseIds ?? [],
       attempt.completedAt,
     );
   }

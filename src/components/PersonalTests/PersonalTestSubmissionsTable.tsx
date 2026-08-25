@@ -18,6 +18,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { cn } from "@/lib/utils";
+import { isResultColor } from "@/components/PersonalTests/resultColor";
 import {
   ANALYTICS_TIMEZONE,
   formatAnalyticsDateTime,
@@ -72,6 +73,7 @@ function buildSubmissionsCsv(
     durationSeconds?: number;
     selectedAnswerCount: number;
     questionCount: number;
+    result: { title: string; title_ar: string; color?: string } | null;
     recommendedCourses: Array<{ name: string }>;
     responses: Array<{
       questionTitle: string;
@@ -92,6 +94,7 @@ function buildSubmissionsCsv(
     "Completed At",
     "Time Taken",
     "Questions Answered",
+    "Result",
     "Courses Recommended",
     ...questionHeaders,
   ].join(",");
@@ -113,6 +116,7 @@ function buildSubmissionsCsv(
       escapeCsv(formatAnalyticsDateTime(row.completedAt)),
       escapeCsv(formatSubmissionDuration(row.durationSeconds)),
       escapeCsv(`${row.selectedAnswerCount} / ${row.questionCount}`),
+      escapeCsv(row.result?.title ?? ""),
       escapeCsv(row.recommendedCourses.map((course) => course.name).join("; ")),
       ...questionCells,
     ].join(",");
@@ -235,7 +239,8 @@ export const PersonalTestSubmissionsTable = ({
         <div>
           <h3 className="font-medium">Test submissions</h3>
           <p className="text-sm text-muted-foreground">
-            Users who completed the test and their recommended courses ({ANALYTICS_TIMEZONE}).
+            Users who completed the test, their result, and recommended courses (
+            {ANALYTICS_TIMEZONE}).
           </p>
         </div>
         <div className="flex w-full flex-col gap-2 sm:flex-row lg:max-w-xl">
@@ -276,8 +281,9 @@ export const PersonalTestSubmissionsTable = ({
                   <TableHead>Completed at</TableHead>
                   <TableHead>Time taken</TableHead>
                   <TableHead>Questions answered</TableHead>
+                  <TableHead>Result</TableHead>
                   <TableHead>Courses recommended</TableHead>
-                  <TableHead className="w-32">Results</TableHead>
+                  <TableHead className="w-32" />
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -309,6 +315,31 @@ export const PersonalTestSubmissionsTable = ({
                     </TableCell>
                     <TableCell className="text-sm">
                       {row.selectedAnswerCount} / {row.questionCount}
+                    </TableCell>
+                    <TableCell>
+                      {row.result ? (
+                        <div className="flex items-center gap-2">
+                          {isResultColor(row.result.color) ? (
+                            <span
+                              className="h-3 w-3 shrink-0 rounded-full border"
+                              style={{ backgroundColor: row.result.color }}
+                              title={row.result.color}
+                            />
+                          ) : null}
+                          <span
+                            className="font-medium"
+                            style={
+                              isResultColor(row.result.color)
+                                ? { color: row.result.color }
+                                : undefined
+                            }
+                          >
+                            {row.result.title}
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">—</span>
+                      )}
                     </TableCell>
                     <TableCell>
                       <div className="flex flex-wrap gap-1.5">

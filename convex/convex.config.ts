@@ -16,6 +16,7 @@ app.use(aggregate, { name: "aggregateCourseWatched" });
 app.use(aggregate, { name: "aggregatePersonalTestAttemptStarts" });
 app.use(aggregate, { name: "aggregatePersonalTestAttemptCompletions" });
 app.use(aggregate, { name: "aggregatePersonalTestCourseRecommendations" });
+app.use(aggregate, { name: "aggregatePersonalTestResultRecommendations" });
 
 app.use(migrations);
 
