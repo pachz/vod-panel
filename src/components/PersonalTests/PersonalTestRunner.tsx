@@ -112,8 +112,6 @@ type PersonalTestRunnerProps = {
   topRecommendedLabel?: string;
   viewCourseLabel?: string;
   getCourseHref?: (courseId: Id<"courses">) => string;
-  chooseOneLabel: string;
-  chooseAllLabel: string;
   previousLabel: string;
   nextLabel: string;
   seeResultsLabel: string;
@@ -148,8 +146,6 @@ export function PersonalTestRunner({
   topRecommendedLabel,
   viewCourseLabel = "View Course",
   getCourseHref = (courseId) => `/courses/preview/${courseId}`,
-  chooseOneLabel,
-  chooseAllLabel,
   previousLabel,
   nextLabel,
   seeResultsLabel,
@@ -478,11 +474,6 @@ export function PersonalTestRunner({
                 {getQuestionSubtitle(currentQuestion!.question)}
               </p>
             )}
-            <span className="inline-flex mt-2 rounded-md border px-2 py-0.5 text-xs text-muted-foreground">
-              {currentQuestion!.question.answerType === "single"
-                ? chooseOneLabel
-                : chooseAllLabel}
-            </span>
           </div>
 
           <div className="space-y-3">

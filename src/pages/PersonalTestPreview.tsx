@@ -57,8 +57,6 @@ const PersonalTestPreview = () => {
       topRecommendedLabel="Top Recommended Courses For You"
       viewCourseLabel="View Course"
       getCourseHref={(courseId) => `/courses/preview/${courseId}`}
-      chooseOneLabel="Choose one"
-      chooseAllLabel="Choose all that apply"
       previousLabel="Previous"
       nextLabel="Next"
       seeResultsLabel="See results"

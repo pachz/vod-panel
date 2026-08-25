@@ -135,8 +135,6 @@ const UserPersonalTestTakeContent = () => {
       topRecommendedLabel={t("topRecommendedCourses")}
       viewCourseLabel={t("viewCourse")}
       getCourseHref={(courseId) => localizedPath(`/courses/preview/${courseId}`)}
-      chooseOneLabel={t("chooseOneAnswer")}
-      chooseAllLabel={t("chooseAllAnswers")}
       previousLabel={t("previous")}
       nextLabel={t("next")}
       seeResultsLabel={t("seeResults")}
