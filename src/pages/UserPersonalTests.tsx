@@ -12,6 +12,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
 import { formatSubmissionDuration } from "../../shared/validation/personalTestAnalytics";
+import { PersonalTestsAccessGate, usePersonalTestsAccess } from "@/components/PersonalTests/PersonalTestsAccessGate";
 
 const RESULTS_PAGE_SIZE = 10;
 
@@ -22,13 +23,14 @@ function formatCompletedAt(timestamp: number, language: "en" | "ar") {
   }).format(new Date(timestamp));
 }
 
-const UserPersonalTests = () => {
+const UserPersonalTestsContent = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const searchFilter = searchParams.get("search") || undefined;
   const resultsSearchFilter = searchParams.get("resultsSearch") || undefined;
   const activeTab = searchParams.get("tab") === "results" ? "results" : "available";
   const { language, t, isRTL, localizedPath } = useLanguage();
+  const { now } = usePersonalTestsAccess();
 
   const [searchInput, setSearchInput] = useState(searchFilter || "");
   const [resultsSearchInput, setResultsSearchInput] = useState(resultsSearchFilter || "");
@@ -39,6 +41,7 @@ const UserPersonalTests = () => {
 
   const tests = useQuery(api.personalTest.listPublishedPersonalTests, {
     search: searchFilter,
+    now,
   });
   const completedAttemptsPage = useQuery(
     api.personalTestAttempts.listMyCompletedPersonalTestAttempts,
@@ -46,6 +49,7 @@ const UserPersonalTests = () => {
       search: resultsSearchFilter,
       limit: RESULTS_PAGE_SIZE,
       cursor: resultsCursor,
+      now,
     },
   );
   const completedAttempts = completedAttemptsPage?.page;
@@ -419,5 +423,11 @@ const UserPersonalTests = () => {
     </div>
   );
 };
+
+const UserPersonalTests = () => (
+  <PersonalTestsAccessGate>
+    <UserPersonalTestsContent />
+  </PersonalTestsAccessGate>
+);
 
 export default UserPersonalTests;

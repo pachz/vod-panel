@@ -130,6 +130,7 @@ const planInputFieldsSchema = z.object({
   inheritsDescription: optionalLocalizedField(PLAN_FIELD_LIMITS.inheritsDescription),
   inheritsDescriptionAr: optionalLocalizedField(PLAN_FIELD_LIMITS.inheritsDescriptionAr),
   includeAllCourses: z.boolean(),
+  includesPersonalTests: z.boolean().optional().default(false),
   includedCourseIds: z.array(z.string()),
   includedCategoryIds: z.array(z.string()),
   excludedCourseIds: z.array(z.string()),

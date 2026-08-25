@@ -7,6 +7,7 @@ import {
   personalTestCompleteAttemptSchema,
 } from "../shared/validation/personalTest";
 import { requireUser } from "./utils/auth";
+import { requirePersonalTestAccess, viewerCanAccessPersonalTests } from "./lib/personalTestAccess";
 import {
   computeRecommendedCourses,
   getExpiredAttemptDurationSeconds,
@@ -132,6 +133,7 @@ async function getTestForAttempt(
     });
   }
 
+  await requirePersonalTestAccess(ctx);
   return test;
 }
 
@@ -565,6 +567,7 @@ export const listMyCompletedPersonalTestAttempts = query({
     search: v.optional(v.string()),
     limit: v.optional(v.number()),
     cursor: v.optional(v.string()),
+    now: v.number(),
   },
   returns: v.object({
     page: v.array(
@@ -583,8 +586,12 @@ export const listMyCompletedPersonalTestAttempts = query({
     isDone: v.boolean(),
     continueCursor: v.union(v.string(), v.null()),
   }),
-  handler: async (ctx, { search, limit = 10, cursor }) => {
+  handler: async (ctx, { search, limit = 10, cursor, now }) => {
     await requireUser(ctx);
+    const canAccess = await viewerCanAccessPersonalTests(ctx, now);
+    if (!canAccess) {
+      return { page: [], isDone: true, continueCursor: null };
+    }
     const userId = await getUserIdOrThrow(ctx);
     const numItems = Math.min(Math.max(limit ?? 10, 1), 50);
     return await loadMyCompletedPersonalTestAttempts(ctx, userId, {
@@ -598,10 +605,15 @@ export const listMyCompletedPersonalTestAttempts = query({
 export const getMyPersonalTestAttemptResults = query({
   args: {
     attemptId: v.id("personalTestAttempts"),
+    now: v.number(),
   },
   returns: v.union(myAttemptResultsValidator, v.null()),
-  handler: async (ctx, { attemptId }) => {
+  handler: async (ctx, { attemptId, now }) => {
     await requireUser(ctx);
+    const canAccess = await viewerCanAccessPersonalTests(ctx, now);
+    if (!canAccess) {
+      return null;
+    }
     const userId = await getUserIdOrThrow(ctx);
     return await loadMyPersonalTestAttemptResults(ctx, userId, attemptId);
   },

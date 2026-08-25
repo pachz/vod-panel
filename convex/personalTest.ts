@@ -13,6 +13,7 @@ import {
   type PersonalTestUpdateInput,
 } from "../shared/validation/personalTest";
 import { requireUser } from "./utils/auth";
+import { viewerCanAccessPersonalTests } from "./lib/personalTestAccess";
 import {
   computeRecommendedCourses,
   matchedPersonalTestResultValidator,
@@ -1139,10 +1140,15 @@ export const previewPersonalTestResults = query({
 export const listPublishedPersonalTests = query({
   args: {
     search: v.optional(v.string()),
+    now: v.number(),
   },
   returns: v.array(publishedTestListItemValidator),
-  handler: async (ctx, { search }) => {
+  handler: async (ctx, { search, now }) => {
     await requireUser(ctx);
+    const canAccess = await viewerCanAccessPersonalTests(ctx, now);
+    if (!canAccess) {
+      return [];
+    }
 
     if (search && search.trim().length > 0) {
       const results = await ctx.db
@@ -1501,7 +1507,10 @@ export const updatePersonalTestCover = mutation({
 });
 
 export const getPublishedPersonalTest = query({
-  args: { testId: v.id("personalTests") },
+  args: {
+    testId: v.id("personalTests"),
+    now: v.number(),
+  },
   returns: v.union(
     v.object({
       test: v.object({
@@ -1520,8 +1529,12 @@ export const getPublishedPersonalTest = query({
     }),
     v.null(),
   ),
-  handler: async (ctx, { testId }) => {
+  handler: async (ctx, { testId, now }) => {
     await requireUser(ctx);
+    const canAccess = await viewerCanAccessPersonalTests(ctx, now);
+    if (!canAccess) {
+      return null;
+    }
 
     const test = await ctx.db.get("personalTests", testId);
     if (

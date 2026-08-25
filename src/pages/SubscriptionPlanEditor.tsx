@@ -82,6 +82,7 @@ export type PlanFormState = {
   inheritsDescription: string;
   inheritsDescriptionAr: string;
   includeAllCourses: boolean;
+  includesPersonalTests: boolean;
   includedCourseIds: Id<"courses">[];
   includedCategoryIds: Id<"categories">[];
   excludedCourseIds: Id<"courses">[];
@@ -110,6 +111,7 @@ const defaultFormState = (): PlanFormState => ({
   inheritsDescription: "",
   inheritsDescriptionAr: "",
   includeAllCourses: false,
+  includesPersonalTests: false,
   includedCourseIds: [],
   includedCategoryIds: [],
   excludedCourseIds: [],
@@ -295,6 +297,7 @@ export function useSubscriptionPlanEditor() {
       inheritsDescription: p.inheritsDescription ?? "",
       inheritsDescriptionAr: p.inheritsDescription_ar ?? "",
       includeAllCourses: p.includeAllCourses,
+      includesPersonalTests: p.includesPersonalTests === true,
       includedCourseIds: p.includedCourseIds,
       includedCategoryIds: p.includedCategoryIds,
       excludedCourseIds: p.excludedCourseIds ?? [],
@@ -397,6 +400,7 @@ export function useSubscriptionPlanEditor() {
     inheritsDescription: form.inheritsDescription.trim() || undefined,
     inheritsDescriptionAr: form.inheritsDescriptionAr.trim() || undefined,
     includeAllCourses: form.includeAllCourses,
+    includesPersonalTests: form.includesPersonalTests,
     includedCourseIds: form.includedCourseIds,
     includedCategoryIds: form.includedCategoryIds,
     excludedCourseIds: form.excludedCourseIds,
@@ -579,6 +583,7 @@ const SubscriptionPlanEditor = () => {
           inheritsDescription: args.inheritsDescription,
           inheritsDescription_ar: args.inheritsDescriptionAr,
           includeAllCourses: args.includeAllCourses,
+          includesPersonalTests: args.includesPersonalTests,
           includedCourseIds: args.includedCourseIds,
           includedCategoryIds: args.includedCategoryIds,
           excludedCourseIds: args.excludedCourseIds,
@@ -964,6 +969,25 @@ const SubscriptionPlanEditor = () => {
                   )}
                 </p>
               )}
+            </CardContent>
+          </Card>
+
+          <Card className="card-elevated">
+            <CardHeader>
+              <CardTitle>Personal tests</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Switch
+                  checked={form.includesPersonalTests}
+                  onCheckedChange={(v) => setField("includesPersonalTests", v)}
+                />
+                <Label>Access to personal tests</Label>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                When enabled, subscribers on this plan can take personal tests in the app.
+                This setting is not shown on the public plan card.
+              </p>
             </CardContent>
           </Card>
 

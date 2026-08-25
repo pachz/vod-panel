@@ -27,7 +27,7 @@ const planThemeValidator = v.object({
   buttonBg: v.string(),
 });
 
-const paywallPlanValidator = v.object({
+export const paywallPlanValidator = v.object({
   _id: v.id("subscriptionPlans"),
   name: v.string(),
   name_ar: v.string(),
@@ -74,14 +74,14 @@ const paywallPlanValidator = v.object({
   ),
 });
 
-function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
+export function isPublicPlan(plan: Doc<"subscriptionPlans">): boolean {
   return plan.deletedAt === undefined && plan.isActive && plan.isHidden !== true;
 }
 
-async function mapPlanForPaywall(
+export async function mapPlanForPaywall(
   plan: Doc<"subscriptionPlans">,
   nowMs: number,
-  ctx: import("./_generated/server").QueryCtx,
+  ctx: import("./_generated/server").QueryCtx | import("./_generated/server").MutationCtx,
   currentPlanId?: Id<"subscriptionPlans">,
 ) {
   const stats = getStoredPlanCourseStats(plan);

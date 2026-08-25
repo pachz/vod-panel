@@ -9,6 +9,7 @@ import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
 import { PersonalTestResultView } from "@/components/PersonalTests/PersonalTestResultView";
 import { formatSubmissionDuration } from "../../shared/validation/personalTestAnalytics";
+import { PersonalTestsAccessGate, usePersonalTestsAccess } from "@/components/PersonalTests/PersonalTestsAccessGate";
 
 function formatCompletedAt(timestamp: number, language: "en" | "ar") {
   return new Intl.DateTimeFormat(language === "ar" ? "ar" : undefined, {
@@ -17,13 +18,15 @@ function formatCompletedAt(timestamp: number, language: "en" | "ar") {
   }).format(new Date(timestamp));
 }
 
-const UserPersonalTestResults = () => {
+const UserPersonalTestResultsContent = () => {
   const { attemptId } = useParams<{ attemptId: string }>();
   const { language, t, isRTL, localizedPath } = useLanguage();
   const testsPath = localizedPath("/my-tests?tab=results");
+  const { now } = usePersonalTestsAccess();
 
   const results = useQuery(api.personalTestAttempts.getMyPersonalTestAttemptResults, {
     attemptId: attemptId as Id<"personalTestAttempts">,
+    now,
   });
 
   if (results === undefined) {
@@ -200,5 +203,11 @@ const UserPersonalTestResults = () => {
     </div>
   );
 };
+
+const UserPersonalTestResults = () => (
+  <PersonalTestsAccessGate>
+    <UserPersonalTestResultsContent />
+  </PersonalTestsAccessGate>
+);
 
 export default UserPersonalTestResults;

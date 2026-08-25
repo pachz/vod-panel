@@ -320,6 +320,8 @@ export default defineSchema({
     inheritsDescription_ar: v.optional(v.string()),
     includesPlanId: v.optional(v.id("subscriptionPlans")),
     includeAllCourses: v.boolean(),
+    /** When true, subscribers can take personal tests. Undefined/false = no access. Not shown on public plan cards. */
+    includesPersonalTests: v.optional(v.boolean()),
     includedCourseIds: v.array(v.id("courses")),
     includedCategoryIds: v.array(v.id("categories")),
     /** Published courses removed from the resolved set after inclusion rules apply. */

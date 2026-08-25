@@ -10,15 +10,17 @@ import { isResultColor } from "@/components/PersonalTests/resultColor";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/hooks/use-language";
 import { cn } from "@/lib/utils";
+import { PersonalTestsAccessGate, usePersonalTestsAccess } from "@/components/PersonalTests/PersonalTestsAccessGate";
 
-const UserPersonalTestTake = () => {
+const UserPersonalTestTakeContent = () => {
   const { id } = useParams<{ id: string }>();
   const testId = id as Id<"personalTests">;
   const { language, t, isRTL, localizedPath } = useLanguage();
   const [hasStarted, setHasStarted] = useState(false);
   const testsPath = localizedPath("/my-tests");
+  const { now } = usePersonalTestsAccess();
 
-  const data = useQuery(api.personalTest.getPublishedPersonalTest, { testId });
+  const data = useQuery(api.personalTest.getPublishedPersonalTest, { testId, now });
 
   if (data === undefined) {
     return (
@@ -159,5 +161,11 @@ const UserPersonalTestTake = () => {
     />
   );
 };
+
+const UserPersonalTestTake = () => (
+  <PersonalTestsAccessGate>
+    <UserPersonalTestTakeContent />
+  </PersonalTestsAccessGate>
+);
 
 export default UserPersonalTestTake;

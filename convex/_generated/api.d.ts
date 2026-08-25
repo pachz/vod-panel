@@ -53,6 +53,7 @@ import type * as legacySubscriptionMigrationStripe from "../legacySubscriptionMi
 import type * as lesson from "../lesson.js";
 import type * as lessonProgress from "../lessonProgress.js";
 import type * as lib_courseSearchText from "../lib/courseSearchText.js";
+import type * as lib_personalTestAccess from "../lib/personalTestAccess.js";
 import type * as lib_personalTestAttemptAggregates from "../lib/personalTestAttemptAggregates.js";
 import type * as lib_personalTestScoring from "../lib/personalTestScoring.js";
 import type * as lib_personalTestSubmissions from "../lib/personalTestSubmissions.js";
@@ -62,6 +63,7 @@ import type * as migrations from "../migrations.js";
 import type * as payment from "../payment.js";
 import type * as paymentInternal from "../paymentInternal.js";
 import type * as personalTest from "../personalTest.js";
+import type * as personalTestAccess from "../personalTestAccess.js";
 import type * as personalTestAttemptAnalytics from "../personalTestAttemptAnalytics.js";
 import type * as personalTestAttempts from "../personalTestAttempts.js";
 import type * as personalTestAttemptsCron from "../personalTestAttemptsCron.js";
@@ -131,6 +133,7 @@ declare const fullApi: ApiFromModules<{
   lesson: typeof lesson;
   lessonProgress: typeof lessonProgress;
   "lib/courseSearchText": typeof lib_courseSearchText;
+  "lib/personalTestAccess": typeof lib_personalTestAccess;
   "lib/personalTestAttemptAggregates": typeof lib_personalTestAttemptAggregates;
   "lib/personalTestScoring": typeof lib_personalTestScoring;
   "lib/personalTestSubmissions": typeof lib_personalTestSubmissions;
@@ -140,6 +143,7 @@ declare const fullApi: ApiFromModules<{
   payment: typeof payment;
   paymentInternal: typeof paymentInternal;
   personalTest: typeof personalTest;
+  personalTestAccess: typeof personalTestAccess;
   personalTestAttemptAnalytics: typeof personalTestAttemptAnalytics;
   personalTestAttempts: typeof personalTestAttempts;
   personalTestAttemptsCron: typeof personalTestAttemptsCron;
