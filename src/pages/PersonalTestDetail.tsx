@@ -24,6 +24,7 @@ import {
   GripVertical,
   Pencil,
   Plus,
+  Save,
   Trash2,
   Upload,
 } from "lucide-react";
@@ -986,222 +987,233 @@ const PersonalTestDetail = () => {
         </TabsList>
 
         <TabsContent value="info" className="mt-6">
-          <form onSubmit={handleSaveInfo} className="space-y-6">
-          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
-            <h2 className="font-medium">Basic information</h2>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="name">Name</Label>
-                <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="name-ar">Name (Arabic)</Label>
-                <Input
-                  id="name-ar"
-                  value={nameAr}
-                  dir="rtl"
-                  onChange={(e) => setNameAr(e.target.value)}
-                />
-              </div>
-            </div>
-            <div className="space-y-2 max-w-xs">
-              <Label htmlFor="display-order">Ordering</Label>
-              <Input
-                id="display-order"
-                type="number"
-                min={0}
-                max={1000}
-                value={displayOrder}
-                onChange={(e) => setDisplayOrder(e.target.value)}
-              />
-              <p className="text-sm text-muted-foreground">
-                Lower numbers appear first on the take-test page.
-              </p>
-            </div>
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="description">Description (optional)</Label>
-                <Textarea
-                  id="description"
-                  value={description}
-                  onChange={(e) => setDescription(e.target.value)}
-                  rows={3}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="description-ar">Description (Arabic, optional)</Label>
-                <Textarea
-                  id="description-ar"
-                  value={descriptionAr}
-                  dir="rtl"
-                  onChange={(e) => setDescriptionAr(e.target.value)}
-                  rows={3}
-                />
-              </div>
-            </div>
-
-            {canToggleAvailability && (
-              <div className="flex items-center justify-between rounded-lg border p-4">
-                <div>
-                  <Label htmlFor="enabled">Status</Label>
-                  <p className="text-sm text-muted-foreground">
-                    {isEnabled
-                      ? "Test will be enabled for users."
-                      : "Test will be disabled for users."}
-                  </p>
-                </div>
-                <Switch
-                  id="enabled"
-                  checked={isEnabled}
-                  onCheckedChange={setIsEnabled}
-                />
-              </div>
-            )}
-
-            {!canToggleAvailability && (
-              <p className="text-sm text-muted-foreground">
-                Publish the test to enable or disable it for users.
-              </p>
-            )}
-          </div>
-
-          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
-            <h2 className="font-medium">Card thumbnail</h2>
-            <p className="text-sm text-muted-foreground">
-              Shown on the test listing card. Landscape image recommended (16:9).
-            </p>
-            <ImageDropzone
-              id="personal-test-thumbnail"
-              label="Test thumbnail"
-              helperText="Click to browse or drop an image file."
-              aspectRatioClass="aspect-video"
-              value={thumbnailPreviewUrl}
-              onSelectFile={handleThumbnailSelect}
-              uploadState={thumbnailUploadState}
-              disabled={isSavingInfo}
-            />
-          </div>
-
-          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
-            <h2 className="font-medium">Cover page</h2>
-            <p className="text-sm text-muted-foreground">
-              Shown before the quiz starts. All fields are optional. Landscape image
-              recommended (16:9).
-            </p>
-            <ImageDropzone
-              id="personal-test-cover"
-              label="Cover image (optional)"
-              helperText="Click to browse or drop an image file."
-              aspectRatioClass="aspect-video"
-              value={coverPreviewUrl}
-              onSelectFile={handleCoverSelect}
-              uploadState={coverUploadState}
-              disabled={isSavingInfo}
-            />
-            {coverPreviewUrl && (
-              <Button
-                type="button"
-                variant="ghost"
-                size="sm"
-                onClick={handleCoverRemove}
-                disabled={isSavingInfo || coverUploadState.status === "uploading"}
-              >
-                Remove cover
+          <form onSubmit={handleSaveInfo} className="space-y-4">
+            <div className="flex items-center justify-between">
+              <h2 className="font-medium">Test settings</h2>
+              <Button type="submit" variant="cta" disabled={isSavingInfo}>
+                <Save className="mr-2 h-4 w-4" />
+                {isSavingInfo ? "Saving…" : "Save changes"}
               </Button>
-            )}
-
-            <div className="space-y-2">
-              <Label>Start button color (optional)</Label>
-              <div className="flex items-center gap-2">
-                <Input
-                  type="color"
-                  value={startButtonColor || "#E91E8C"}
-                  onChange={(event) => setStartButtonColor(event.target.value)}
-                  className="h-10 w-12 cursor-pointer p-1"
-                  aria-label="Start button color"
-                />
-                <Input
-                  value={startButtonColor}
-                  onChange={(event) => setStartButtonColor(event.target.value)}
-                  placeholder="#E91E8C"
-                  className="font-mono"
-                />
-                {startButtonColor && (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setStartButtonColor("")}
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-              <p className="text-xs text-muted-foreground">
-                Used on the start quiz button. Leave empty to use the default button.
-              </p>
             </div>
 
-            <div className="grid gap-4 sm:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="start-button-text">Start button text (optional)</Label>
-                <Input
-                  id="start-button-text"
-                  value={startButtonText}
-                  onChange={(event) => setStartButtonText(event.target.value)}
-                  placeholder="Start Test"
-                />
+            <div className="grid gap-6 lg:grid-cols-2">
+              <div className="space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <h3 className="font-medium">Basic information</h3>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="name">Name</Label>
+                      <Input id="name" value={name} onChange={(e) => setName(e.target.value)} />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="name-ar">Name (Arabic)</Label>
+                      <Input
+                        id="name-ar"
+                        value={nameAr}
+                        dir="rtl"
+                        onChange={(e) => setNameAr(e.target.value)}
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-2 max-w-xs">
+                    <Label htmlFor="display-order">Ordering</Label>
+                    <Input
+                      id="display-order"
+                      type="number"
+                      min={0}
+                      max={1000}
+                      value={displayOrder}
+                      onChange={(e) => setDisplayOrder(e.target.value)}
+                    />
+                    <p className="text-sm text-muted-foreground">
+                      Lower numbers appear first on the take-test page.
+                    </p>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description (optional)</Label>
+                      <Textarea
+                        id="description"
+                        value={description}
+                        onChange={(e) => setDescription(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description-ar">Description (Arabic, optional)</Label>
+                      <Textarea
+                        id="description-ar"
+                        value={descriptionAr}
+                        dir="rtl"
+                        onChange={(e) => setDescriptionAr(e.target.value)}
+                        rows={3}
+                      />
+                    </div>
+                  </div>
+
+                  {canToggleAvailability && (
+                    <div className="flex items-center justify-between rounded-lg border p-4">
+                      <div>
+                        <Label htmlFor="enabled">Status</Label>
+                        <p className="text-sm text-muted-foreground">
+                          {isEnabled
+                            ? "Test will be enabled for users."
+                            : "Test will be disabled for users."}
+                        </p>
+                      </div>
+                      <Switch
+                        id="enabled"
+                        checked={isEnabled}
+                        onCheckedChange={setIsEnabled}
+                      />
+                    </div>
+                  )}
+
+                  {!canToggleAvailability && (
+                    <p className="text-sm text-muted-foreground">
+                      Publish the test to enable or disable it for users.
+                    </p>
+                  )}
+                </div>
+
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <h3 className="font-medium">Result settings</h3>
+                  <div className="flex items-center justify-between rounded-lg border p-4">
+                    <div>
+                      <Label htmlFor="show-all">Show all recommended courses</Label>
+                      <p className="text-sm text-muted-foreground">
+                        When off, limit how many courses appear in results.
+                      </p>
+                    </div>
+                    <Switch
+                      id="show-all"
+                      checked={showAllResults}
+                      onCheckedChange={setShowAllResults}
+                    />
+                  </div>
+                  {!showAllResults && (
+                    <div className="space-y-2 max-w-xs">
+                      <Label htmlFor="max-courses">Limit results to</Label>
+                      <Input
+                        id="max-courses"
+                        type="number"
+                        min={1}
+                        max={100}
+                        value={maxCourses}
+                        onChange={(e) => setMaxCourses(e.target.value)}
+                        placeholder="e.g. 5"
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
-              <div className="space-y-2">
-                <Label htmlFor="start-button-text-ar">
-                  Start button text (Arabic, optional)
-                </Label>
-                <Input
-                  id="start-button-text-ar"
-                  value={startButtonTextAr}
-                  dir="rtl"
-                  onChange={(event) => setStartButtonTextAr(event.target.value)}
-                />
+
+              <div className="space-y-6">
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <h3 className="font-medium">Card thumbnail</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Shown on the test listing card. Landscape image recommended (16:9).
+                  </p>
+                  <ImageDropzone
+                    id="personal-test-thumbnail"
+                    label="Test thumbnail"
+                    helperText="Click to browse or drop an image file."
+                    aspectRatioClass="aspect-video"
+                    value={thumbnailPreviewUrl}
+                    onSelectFile={handleThumbnailSelect}
+                    uploadState={thumbnailUploadState}
+                    disabled={isSavingInfo}
+                  />
+                </div>
+
+                <div className="rounded-xl border bg-card p-6 space-y-4">
+                  <h3 className="font-medium">Cover page</h3>
+                  <p className="text-sm text-muted-foreground">
+                    Shown before the quiz starts. All fields are optional. Landscape
+                    image recommended (16:9).
+                  </p>
+                  <ImageDropzone
+                    id="personal-test-cover"
+                    label="Cover image (optional)"
+                    helperText="Click to browse or drop an image file."
+                    aspectRatioClass="aspect-video"
+                    value={coverPreviewUrl}
+                    onSelectFile={handleCoverSelect}
+                    uploadState={coverUploadState}
+                    disabled={isSavingInfo}
+                  />
+                  {coverPreviewUrl && (
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={handleCoverRemove}
+                      disabled={isSavingInfo || coverUploadState.status === "uploading"}
+                    >
+                      Remove cover
+                    </Button>
+                  )}
+
+                  <div className="space-y-2">
+                    <Label>Start button color (optional)</Label>
+                    <div className="flex items-center gap-2">
+                      <Input
+                        type="color"
+                        value={startButtonColor || "#E91E8C"}
+                        onChange={(event) => setStartButtonColor(event.target.value)}
+                        className="h-10 w-12 cursor-pointer p-1"
+                        aria-label="Start button color"
+                      />
+                      <Input
+                        value={startButtonColor}
+                        onChange={(event) => setStartButtonColor(event.target.value)}
+                        placeholder="#E91E8C"
+                        className="font-mono"
+                      />
+                      {startButtonColor && (
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => setStartButtonColor("")}
+                        >
+                          Clear
+                        </Button>
+                      )}
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Used on the start quiz button. Leave empty to use the default
+                      button.
+                    </p>
+                  </div>
+
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="start-button-text">
+                        Start button text (optional)
+                      </Label>
+                      <Input
+                        id="start-button-text"
+                        value={startButtonText}
+                        onChange={(event) => setStartButtonText(event.target.value)}
+                        placeholder="Start Test"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="start-button-text-ar">
+                        Start button text (Arabic, optional)
+                      </Label>
+                      <Input
+                        id="start-button-text-ar"
+                        value={startButtonTextAr}
+                        dir="rtl"
+                        onChange={(event) => setStartButtonTextAr(event.target.value)}
+                      />
+                    </div>
+                  </div>
+                </div>
               </div>
             </div>
-          </div>
-
-          <div className="rounded-xl border bg-card p-6 space-y-4 max-w-2xl">
-            <h2 className="font-medium">Result settings</h2>
-            <div className="flex items-center justify-between rounded-lg border p-4">
-              <div>
-                <Label htmlFor="show-all">Show all recommended courses</Label>
-                <p className="text-sm text-muted-foreground">
-                  When off, limit how many courses appear in results.
-                </p>
-              </div>
-              <Switch
-                id="show-all"
-                checked={showAllResults}
-                onCheckedChange={setShowAllResults}
-              />
-            </div>
-            {!showAllResults && (
-              <div className="space-y-2 max-w-xs">
-                <Label htmlFor="max-courses">Limit results to</Label>
-                <Input
-                  id="max-courses"
-                  type="number"
-                  min={1}
-                  max={100}
-                  value={maxCourses}
-                  onChange={(e) => setMaxCourses(e.target.value)}
-                  placeholder="e.g. 5"
-                />
-              </div>
-            )}
-          </div>
-
-          <div className="flex max-w-2xl justify-end">
-            <Button type="submit" variant="cta" disabled={isSavingInfo}>
-              {isSavingInfo ? "Saving…" : "Save changes"}
-            </Button>
-          </div>
           </form>
         </TabsContent>
 
