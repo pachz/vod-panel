@@ -7,6 +7,7 @@ import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { ConvexError, v } from "convex/values";
 import { getAuthUserId } from "@convex-dev/auth/server";
 import type { Id } from "./_generated/dataModel";
+import { internal } from "./_generated/api";
 import { requireUser } from "./utils/auth";
 import {
   MAX_CONTENT_ANALYTICS_RANGE_DAYS,
@@ -927,34 +928,107 @@ export const getContentEngagementDashboard = query({
 
 /**
  * Backfill watch buckets from existing lessonProgress rows.
- * Run once after deploy: internal.contentViews.backfillWatchBuckets
+ * Batched + self-scheduling to stay under mutation time limits.
+ * Clears existing watch buckets first (safe after a partial/timed-out run).
+ *
+ * Run once: internal.contentViews.backfillWatchBuckets
+ * Optional: { phase: "clear" } or continue with returned cursor args.
  */
+const WATCH_BACKFILL_CLEAR_BATCH = 80;
+/** Each row updates 8 period buckets; keep this small for the 1s mutation limit. */
+const WATCH_BACKFILL_FILL_BATCH = 3;
+
 export const backfillWatchBuckets = internalMutation({
-  args: {},
+  args: {
+    phase: v.optional(v.union(v.literal("clear"), v.literal("fill"))),
+    cursor: v.optional(v.union(v.string(), v.null())),
+    deleted: v.optional(v.number()),
+    processed: v.optional(v.number()),
+    skipped: v.optional(v.number()),
+  },
   returns: v.object({
+    phase: v.union(v.literal("clear"), v.literal("fill")),
+    deleted: v.number(),
     processed: v.number(),
     skipped: v.number(),
+    done: v.boolean(),
   }),
-  handler: async (ctx) => {
-    const allProgress = await ctx.db.query("lessonProgress").collect();
-    let processed = 0;
-    let skipped = 0;
+  handler: async (
+    ctx,
+    args,
+  ): Promise<{
+    phase: "clear" | "fill";
+    deleted: number;
+    processed: number;
+    skipped: number;
+    done: boolean;
+  }> => {
+    const phase: "clear" | "fill" = args.phase ?? "clear";
+    let deleted = args.deleted ?? 0;
+    let processed = args.processed ?? 0;
+    let skipped = args.skipped ?? 0;
 
-    for (const progress of allProgress) {
+    if (phase === "clear") {
+      const lessonRows = await ctx.db
+        .query("lessonWatchBuckets")
+        .take(WATCH_BACKFILL_CLEAR_BATCH);
+      for (const row of lessonRows) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+      if (lessonRows.length > 0) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.contentViews.backfillWatchBuckets,
+          { phase: "clear", deleted, processed, skipped },
+        );
+        return { phase: "clear", deleted, processed, skipped, done: false };
+      }
+
+      const courseRows = await ctx.db
+        .query("courseWatchBuckets")
+        .take(WATCH_BACKFILL_CLEAR_BATCH);
+      for (const row of courseRows) {
+        await ctx.db.delete(row._id);
+        deleted += 1;
+      }
+      if (courseRows.length > 0) {
+        await ctx.scheduler.runAfter(
+          0,
+          internal.contentViews.backfillWatchBuckets,
+          { phase: "clear", deleted, processed, skipped },
+        );
+        return { phase: "clear", deleted, processed, skipped, done: false };
+      }
+
+      await ctx.scheduler.runAfter(
+        0,
+        internal.contentViews.backfillWatchBuckets,
+        {
+          phase: "fill",
+          cursor: null,
+          deleted,
+          processed: 0,
+          skipped: 0,
+        },
+      );
+      return { phase: "clear", deleted, processed, skipped, done: false };
+    }
+
+    const page = await ctx.db.query("lessonProgress").paginate({
+      numItems: WATCH_BACKFILL_FILL_BATCH,
+      cursor: args.cursor ?? null,
+    });
+
+    for (const progress of page.page) {
       const lesson = await ctx.db.get(progress.lesson_id);
       const course = await ctx.db.get(progress.course_id);
-      if (
-        !lesson ||
-        lesson.deletedAt ||
-        !course ||
-        course.deletedAt
-      ) {
+      if (!lesson || lesson.deletedAt || !course || course.deletedAt) {
         skipped += 1;
         continue;
       }
 
-      const watchedSeconds =
-        progress.watchedSeconds ?? lesson.duration ?? 0;
+      const watchedSeconds = progress.watchedSeconds ?? lesson.duration ?? 0;
       if (watchedSeconds <= 0) {
         skipped += 1;
         continue;
@@ -975,6 +1049,21 @@ export const backfillWatchBuckets = internalMutation({
       processed += 1;
     }
 
-    return { processed, skipped };
+    if (!page.isDone) {
+      await ctx.scheduler.runAfter(
+        0,
+        internal.contentViews.backfillWatchBuckets,
+        {
+          phase: "fill",
+          cursor: page.continueCursor,
+          deleted,
+          processed,
+          skipped,
+        },
+      );
+      return { phase: "fill", deleted, processed, skipped, done: false };
+    }
+
+    return { phase: "fill", deleted, processed, skipped, done: true };
   },
 });
