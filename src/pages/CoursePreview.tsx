@@ -82,6 +82,7 @@ const CoursePreview = () => {
     courseId && canAccessProtectedContent ? { courseId } : undefined,
   );
   const setLessonCompletion = useMutation(api.lessonProgress.setLessonCompletion);
+  const recordLessonView = useMutation(api.contentViews.recordLessonView);
 
   const [searchParams, setSearchParams] = useSearchParams();
   const [activeLessonId, setActiveLessonId] = useState<Id<"lessons"> | null>(null);
@@ -165,6 +166,19 @@ const CoursePreview = () => {
     nextParams.set("lesson", activeLessonId);
     setSearchParams(nextParams, { replace: true });
   }, [activeLessonId, lessonList.length, searchLessonId, searchParams, setSearchParams]);
+
+  useEffect(() => {
+    if (!courseId || !activeLessonId || !canAccessProtectedContent) {
+      return;
+    }
+
+    void recordLessonView({
+      courseId,
+      lessonId: activeLessonId,
+    }).catch((error) => {
+      console.error("Failed to record lesson view", error);
+    });
+  }, [activeLessonId, canAccessProtectedContent, courseId, recordLessonView]);
 
 
   const progressData: CourseProgress = progress ?? DEFAULT_PROGRESS;

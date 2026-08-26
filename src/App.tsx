@@ -9,6 +9,7 @@ import UserDashboard from "@/pages/UserDashboard";
 import Categories from "@/pages/Categories";
 import BlogCategories from "@/pages/BlogCategories";
 import Courses from "@/pages/Courses";
+import ContentAnalytics from "@/pages/ContentAnalytics";
 import CourseCards from "@/pages/CourseCards";
 import CourseDetail from "@/pages/CourseDetail";
 import CoursePreview from "@/pages/CoursePreview";
@@ -303,6 +304,9 @@ const App = () => (
               <Route path="/coaches" element={<Coaches />} />
               <Route path="/coaches/:id" element={<CoachDetail />} />
               <Route path="/users" element={<Users />} />
+            </Route>
+            <Route element={<GodOrTechRoute />}>
+              <Route path="/content-analytics" element={<ContentAnalytics />} />
             </Route>
             <Route element={<GodOrTechRoute />}>
               <Route path="/users/:id/info" element={<UserInfo />} />

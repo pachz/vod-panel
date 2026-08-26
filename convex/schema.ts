@@ -165,6 +165,124 @@ export default defineSchema({
     watchedSeconds: v.optional(v.number()),
   }).index("by_user_course_lesson", ["user_id", "course_id", "lesson_id"]),
 
+  /**
+   * Dedup: at most one counted lesson view per user per lesson per UTC day.
+   * dayKey is YYYY-MM-DD (UTC), matching view bucket period keys.
+   */
+  lessonViewDedup: defineTable({
+    user_id: v.id("users"),
+    lesson_id: v.id("lessons"),
+    dayKey: v.string(),
+    createdAt: v.number(),
+  }).index("by_user_lesson_day", ["user_id", "lesson_id", "dayKey"]),
+
+  /**
+   * Time-bucketed lesson view counters (total / day / week / month).
+   * periodKey: "all" | YYYY-MM-DD | YYYY-Www | YYYY-MM (UTC).
+   */
+  lessonViewBuckets: defineTable({
+    lesson_id: v.id("lessons"),
+    course_id: v.id("courses"),
+    granularity: v.union(
+      v.literal("total"),
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+    ),
+    periodKey: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_entity_granularity_period", [
+      "lesson_id",
+      "granularity",
+      "periodKey",
+    ])
+    .index("by_granularity_period_count", [
+      "granularity",
+      "periodKey",
+      "count",
+    ]),
+
+  /**
+   * Time-bucketed course view counters (total / day / week / month).
+   */
+  courseViewBuckets: defineTable({
+    course_id: v.id("courses"),
+    granularity: v.union(
+      v.literal("total"),
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+    ),
+    periodKey: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_entity_granularity_period", [
+      "course_id",
+      "granularity",
+      "periodKey",
+    ])
+    .index("by_granularity_period_count", [
+      "granularity",
+      "periodKey",
+      "count",
+    ]),
+
+  /**
+   * Time-bucketed lesson watched-seconds (sum of durations at completion).
+   */
+  lessonWatchBuckets: defineTable({
+    lesson_id: v.id("lessons"),
+    course_id: v.id("courses"),
+    granularity: v.union(
+      v.literal("total"),
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+    ),
+    periodKey: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_entity_granularity_period", [
+      "lesson_id",
+      "granularity",
+      "periodKey",
+    ])
+    .index("by_granularity_period_count", [
+      "granularity",
+      "periodKey",
+      "count",
+    ]),
+
+  /**
+   * Time-bucketed course watched-seconds (sum of lesson durations at completion).
+   */
+  courseWatchBuckets: defineTable({
+    course_id: v.id("courses"),
+    granularity: v.union(
+      v.literal("total"),
+      v.literal("day"),
+      v.literal("week"),
+      v.literal("month"),
+    ),
+    periodKey: v.string(),
+    count: v.number(),
+    updatedAt: v.number(),
+  })
+    .index("by_entity_granularity_period", [
+      "course_id",
+      "granularity",
+      "periodKey",
+    ])
+    .index("by_granularity_period_count", [
+      "granularity",
+      "periodKey",
+      "count",
+    ]),
+
   coaches: defineTable({
     name: v.string(),
     name_ar: v.string(),

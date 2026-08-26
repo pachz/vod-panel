@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
-import { Plus, Eye, Trash2, RotateCcw, PlayCircle } from "lucide-react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
+import { Plus, Eye, Trash2, RotateCcw, PlayCircle, BarChart3 } from "lucide-react";
 import { useMutation, useQuery } from "convex/react";
 import { ViewDeletedToggle } from "@/components/ViewDeletedToggle";
 
@@ -477,6 +477,12 @@ const Courses = () => {
           </p>
         </div>
         <div className="flex items-center gap-2">
+          <Button variant="outline" asChild>
+            <Link to="/content-analytics">
+              <BarChart3 className="mr-2 h-4 w-4" />
+              Analytics
+            </Link>
+          </Button>
           <ViewDeletedToggle
             viewDeleted={viewDeleted}
             onToggle={toggleViewDeleted}

@@ -8,6 +8,7 @@ import { components } from "./_generated/api";
 import { DataModel } from "./_generated/dataModel";
 
 import { requireUser } from "./utils/auth";
+import { adjustContentBucketsAt } from "./contentViews";
 
 // Aggregate: total watched seconds per lesson (across all users)
 const lessonWatchedAggregate = new TableAggregate<
@@ -184,11 +185,12 @@ export const setLessonCompletion = mutation({
       .unique();
 
     const watchedSeconds = lesson.duration ?? 0;
+    const now = Date.now();
 
     if (completed) {
       if (existing) {
         await ctx.db.patch(existing._id, {
-          completedAt: Date.now(),
+          completedAt: now,
           watchedSeconds,
         });
         const updatedDoc = await ctx.db.get(existing._id);
@@ -201,7 +203,7 @@ export const setLessonCompletion = mutation({
           user_id: userId,
           course_id: courseId,
           lesson_id: lessonId,
-          completedAt: Date.now(),
+          completedAt: now,
           watchedSeconds,
         });
         const doc = await ctx.db.get(id);
@@ -209,8 +211,18 @@ export const setLessonCompletion = mutation({
           await lessonWatchedAggregate.insert(ctx, doc);
           await courseWatchedAggregate.insert(ctx, doc);
         }
+        if (watchedSeconds > 0) {
+          await adjustContentBucketsAt(ctx, {
+            metric: "watchedSeconds",
+            lessonId,
+            courseId,
+            delta: watchedSeconds,
+            atMs: now,
+          });
+        }
       }
-      } else if (existing) {
+    } else if (existing) {
+      const secondsToRemove = existing.watchedSeconds ?? watchedSeconds;
       try {
         await lessonWatchedAggregate.delete(ctx, existing);
       } catch (error) {
@@ -228,6 +240,20 @@ export const setLessonCompletion = mutation({
       }
 
       await ctx.db.delete(existing._id);
+
+      if (secondsToRemove > 0) {
+        const atMs =
+          typeof existing.completedAt === "number" && existing.completedAt > 0
+            ? existing.completedAt
+            : existing._creationTime;
+        await adjustContentBucketsAt(ctx, {
+          metric: "watchedSeconds",
+          lessonId,
+          courseId,
+          delta: -secondsToRemove,
+          atMs,
+        });
+      }
     }
 
     const updated = await ctx.db

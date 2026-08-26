@@ -2,68 +2,30 @@ import { internalMutation, internalQuery } from "./_generated/server";
 import type { MutationCtx, QueryCtx } from "./_generated/server";
 import { v } from "convex/values";
 import type { Id } from "./_generated/dataModel";
+import {
+  periodKeysAt,
+  utcDayKey,
+  utcIsoWeekKey,
+  utcMonthKey,
+  viewCountsValidator,
+  type ViewCounts,
+  type ViewGranularity,
+} from "./lib/viewPeriodKeys";
 
-export type BlogViewGranularity = "total" | "day" | "week" | "month";
+/** @deprecated Prefer ViewGranularity from lib/viewPeriodKeys */
+export type BlogViewGranularity = ViewGranularity;
 
-export type BlogViewCounts = {
-  total: number;
-  day: number;
-  week: number;
-  month: number;
-};
+/** @deprecated Prefer ViewCounts from lib/viewPeriodKeys */
+export type BlogViewCounts = ViewCounts;
 
-export const blogViewCountsValidator = v.object({
-  total: v.number(),
-  day: v.number(),
-  week: v.number(),
-  month: v.number(),
-});
+export const blogViewCountsValidator = viewCountsValidator;
 
-/** UTC calendar day: YYYY-MM-DD */
-export function utcDayKey(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 10);
-}
-
-/** UTC calendar month: YYYY-MM */
-export function utcMonthKey(ms: number): string {
-  return new Date(ms).toISOString().slice(0, 7);
-}
-
-/**
- * ISO week key in UTC: YYYY-Www (week-year may differ from calendar year).
- */
-export function utcIsoWeekKey(ms: number): string {
-  const date = new Date(ms);
-  const utc = new Date(
-    Date.UTC(date.getUTCFullYear(), date.getUTCMonth(), date.getUTCDate()),
-  );
-  // ISO: week belongs to the year of its Thursday
-  const day = utc.getUTCDay() || 7;
-  utc.setUTCDate(utc.getUTCDate() + 4 - day);
-  const isoYear = utc.getUTCFullYear();
-  const yearStart = new Date(Date.UTC(isoYear, 0, 1));
-  const week = Math.ceil(
-    ((utc.getTime() - yearStart.getTime()) / 86400000 + 1) / 7,
-  );
-  return `${isoYear}-W${String(week).padStart(2, "0")}`;
-}
-
-function periodKeysAt(ms: number): Array<{
-  granularity: BlogViewGranularity;
-  periodKey: string;
-}> {
-  return [
-    { granularity: "total", periodKey: "all" },
-    { granularity: "day", periodKey: utcDayKey(ms) },
-    { granularity: "week", periodKey: utcIsoWeekKey(ms) },
-    { granularity: "month", periodKey: utcMonthKey(ms) },
-  ];
-}
+export { utcDayKey, utcMonthKey, utcIsoWeekKey };
 
 async function incrementBucket(
   ctx: MutationCtx,
   blogId: Id<"blogs">,
-  granularity: BlogViewGranularity,
+  granularity: ViewGranularity,
   periodKey: string,
   now: number,
 ): Promise<number> {
@@ -96,7 +58,7 @@ async function incrementBucket(
 async function readBucketCount(
   ctx: QueryCtx | MutationCtx,
   blogId: Id<"blogs">,
-  granularity: BlogViewGranularity,
+  granularity: ViewGranularity,
   periodKey: string,
 ): Promise<number> {
   const row = await ctx.db
@@ -116,7 +78,7 @@ export async function getBlogViewCounts(
   ctx: QueryCtx | MutationCtx,
   blogId: Id<"blogs">,
   atMs: number,
-): Promise<BlogViewCounts> {
+): Promise<ViewCounts> {
   const keys = periodKeysAt(atMs);
   const [total, day, week, month] = await Promise.all(
     keys.map(({ granularity, periodKey }) =>
@@ -159,7 +121,7 @@ export const recordBlogViewBySlug = internalMutation({
 
     const now = Date.now();
     const keys = periodKeysAt(now);
-    const counts: Partial<Record<BlogViewGranularity, number>> = {};
+    const counts: Partial<Record<ViewGranularity, number>> = {};
 
     for (const { granularity, periodKey } of keys) {
       counts[granularity] = await incrementBucket(
