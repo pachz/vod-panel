@@ -5,6 +5,7 @@ import {
   Activity,
   ArrowLeft,
   Award,
+  CheckCircle2,
   Clock,
   Eye,
   TrendingDown,
@@ -40,10 +41,14 @@ const CHART_COLORS = [
   "hsl(173 80% 40%)",
 ];
 
-const viewsChartConfig = {
+const engagementChartConfig = {
   views: {
     label: "Views",
     color: "hsl(221 83% 53%)",
+  },
+  completions: {
+    label: "Completions",
+    color: "hsl(262 83% 58%)",
   },
 } satisfies ChartConfig;
 
@@ -248,14 +253,18 @@ const ContentAnalytics = () => {
     endDate,
   });
 
-  const lineChartData = useMemo(
-    () =>
-      analytics?.viewsByDay.map((day) => ({
-        ...day,
-        label: formatShortDate(day.date),
-      })) ?? [],
-    [analytics?.viewsByDay],
-  );
+  const engagementChartData = useMemo(() => {
+    if (!analytics) return [];
+    const completionsByDate = new Map(
+      analytics.completionsByDay.map((day) => [day.date, day.completions]),
+    );
+    return analytics.viewsByDay.map((day) => ({
+      date: day.date,
+      label: formatShortDate(day.date),
+      views: day.views,
+      completions: completionsByDate.get(day.date) ?? 0,
+    }));
+  }, [analytics]);
 
   const courseViewsDonut = useMemo(() => {
     if (!analytics?.topCoursesByViews.length) return [];
@@ -290,6 +299,17 @@ const ContentAnalytics = () => {
       fill: CHART_COLORS[index % CHART_COLORS.length],
     }));
   }, [analytics?.topCoursesByWatched]);
+
+  const courseCompletionsDonut = useMemo(() => {
+    if (!analytics?.topCoursesByCompletions.length) return [];
+    return analytics.topCoursesByCompletions.map((item, index) => ({
+      key: item.id,
+      name: item.name,
+      count: item.count,
+      percentage: item.percentage,
+      fill: CHART_COLORS[index % CHART_COLORS.length],
+    }));
+  }, [analytics?.topCoursesByCompletions]);
 
   const previousPeriodLabel = analytics
     ? `vs ${formatShortDate(analytics.previousPeriod.startDate)} – ${formatDateLabel(analytics.previousPeriod.endDate)}`
@@ -352,7 +372,7 @@ const ContentAnalytics = () => {
         <p className="text-muted-foreground">Loading analytics…</p>
       ) : (
         <>
-          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-4">
+          <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-5">
             <KpiCard
               title="Total views"
               value={analytics.totalViews.toLocaleString()}
@@ -370,6 +390,13 @@ const ContentAnalytics = () => {
               subtitle="From completed lessons"
               icon={<Clock className="h-5 w-5 text-violet-600" />}
               iconClassName="bg-violet-100"
+            />
+            <KpiCard
+              title="Lesson completions"
+              value={analytics.totalCompletions.toLocaleString()}
+              subtitle="Users who finished a lesson"
+              icon={<CheckCircle2 className="h-5 w-5 text-indigo-600" />}
+              iconClassName="bg-indigo-100"
             />
             <KpiCard
               title="Top course"
@@ -398,22 +425,24 @@ const ContentAnalytics = () => {
           <div className="grid gap-4 xl:grid-cols-2">
             <div className="rounded-xl border bg-card p-5 shadow-sm xl:col-span-2">
               <div className="mb-4 flex items-center justify-between gap-3">
-                <h3 className="font-medium">Views over time</h3>
+                <h3 className="font-medium">Views & completions over time</h3>
                 <span className="rounded-md border px-2.5 py-1 text-xs text-muted-foreground">
                   Daily
                 </span>
               </div>
-              {lineChartData.every((day) => day.views === 0) ? (
+              {engagementChartData.every(
+                (day) => day.views === 0 && day.completions === 0,
+              ) ? (
                 <p className="py-10 text-center text-sm text-muted-foreground">
-                  No views in this date range.
+                  No views or completions in this date range.
                 </p>
               ) : (
                 <ChartContainer
-                  config={viewsChartConfig}
+                  config={engagementChartConfig}
                   className="aspect-auto h-[200px] w-full"
                 >
                   <AreaChart
-                    data={lineChartData}
+                    data={engagementChartData}
                     margin={{ left: 0, right: 8, top: 8 }}
                   >
                     <defs>
@@ -426,6 +455,24 @@ const ContentAnalytics = () => {
                         <stop
                           offset="100%"
                           stopColor="hsl(221 83% 53%)"
+                          stopOpacity={0.03}
+                        />
+                      </linearGradient>
+                      <linearGradient
+                        id="completionsFill"
+                        x1="0"
+                        y1="0"
+                        x2="0"
+                        y2="1"
+                      >
+                        <stop
+                          offset="0%"
+                          stopColor="hsl(262 83% 58%)"
+                          stopOpacity={0.3}
+                        />
+                        <stop
+                          offset="100%"
+                          stopColor="hsl(262 83% 58%)"
                           stopOpacity={0.03}
                         />
                       </linearGradient>
@@ -462,6 +509,15 @@ const ContentAnalytics = () => {
                       dot={false}
                       activeDot={{ r: 4 }}
                     />
+                    <Area
+                      type="monotone"
+                      dataKey="completions"
+                      stroke="hsl(262 83% 58%)"
+                      strokeWidth={2}
+                      fill="url(#completionsFill)"
+                      dot={false}
+                      activeDot={{ r: 4 }}
+                    />
                   </AreaChart>
                 </ChartContainer>
               )}
@@ -483,13 +539,20 @@ const ContentAnalytics = () => {
             />
             <BreakdownPieCard
               title="Top courses by watched hours"
-              badge="Completions"
+              badge="Hours"
               emptyMessage="No watched hours in this date range."
               total={
                 Math.round((analytics.totalWatchedSeconds / 3600) * 10) / 10
               }
               data={courseWatchDonut}
               valueSuffix="h"
+            />
+            <BreakdownPieCard
+              title="Top courses by completions"
+              badge="Users finished"
+              emptyMessage="No lesson completions in this date range."
+              total={analytics.totalCompletions}
+              data={courseCompletionsDonut}
             />
           </div>
         </>

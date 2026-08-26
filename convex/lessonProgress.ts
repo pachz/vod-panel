@@ -211,15 +211,14 @@ export const setLessonCompletion = mutation({
           await lessonWatchedAggregate.insert(ctx, doc);
           await courseWatchedAggregate.insert(ctx, doc);
         }
-        if (watchedSeconds > 0) {
-          await adjustContentBucketsAt(ctx, {
-            metric: "watchedSeconds",
-            lessonId,
-            courseId,
-            delta: watchedSeconds,
-            atMs: now,
-          });
-        }
+        await adjustContentBucketsAt(ctx, {
+          metric: "watchedSeconds",
+          lessonId,
+          courseId,
+          delta: watchedSeconds,
+          completionsDelta: 1,
+          atMs: now,
+        });
       }
     } else if (existing) {
       const secondsToRemove = existing.watchedSeconds ?? watchedSeconds;
@@ -241,19 +240,17 @@ export const setLessonCompletion = mutation({
 
       await ctx.db.delete(existing._id);
 
-      if (secondsToRemove > 0) {
-        const atMs =
+      await adjustContentBucketsAt(ctx, {
+        metric: "watchedSeconds",
+        lessonId,
+        courseId,
+        delta: -secondsToRemove,
+        completionsDelta: -1,
+        atMs:
           typeof existing.completedAt === "number" && existing.completedAt > 0
             ? existing.completedAt
-            : existing._creationTime;
-        await adjustContentBucketsAt(ctx, {
-          metric: "watchedSeconds",
-          lessonId,
-          courseId,
-          delta: -secondsToRemove,
-          atMs,
-        });
-      }
+            : existing._creationTime,
+      });
     }
 
     const updated = await ctx.db

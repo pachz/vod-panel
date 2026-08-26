@@ -231,7 +231,9 @@ export default defineSchema({
     ]),
 
   /**
-   * Time-bucketed lesson watched-seconds (sum of durations at completion).
+   * Time-bucketed lesson watch metrics.
+   * - count: sum of watched seconds (lesson duration at completion)
+   * - completions: number of lesson completions (≈ unique users per lesson)
    */
   lessonWatchBuckets: defineTable({
     lesson_id: v.id("lessons"),
@@ -244,6 +246,7 @@ export default defineSchema({
     ),
     periodKey: v.string(),
     count: v.number(),
+    completions: v.optional(v.number()),
     updatedAt: v.number(),
   })
     .index("by_entity_granularity_period", [
@@ -255,10 +258,17 @@ export default defineSchema({
       "granularity",
       "periodKey",
       "count",
+    ])
+    .index("by_granularity_period_completions", [
+      "granularity",
+      "periodKey",
+      "completions",
     ]),
 
   /**
-   * Time-bucketed course watched-seconds (sum of lesson durations at completion).
+   * Time-bucketed course watch metrics (rolled up from lesson completions).
+   * - count: sum of watched seconds
+   * - completions: number of lesson completions on the course
    */
   courseWatchBuckets: defineTable({
     course_id: v.id("courses"),
@@ -270,6 +280,7 @@ export default defineSchema({
     ),
     periodKey: v.string(),
     count: v.number(),
+    completions: v.optional(v.number()),
     updatedAt: v.number(),
   })
     .index("by_entity_granularity_period", [
@@ -281,6 +292,11 @@ export default defineSchema({
       "granularity",
       "periodKey",
       "count",
+    ])
+    .index("by_granularity_period_completions", [
+      "granularity",
+      "periodKey",
+      "completions",
     ]),
 
   coaches: defineTable({

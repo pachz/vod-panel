@@ -48,9 +48,11 @@ async function adjustLessonBucket(
   periodKey: string,
   delta: number,
   now: number,
+  completionsDelta = 0,
 ): Promise<number> {
-  if (delta === 0) return 0;
+  if (delta === 0 && completionsDelta === 0) return 0;
 
+  const isWatch = table === "lessonWatchBuckets";
   const existing = await ctx.db
     .query(table)
     .withIndex("by_entity_granularity_period", (q) =>
@@ -62,17 +64,50 @@ async function adjustLessonBucket(
     .unique();
 
   if (existing) {
-    const next = Math.max(0, existing.count + delta);
-    if (next === 0) {
+    const nextCount = Math.max(0, existing.count + delta);
+    const existingCompletions =
+      isWatch && "completions" in existing
+        ? ((existing.completions as number | undefined) ?? 0)
+        : 0;
+    const nextCompletions = isWatch
+      ? Math.max(0, existingCompletions + completionsDelta)
+      : 0;
+    if (nextCount === 0 && (!isWatch || nextCompletions === 0)) {
       await ctx.db.delete(existing._id);
       return 0;
     }
-    await ctx.db.patch(existing._id, { count: next, updatedAt: now });
-    return next;
+    if (isWatch) {
+      await ctx.db.patch(existing._id, {
+        count: nextCount,
+        completions: nextCompletions,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.patch(existing._id, { count: nextCount, updatedAt: now });
+    }
+    return nextCount;
   }
 
-  if (delta < 0) return 0;
+  if (delta < 0 && completionsDelta <= 0) return 0;
+  if (delta <= 0 && completionsDelta < 0) return 0;
 
+  if (isWatch) {
+    const initialCount = Math.max(0, delta);
+    const initialCompletions = Math.max(0, completionsDelta);
+    if (initialCount === 0 && initialCompletions === 0) return 0;
+    await ctx.db.insert(table, {
+      lesson_id: lessonId,
+      course_id: courseId,
+      granularity,
+      periodKey,
+      count: initialCount,
+      completions: initialCompletions,
+      updatedAt: now,
+    });
+    return initialCount;
+  }
+
+  if (delta <= 0) return 0;
   await ctx.db.insert(table, {
     lesson_id: lessonId,
     course_id: courseId,
@@ -92,9 +127,11 @@ async function adjustCourseBucket(
   periodKey: string,
   delta: number,
   now: number,
+  completionsDelta = 0,
 ): Promise<number> {
-  if (delta === 0) return 0;
+  if (delta === 0 && completionsDelta === 0) return 0;
 
+  const isWatch = table === "courseWatchBuckets";
   const existing = await ctx.db
     .query(table)
     .withIndex("by_entity_granularity_period", (q) =>
@@ -106,17 +143,49 @@ async function adjustCourseBucket(
     .unique();
 
   if (existing) {
-    const next = Math.max(0, existing.count + delta);
-    if (next === 0) {
+    const nextCount = Math.max(0, existing.count + delta);
+    const existingCompletions =
+      isWatch && "completions" in existing
+        ? ((existing.completions as number | undefined) ?? 0)
+        : 0;
+    const nextCompletions = isWatch
+      ? Math.max(0, existingCompletions + completionsDelta)
+      : 0;
+    if (nextCount === 0 && (!isWatch || nextCompletions === 0)) {
       await ctx.db.delete(existing._id);
       return 0;
     }
-    await ctx.db.patch(existing._id, { count: next, updatedAt: now });
-    return next;
+    if (isWatch) {
+      await ctx.db.patch(existing._id, {
+        count: nextCount,
+        completions: nextCompletions,
+        updatedAt: now,
+      });
+    } else {
+      await ctx.db.patch(existing._id, { count: nextCount, updatedAt: now });
+    }
+    return nextCount;
   }
 
-  if (delta < 0) return 0;
+  if (delta < 0 && completionsDelta <= 0) return 0;
+  if (delta <= 0 && completionsDelta < 0) return 0;
 
+  if (isWatch) {
+    const initialCount = Math.max(0, delta);
+    const initialCompletions = Math.max(0, completionsDelta);
+    if (initialCount === 0 && initialCompletions === 0) return 0;
+    await ctx.db.insert(table, {
+      course_id: courseId,
+      granularity,
+      periodKey,
+      count: initialCount,
+      completions: initialCompletions,
+      updatedAt: now,
+    });
+    return initialCount;
+  }
+
+  if (delta <= 0) return 0;
   await ctx.db.insert(table, {
     course_id: courseId,
     granularity,
@@ -135,11 +204,15 @@ export async function adjustContentBucketsAt(
     lessonId: Id<"lessons">;
     courseId: Id<"courses">;
     delta: number;
+    /** Lesson completion count delta (watch buckets only). Typically +1 / -1. */
+    completionsDelta?: number;
     atMs: number;
   },
 ): Promise<void> {
   const { metric, lessonId, courseId, delta, atMs } = args;
-  if (delta === 0) return;
+  const completionsDelta =
+    metric === "watchedSeconds" ? (args.completionsDelta ?? 0) : 0;
+  if (delta === 0 && completionsDelta === 0) return;
 
   const lessonTable: LessonBucketTable =
     metric === "views" ? "lessonViewBuckets" : "lessonWatchBuckets";
@@ -158,6 +231,7 @@ export async function adjustContentBucketsAt(
       periodKey,
       delta,
       now,
+      completionsDelta,
     );
     await adjustCourseBucket(
       ctx,
@@ -167,6 +241,7 @@ export async function adjustContentBucketsAt(
       periodKey,
       delta,
       now,
+      completionsDelta,
     );
   }
 }
@@ -663,6 +738,64 @@ async function sumCourseMetricForDays(
   return { total, byDay, byEntity };
 }
 
+async function sumCourseWatchForDays(
+  ctx: QueryCtx,
+  dayKeys: string[],
+): Promise<{
+  totalSeconds: number;
+  totalCompletions: number;
+  byDay: Array<{ date: string; seconds: number; completions: number }>;
+  byEntitySeconds: Map<Id<"courses">, number>;
+  byEntityCompletions: Map<Id<"courses">, number>;
+}> {
+  const byEntitySeconds = new Map<Id<"courses">, number>();
+  const byEntityCompletions = new Map<Id<"courses">, number>();
+  const byDay: Array<{ date: string; seconds: number; completions: number }> =
+    [];
+  let totalSeconds = 0;
+  let totalCompletions = 0;
+
+  for (const dayKey of dayKeys) {
+    const rows = await ctx.db
+      .query("courseWatchBuckets")
+      .withIndex("by_granularity_period_count", (q) =>
+        q.eq("granularity", "day").eq("periodKey", dayKey),
+      )
+      .take(500);
+
+    let daySeconds = 0;
+    let dayCompletions = 0;
+    for (const row of rows) {
+      daySeconds += row.count;
+      const completions = row.completions ?? 0;
+      dayCompletions += completions;
+      byEntitySeconds.set(
+        row.course_id,
+        (byEntitySeconds.get(row.course_id) ?? 0) + row.count,
+      );
+      byEntityCompletions.set(
+        row.course_id,
+        (byEntityCompletions.get(row.course_id) ?? 0) + completions,
+      );
+    }
+    totalSeconds += daySeconds;
+    totalCompletions += dayCompletions;
+    byDay.push({
+      date: dayKey,
+      seconds: daySeconds,
+      completions: dayCompletions,
+    });
+  }
+
+  return {
+    totalSeconds,
+    totalCompletions,
+    byDay,
+    byEntitySeconds,
+    byEntityCompletions,
+  };
+}
+
 async function sumLessonMetricForDays(
   ctx: QueryCtx,
   table: LessonBucketTable,
@@ -721,6 +854,7 @@ export const getContentEngagementDashboard = query({
     totalViews: v.number(),
     totalWatchedSeconds: v.number(),
     totalWatchedHours: v.number(),
+    totalCompletions: v.number(),
     viewsChangePercent: v.number(),
     previousPeriod: v.object({
       startDate: v.string(),
@@ -733,9 +867,16 @@ export const getContentEngagementDashboard = query({
         views: v.number(),
       }),
     ),
+    completionsByDay: v.array(
+      v.object({
+        date: v.string(),
+        completions: v.number(),
+      }),
+    ),
     topCoursesByViews: v.array(rankedItemValidator),
     topLessonsByViews: v.array(rankedItemValidator),
     topCoursesByWatched: v.array(rankedItemValidator),
+    topCoursesByCompletions: v.array(rankedItemValidator),
     topCourse: v.union(
       v.null(),
       v.object({
@@ -788,13 +929,14 @@ export const getContentEngagementDashboard = query({
     const [courseViews, courseWatch, lessonViews, previousCourseViews] =
       await Promise.all([
         sumCourseMetricForDays(ctx, "courseViewBuckets", dayKeys),
-        sumCourseMetricForDays(ctx, "courseWatchBuckets", dayKeys),
+        sumCourseWatchForDays(ctx, dayKeys),
         sumLessonMetricForDays(ctx, "lessonViewBuckets", dayKeys),
         sumCourseMetricForDays(ctx, "courseViewBuckets", previousDayKeys),
       ]);
 
     const totalViews = courseViews.total;
-    const totalWatchedSeconds = courseWatch.total;
+    const totalWatchedSeconds = courseWatch.totalSeconds;
+    const totalCompletions = courseWatch.totalCompletions;
     const previousTotalViews = previousCourseViews.total;
     const viewsChangePercent =
       previousTotalViews === 0
@@ -820,7 +962,14 @@ export const getContentEngagementDashboard = query({
       8,
     );
     const topWatchCourseEntries = topEntries(
-      [...courseWatch.byEntity.entries()].map(([key, count]) => ({
+      [...courseWatch.byEntitySeconds.entries()].map(([key, count]) => ({
+        key,
+        count,
+      })),
+      8,
+    );
+    const topCompletionCourseEntries = topEntries(
+      [...courseWatch.byEntityCompletions.entries()].map(([key, count]) => ({
         key,
         count,
       })),
@@ -830,6 +979,8 @@ export const getContentEngagementDashboard = query({
     const courseIdsNeeded = new Set<Id<"courses">>();
     for (const entry of topCourseEntries) courseIdsNeeded.add(entry.key);
     for (const entry of topWatchCourseEntries) courseIdsNeeded.add(entry.key);
+    for (const entry of topCompletionCourseEntries)
+      courseIdsNeeded.add(entry.key);
     for (const [, value] of lessonViews) courseIdsNeeded.add(value.courseId);
 
     const courseNameById = new Map<Id<"courses">, string>();
@@ -882,6 +1033,15 @@ export const getContentEngagementDashboard = query({
       percentage: toPercent(count, totalWatchedSeconds),
     }));
 
+    const topCoursesByCompletions = topCompletionCourseEntries.map(
+      ({ key, count }) => ({
+        id: key as string,
+        name: courseNameById.get(key) ?? "Unknown course",
+        count,
+        percentage: toPercent(count, totalCompletions),
+      }),
+    );
+
     const topCourse =
       topCoursesByViews[0] !== undefined
         ? {
@@ -907,6 +1067,7 @@ export const getContentEngagementDashboard = query({
       totalWatchedSeconds,
       totalWatchedHours:
         Math.round((totalWatchedSeconds / 3600) * 1000) / 1000,
+      totalCompletions,
       viewsChangePercent,
       previousPeriod: {
         startDate: previous.startDay,
@@ -917,9 +1078,14 @@ export const getContentEngagementDashboard = query({
         date: d.date,
         views: d.count,
       })),
+      completionsByDay: courseWatch.byDay.map((d) => ({
+        date: d.date,
+        completions: d.completions,
+      })),
       topCoursesByViews,
       topLessonsByViews,
       topCoursesByWatched,
+      topCoursesByCompletions,
       topCourse,
       topLesson,
     };
@@ -1044,6 +1210,7 @@ export const backfillWatchBuckets = internalMutation({
         lessonId: progress.lesson_id,
         courseId: progress.course_id,
         delta: watchedSeconds,
+        completionsDelta: 1,
         atMs,
       });
       processed += 1;
