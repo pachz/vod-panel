@@ -151,6 +151,8 @@ export function buildAssistantSystemPrompt(args: {
   userContext: string;
   userMemory: string | null;
   preferredLanguage?: "en" | "ar";
+  welcomeMessageEn?: string;
+  welcomeMessageAr?: string;
 }): string {
   const sections = [args.customInstructions.trim(), ASSISTANT_FIXED_INSTRUCTIONS];
 
@@ -171,6 +173,23 @@ export function buildAssistantSystemPrompt(args: {
   const userContext = args.userContext.trim();
   if (userContext.length > 0) {
     sections.push(`Current user context:\n${userContext}`);
+  }
+
+  const welcomeEn = args.welcomeMessageEn?.trim();
+  const welcomeAr = args.welcomeMessageAr?.trim();
+  if (welcomeEn || welcomeAr) {
+    const welcomeLines = [
+      "Conversation greeting:",
+      "The chat UI already shows a welcome message at the start of a new conversation.",
+      "Do not repeat or rephrase this greeting. Start helping with the user's request.",
+    ];
+    if (welcomeEn) {
+      welcomeLines.push(`English welcome:\n${welcomeEn}`);
+    }
+    if (welcomeAr) {
+      welcomeLines.push(`Arabic welcome:\n${welcomeAr}`);
+    }
+    sections.push(welcomeLines.join("\n"));
   }
 
   const memory = args.userMemory?.trim();

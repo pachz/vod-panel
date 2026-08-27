@@ -653,6 +653,22 @@ export default defineSchema({
     whatsAppSupportMessageEn: v.optional(v.string()),
     /** Optional overrides for the sendWhatsAppSupport fixed message (Arabic). */
     whatsAppSupportMessageAr: v.optional(v.string()),
+    /** Optional override for the new-conversation welcome message (English). */
+    welcomeMessageEn: v.optional(v.string()),
+    /** Optional override for the new-conversation welcome message (Arabic). */
+    welcomeMessageAr: v.optional(v.string()),
+    /**
+     * Suggested first-message buttons shown until the user sends a message.
+     * Missing = built-in defaults. Empty array = no buttons.
+     */
+    starterSuggestions: v.optional(
+      v.array(
+        v.object({
+          textEn: v.string(),
+          textAr: v.string(),
+        }),
+      ),
+    ),
     /** Second-pass (cleanup) AI: CTA decision system prompt override. */
     cleanupCtaSystemPrompt: v.optional(v.string()),
     /** Second-pass AI: reply rewrite system prompt override. */

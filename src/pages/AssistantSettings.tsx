@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
-import { MessagesSquare } from "lucide-react";
+import { MessagesSquare, Plus, Trash2 } from "lucide-react";
 import { api } from "../../convex/_generated/api";
 import { KnowledgeFilesSection } from "@/components/assistant/KnowledgeFilesSection";
 import { NamedInstructionsSection } from "@/components/assistant/NamedInstructionsSection";
@@ -21,6 +21,11 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import {
+  MAX_STARTER_SUGGESTION_LENGTH,
+  MAX_STARTER_SUGGESTIONS,
+  MAX_WELCOME_MESSAGE_LENGTH,
+} from "../../convex/assistant/greeting";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
@@ -30,6 +35,25 @@ const MAX_CLEANUP_PROMPT_LENGTH = 20_000;
 
 type AssistantSettingsData = FunctionReturnType<typeof api.assistant.settings.getAssistantSettings>;
 type ToolKnowledgeItem = AssistantSettingsData["tools"][number];
+type GreetingSuggestionDraft = {
+  id: string;
+  textEn: string;
+  textAr: string;
+};
+
+function newSuggestionDraftId(): string {
+  return crypto.randomUUID();
+}
+
+function draftsFromSuggestions(
+  suggestions: Array<{ textEn: string; textAr: string }>,
+): GreetingSuggestionDraft[] {
+  return suggestions.map((item) => ({
+    id: newSuggestionDraftId(),
+    textEn: item.textEn,
+    textAr: item.textAr,
+  }));
+}
 
 const AssistantSettings = () => {
   const currentUser = useQuery(api.user.getCurrentUser);
@@ -42,6 +66,7 @@ const AssistantSettings = () => {
   const updateWhatsAppSupportMessages = useMutation(
     api.assistant.settings.updateWhatsAppSupportMessages,
   );
+  const updateAssistantGreeting = useMutation(api.assistant.settings.updateAssistantGreeting);
   const updateCleanupSettings = useMutation(api.assistant.settings.updateCleanupSettings);
   const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
@@ -50,6 +75,9 @@ const AssistantSettings = () => {
   const [catalogMessageAr, setCatalogMessageAr] = useState("");
   const [whatsAppMessageEn, setWhatsAppMessageEn] = useState("");
   const [whatsAppMessageAr, setWhatsAppMessageAr] = useState("");
+  const [welcomeMessageEn, setWelcomeMessageEn] = useState("");
+  const [welcomeMessageAr, setWelcomeMessageAr] = useState("");
+  const [suggestionDrafts, setSuggestionDrafts] = useState<GreetingSuggestionDraft[]>([]);
   const [cleanupCtaSystem, setCleanupCtaSystem] = useState("");
   const [cleanupStreamSystem, setCleanupStreamSystem] = useState("");
   const [cleanupCtaUserTemplate, setCleanupCtaUserTemplate] = useState("");
@@ -61,6 +89,7 @@ const AssistantSettings = () => {
   const [togglingToolId, setTogglingToolId] = useState<string | null>(null);
   const [isSavingCatalog, setIsSavingCatalog] = useState(false);
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
+  const [isSavingGreeting, setIsSavingGreeting] = useState(false);
   const [isSavingCleanup, setIsSavingCleanup] = useState(false);
 
   useEffect(() => {
@@ -101,6 +130,19 @@ const AssistantSettings = () => {
     setWhatsAppMessageEn(settings.whatsAppSupport.messageEn);
     setWhatsAppMessageAr(settings.whatsAppSupport.messageAr);
   }, [settings?.whatsAppSupport]);
+
+  useEffect(() => {
+    if (!settings?.greeting) {
+      return;
+    }
+    setWelcomeMessageEn(settings.greeting.welcomeMessageEn);
+    setWelcomeMessageAr(settings.greeting.welcomeMessageAr);
+    setSuggestionDrafts(draftsFromSuggestions(settings.greeting.starterSuggestions));
+  }, [
+    settings?.greeting?.welcomeMessageEn,
+    settings?.greeting?.welcomeMessageAr,
+    JSON.stringify(settings?.greeting?.starterSuggestions ?? null),
+  ]);
 
   useEffect(() => {
     if (!settings?.cleanup) {
@@ -261,6 +303,71 @@ const AssistantSettings = () => {
     }
   };
 
+  const handleSaveGreeting = async () => {
+    if (welcomeMessageEn.length > MAX_WELCOME_MESSAGE_LENGTH) {
+      toast.error(
+        `English welcome message is too long by ${(welcomeMessageEn.length - MAX_WELCOME_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+    if (welcomeMessageAr.length > MAX_WELCOME_MESSAGE_LENGTH) {
+      toast.error(
+        `Arabic welcome message is too long by ${(welcomeMessageAr.length - MAX_WELCOME_MESSAGE_LENGTH).toLocaleString()} characters.`,
+      );
+      return;
+    }
+    if (suggestionDrafts.length > MAX_STARTER_SUGGESTIONS) {
+      toast.error(`You can add at most ${MAX_STARTER_SUGGESTIONS} starter buttons.`);
+      return;
+    }
+
+    for (const [index, item] of suggestionDrafts.entries()) {
+      const textEn = item.textEn.trim();
+      const textAr = item.textAr.trim();
+      if (textEn.length === 0 && textAr.length === 0) {
+        continue;
+      }
+      if (textEn.length === 0 || textAr.length === 0) {
+        toast.error(`Starter button ${index + 1} needs both English and Arabic text.`);
+        return;
+      }
+      if (textEn.length > MAX_STARTER_SUGGESTION_LENGTH) {
+        toast.error(
+          `English starter button ${index + 1} is too long by ${(textEn.length - MAX_STARTER_SUGGESTION_LENGTH).toLocaleString()} characters.`,
+        );
+        return;
+      }
+      if (textAr.length > MAX_STARTER_SUGGESTION_LENGTH) {
+        toast.error(
+          `Arabic starter button ${index + 1} is too long by ${(textAr.length - MAX_STARTER_SUGGESTION_LENGTH).toLocaleString()} characters.`,
+        );
+        return;
+      }
+    }
+
+    setIsSavingGreeting(true);
+    try {
+      const result = await updateAssistantGreeting({
+        welcomeMessageEn,
+        welcomeMessageAr,
+        starterSuggestions: suggestionDrafts.map((item) => ({
+          textEn: item.textEn,
+          textAr: item.textAr,
+        })),
+      });
+      setWelcomeMessageEn(result.greeting.welcomeMessageEn);
+      setWelcomeMessageAr(result.greeting.welcomeMessageAr);
+      setSuggestionDrafts(draftsFromSuggestions(result.greeting.starterSuggestions));
+      toast.success("Welcome message and starter buttons updated");
+    } catch (error) {
+      toast.error(
+        error instanceof Error ? error.message : "Failed to save welcome settings",
+      );
+    } finally {
+      setIsSavingGreeting(false);
+    }
+  };
+
   const parsedCleanupTemperature = Number(cleanupCtaTemperature);
   const cleanupTemperatureValid =
     Number.isFinite(parsedCleanupTemperature) &&
@@ -343,6 +450,27 @@ const AssistantSettings = () => {
   const whatsAppEnOverLimit = whatsAppMessageEn.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
   const whatsAppArOverLimit = whatsAppMessageAr.length > MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH;
 
+  const greetingDefaults = settings.greeting;
+  const greetingSuggestionsDirty =
+    suggestionDrafts.length !== greetingDefaults.starterSuggestions.length ||
+    suggestionDrafts.some((item, index) => {
+      const saved = greetingDefaults.starterSuggestions[index];
+      return !saved || item.textEn !== saved.textEn || item.textAr !== saved.textAr;
+    });
+  const greetingDirty =
+    welcomeMessageEn !== greetingDefaults.welcomeMessageEn ||
+    welcomeMessageAr !== greetingDefaults.welcomeMessageAr ||
+    greetingSuggestionsDirty;
+  const welcomeEnOverLimit = welcomeMessageEn.length > MAX_WELCOME_MESSAGE_LENGTH;
+  const welcomeArOverLimit = welcomeMessageAr.length > MAX_WELCOME_MESSAGE_LENGTH;
+  const greetingSuggestionsOverLimit = suggestionDrafts.some(
+    (item) =>
+      item.textEn.length > MAX_STARTER_SUGGESTION_LENGTH ||
+      item.textAr.length > MAX_STARTER_SUGGESTION_LENGTH,
+  );
+  const greetingOverLimit =
+    welcomeEnOverLimit || welcomeArOverLimit || greetingSuggestionsOverLimit;
+
   const cleanupDefaults = settings.cleanup;
   const cleanupDirty =
     cleanupCtaSystem !== cleanupDefaults.ctaSystemPrompt ||
@@ -388,6 +516,243 @@ const AssistantSettings = () => {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Welcome & starter buttons</CardTitle>
+          <CardDescription>
+            Every new conversation starts with this welcome message. Suggested reply buttons appear
+            only until the user sends their first message. You can add 1 to {MAX_STARTER_SUGGESTIONS}{" "}
+            buttons, or none.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="welcome-message-en">English welcome message</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  welcomeEnOverLimit ? "font-medium text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {welcomeMessageEn.length.toLocaleString()} /{" "}
+                {MAX_WELCOME_MESSAGE_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="welcome-message-en"
+              value={welcomeMessageEn}
+              onChange={(event) => setWelcomeMessageEn(event.target.value)}
+              rows={3}
+              dir="ltr"
+              aria-invalid={welcomeEnOverLimit}
+              placeholder={greetingDefaults.defaultWelcomeMessageEn}
+              className={cn(
+                "text-sm",
+                welcomeEnOverLimit && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+          </div>
+          <div className="space-y-2">
+            <div className="flex flex-wrap items-end justify-between gap-2">
+              <Label htmlFor="welcome-message-ar">Arabic welcome message</Label>
+              <p
+                className={cn(
+                  "text-xs tabular-nums",
+                  welcomeArOverLimit ? "font-medium text-destructive" : "text-muted-foreground",
+                )}
+              >
+                {welcomeMessageAr.length.toLocaleString()} /{" "}
+                {MAX_WELCOME_MESSAGE_LENGTH.toLocaleString()}
+              </p>
+            </div>
+            <Textarea
+              id="welcome-message-ar"
+              value={welcomeMessageAr}
+              onChange={(event) => setWelcomeMessageAr(event.target.value)}
+              rows={3}
+              dir="rtl"
+              aria-invalid={welcomeArOverLimit}
+              placeholder={greetingDefaults.defaultWelcomeMessageAr}
+              className={cn(
+                "text-sm",
+                welcomeArOverLimit && "border-destructive focus-visible:ring-destructive",
+              )}
+            />
+            <p className="text-xs text-muted-foreground">
+              Leave blank and save to use the built-in default.
+            </p>
+          </div>
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="space-y-1">
+                <h3 className="text-sm font-medium">Starter buttons</h3>
+                <p className="text-sm text-muted-foreground">
+                  {suggestionDrafts.length} / {MAX_STARTER_SUGGESTIONS} buttons
+                </p>
+              </div>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                disabled={suggestionDrafts.length >= MAX_STARTER_SUGGESTIONS || isSavingGreeting}
+                onClick={() =>
+                  setSuggestionDrafts((previous) => [
+                    ...previous,
+                    { id: newSuggestionDraftId(), textEn: "", textAr: "" },
+                  ])
+                }
+              >
+                <Plus className="me-1.5 h-4 w-4" />
+                Add button
+              </Button>
+            </div>
+
+            {suggestionDrafts.length === 0 ? (
+              <p className="rounded-lg border border-dashed border-border/70 bg-muted/20 p-4 text-sm text-muted-foreground">
+                No starter buttons. New conversations will show the welcome message only.
+              </p>
+            ) : (
+              <div className="space-y-3">
+                {suggestionDrafts.map((item, index) => {
+                  const enOver = item.textEn.length > MAX_STARTER_SUGGESTION_LENGTH;
+                  const arOver = item.textAr.length > MAX_STARTER_SUGGESTION_LENGTH;
+                  return (
+                    <div
+                      key={item.id}
+                      className="space-y-3 rounded-lg border border-border/60 bg-muted/20 p-4"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <p className="text-sm font-medium">Button {index + 1}</p>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          aria-label={`Remove starter button ${index + 1}`}
+                          disabled={isSavingGreeting}
+                          onClick={() =>
+                            setSuggestionDrafts((previous) =>
+                              previous.filter((suggestion) => suggestion.id !== item.id),
+                            )
+                          }
+                        >
+                          <Trash2 className="h-4 w-4 text-destructive" />
+                        </Button>
+                      </div>
+                      <div className="grid gap-3 sm:grid-cols-2">
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-end justify-between gap-2">
+                            <Label htmlFor={`starter-en-${item.id}`}>English</Label>
+                            <p
+                              className={cn(
+                                "text-xs tabular-nums",
+                                enOver ? "font-medium text-destructive" : "text-muted-foreground",
+                              )}
+                            >
+                              {item.textEn.length.toLocaleString()} /{" "}
+                              {MAX_STARTER_SUGGESTION_LENGTH.toLocaleString()}
+                            </p>
+                          </div>
+                          <Input
+                            id={`starter-en-${item.id}`}
+                            value={item.textEn}
+                            onChange={(event) =>
+                              setSuggestionDrafts((previous) =>
+                                previous.map((suggestion) =>
+                                  suggestion.id === item.id
+                                    ? { ...suggestion, textEn: event.target.value }
+                                    : suggestion,
+                                ),
+                              )
+                            }
+                            dir="ltr"
+                            aria-invalid={enOver}
+                            className={cn(
+                              "text-sm",
+                              enOver && "border-destructive focus-visible:ring-destructive",
+                            )}
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <div className="flex flex-wrap items-end justify-between gap-2">
+                            <Label htmlFor={`starter-ar-${item.id}`}>Arabic</Label>
+                            <p
+                              className={cn(
+                                "text-xs tabular-nums",
+                                arOver ? "font-medium text-destructive" : "text-muted-foreground",
+                              )}
+                            >
+                              {item.textAr.length.toLocaleString()} /{" "}
+                              {MAX_STARTER_SUGGESTION_LENGTH.toLocaleString()}
+                            </p>
+                          </div>
+                          <Input
+                            id={`starter-ar-${item.id}`}
+                            value={item.textAr}
+                            onChange={(event) =>
+                              setSuggestionDrafts((previous) =>
+                                previous.map((suggestion) =>
+                                  suggestion.id === item.id
+                                    ? { ...suggestion, textAr: event.target.value }
+                                    : suggestion,
+                                ),
+                              )
+                            }
+                            dir="rtl"
+                            aria-invalid={arOver}
+                            className={cn(
+                              "text-sm",
+                              arOver && "border-destructive focus-visible:ring-destructive",
+                            )}
+                          />
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap gap-2">
+            <Button
+              type="button"
+              onClick={() => void handleSaveGreeting()}
+              disabled={!greetingDirty || isSavingGreeting || greetingOverLimit}
+            >
+              {isSavingGreeting ? "Saving..." : "Save greeting"}
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={!greetingDirty || isSavingGreeting}
+              onClick={() => {
+                setWelcomeMessageEn(greetingDefaults.welcomeMessageEn);
+                setWelcomeMessageAr(greetingDefaults.welcomeMessageAr);
+                setSuggestionDrafts(draftsFromSuggestions(greetingDefaults.starterSuggestions));
+              }}
+            >
+              Discard
+            </Button>
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isSavingGreeting}
+              onClick={() => {
+                setWelcomeMessageEn(greetingDefaults.defaultWelcomeMessageEn);
+                setWelcomeMessageAr(greetingDefaults.defaultWelcomeMessageAr);
+                setSuggestionDrafts(
+                  draftsFromSuggestions(greetingDefaults.defaultStarterSuggestions),
+                );
+              }}
+            >
+              Reset to default
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>

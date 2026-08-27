@@ -7,6 +7,7 @@ import {
   ASSISTANT_FIXED_INSTRUCTIONS,
   buildAssistantSystemPrompt,
 } from "./prompt";
+import { resolveAssistantGreeting } from "./greeting";
 
 const SETTINGS_KEY = "global" as const;
 
@@ -109,7 +110,12 @@ export async function buildRuntimeSystemInstructions(
   nowMs: number,
   preferredLanguage?: "en" | "ar",
 ): Promise<string> {
-  const customInstructions = await loadCustomInstructions(ctx);
+  const settings = await ctx.db
+    .query("assistantSettings")
+    .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+    .unique();
+  const customInstructions = settings?.customInstructions ?? ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS;
+  const greeting = resolveAssistantGreeting(settings);
   const userContext = await loadUserContext(ctx, userId, nowMs);
   const userMemory = await loadUserMemory(ctx, userId);
 
@@ -118,6 +124,8 @@ export async function buildRuntimeSystemInstructions(
     userContext,
     userMemory,
     preferredLanguage,
+    welcomeMessageEn: greeting.welcomeMessageEn,
+    welcomeMessageAr: greeting.welcomeMessageAr,
   });
 }
 

@@ -3,6 +3,7 @@ import { v } from "convex/values";
 import { internalQuery, mutation, query } from "../_generated/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
 import { requireUser } from "../utils/auth";
+import { requireAssistantAccess } from "./lib";
 import {
   ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
   ASSISTANT_FIXED_INSTRUCTIONS,
@@ -39,6 +40,15 @@ import {
   showCoursesCatalogResultValidator,
 } from "./validators";
 import type { Infer } from "convex/values";
+import {
+  MAX_WELCOME_MESSAGE_LENGTH,
+  assistantGreetingPublicValidator,
+  assistantGreetingSettingsValidator,
+  buildGreetingSettingsResponse,
+  normalizeStarterSuggestions,
+  resolveAssistantGreeting,
+  starterSuggestionValidator,
+} from "./greeting";
 
 const SETTINGS_KEY = "global" as const;
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
@@ -337,6 +347,16 @@ export const getCleanupSettingsInternal = internalQuery({
   },
 });
 
+export const getAssistantGreeting = query({
+  args: {},
+  returns: assistantGreetingPublicValidator,
+  handler: async (ctx) => {
+    await requireAssistantAccess(ctx);
+    const settings = await getSettingsDoc(ctx);
+    return resolveAssistantGreeting(settings);
+  },
+});
+
 export const getAssistantSettings = query({
   args: {},
   returns: v.object({
@@ -346,6 +366,7 @@ export const getAssistantSettings = query({
     tools: v.array(toolKnowledgeItemValidator),
     coursesCatalog: coursesCatalogSettingsValidator,
     whatsAppSupport: whatsAppSupportSettingsValidator,
+    greeting: assistantGreetingSettingsValidator,
     cleanup: cleanupSettingsValidator,
     updatedAt: v.optional(v.number()),
   }),
@@ -440,6 +461,7 @@ export const getAssistantSettings = query({
         buttonTextAr: whatsAppResult.buttonTextAr,
         url: whatsAppResult.url,
       },
+      greeting: buildGreetingSettingsResponse(settings),
       cleanup: buildCleanupSettingsResponse(settings),
       updatedAt: settings?.updatedAt,
     };
@@ -565,6 +587,71 @@ export const updateAssistantToolKnowledge = mutation({
     }
 
     return { updatedAt: now, tool };
+  },
+});
+
+export const updateAssistantGreeting = mutation({
+  args: {
+    welcomeMessageEn: v.string(),
+    welcomeMessageAr: v.string(),
+    starterSuggestions: v.array(starterSuggestionValidator),
+  },
+  returns: v.object({
+    updatedAt: v.number(),
+    greeting: assistantGreetingSettingsValidator,
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    if (args.welcomeMessageEn.length > MAX_WELCOME_MESSAGE_LENGTH) {
+      throw new Error(
+        `English welcome message is too long (${args.welcomeMessageEn.length.toLocaleString()} characters). Please shorten it to ${MAX_WELCOME_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+    if (args.welcomeMessageAr.length > MAX_WELCOME_MESSAGE_LENGTH) {
+      throw new Error(
+        `Arabic welcome message is too long (${args.welcomeMessageAr.length.toLocaleString()} characters). Please shorten it to ${MAX_WELCOME_MESSAGE_LENGTH.toLocaleString()} characters or fewer.`,
+      );
+    }
+
+    const starterSuggestions = normalizeStarterSuggestions(args.starterSuggestions);
+    const welcomeMessageEn = args.welcomeMessageEn.trim();
+    const welcomeMessageAr = args.welcomeMessageAr.trim();
+    const now = Date.now();
+    const existing = await getSettingsDoc(ctx);
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        welcomeMessageEn,
+        welcomeMessageAr,
+        starterSuggestions,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    } else {
+      await ctx.db.insert("assistantSettings", {
+        key: SETTINGS_KEY,
+        customInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+        welcomeMessageEn,
+        welcomeMessageAr,
+        starterSuggestions,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    }
+
+    return {
+      updatedAt: now,
+      greeting: buildGreetingSettingsResponse({
+        welcomeMessageEn,
+        welcomeMessageAr,
+        starterSuggestions,
+      }),
+    };
   },
 });
 

@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react";
-import { useMutation } from "convex/react";
+import { useMutation, useQuery } from "convex/react";
 import { useUIMessages, optimisticallySendMessage, type UIMessage } from "@convex-dev/agent/react";
 import { Loader2, Send } from "lucide-react";
 import { api } from "../../../convex/_generated/api";
@@ -23,7 +23,7 @@ type AssistantChatProps = {
   onCreateThread: () => Promise<string>;
 };
 
-const SUGGESTION_KEYS = [
+const FALLBACK_SUGGESTION_KEYS = [
   "assistantSuggestion1",
   "assistantSuggestion2",
   "assistantSuggestion3",
@@ -64,6 +64,7 @@ export function AssistantChat({
   onCreateThread,
 }: AssistantChatProps) {
   const { t, isRTL, language } = useLanguage();
+  const greeting = useQuery(api.assistant.settings.getAssistantGreeting);
   const [activeThreadId, setActiveThreadId] = useState<string | null>(threadId);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);
@@ -85,7 +86,7 @@ export function AssistantChat({
     },
   );
 
-  const { results: messages } = useUIMessages(
+  const { results: messages, status: threadMessagesStatus } = useUIMessages(
     api.assistant.threads.listThreadMessages,
     activeThreadId ? { threadId: activeThreadId } : "skip",
     { initialNumItems: 50, stream: true },
@@ -103,6 +104,33 @@ export function AssistantChat({
 
   const showThinking = isSending || isStreaming || isAwaitingReply;
   const inputIsRtl = isRTL || containsArabic(input);
+
+  const hasUserMessage = useMemo(
+    () => (messages ?? []).some((message) => message.role === "user"),
+    [messages],
+  );
+  const isLoadingExistingThread =
+    Boolean(activeThreadId) && threadMessagesStatus === "LoadingFirstPage";
+  const showWelcome = !hasUserMessage && !isLoadingExistingThread;
+  const showSuggestions = showWelcome && !showThinking;
+
+  const welcomeText = useMemo(() => {
+    if (!greeting) {
+      return t("assistantEmptyState");
+    }
+    return language === "ar" ? greeting.welcomeMessageAr : greeting.welcomeMessageEn;
+  }, [greeting, language, t]);
+
+  const starterSuggestions = useMemo(() => {
+    if (!greeting) {
+      return FALLBACK_SUGGESTION_KEYS.map((key) => t(key));
+    }
+    return greeting.starterSuggestions.map((item) =>
+      language === "ar" ? item.textAr : item.textEn,
+    );
+  }, [greeting, language, t]);
+
+  const welcomeIsRtl = isRTL || containsArabic(welcomeText);
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -161,26 +189,45 @@ export function AssistantChat({
         onScrollCapture={handleScroll}
       >
         <div className="space-y-4 pb-4">
-          {!activeThreadId || messages.length === 0 ? (
-            <div className="space-y-3 py-8 text-center">
-              <p className="text-muted-foreground">{t("assistantEmptyState")}</p>
-              <div className="flex flex-wrap justify-center gap-2">
-                {SUGGESTION_KEYS.map((key) => (
-                  <Button
-                    key={key}
-                    type="button"
-                    variant="secondary"
-                    size="sm"
-                    onClick={() => void handleSend(t(key))}
-                  >
-                    {t(key)}
-                  </Button>
-                ))}
+          {showWelcome ? (
+            <div className="space-y-3">
+              <div className="flex w-full justify-start">
+                <div
+                  className={cn(
+                    "min-w-0 max-w-[92%] overflow-hidden rounded-2xl border border-border/60 bg-card/90 px-4 py-3 text-foreground sm:max-w-[80%]",
+                    welcomeIsRtl ? "assistant-rtl text-right" : "text-left",
+                  )}
+                  dir={welcomeIsRtl ? "rtl" : "ltr"}
+                  lang={language}
+                >
+                  <p className="whitespace-pre-wrap text-sm leading-relaxed">{welcomeText}</p>
+                </div>
               </div>
+              {showSuggestions && starterSuggestions.length > 0 ? (
+                <div className="flex flex-wrap gap-2">
+                  {starterSuggestions.map((suggestion, index) => (
+                    <Button
+                      key={`${index}-${suggestion}`}
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      disabled={isSending}
+                      className={cn(
+                        "h-auto max-w-full whitespace-normal text-start",
+                        (isRTL || containsArabic(suggestion)) && "assistant-rtl text-right",
+                      )}
+                      dir={isRTL || containsArabic(suggestion) ? "rtl" : "ltr"}
+                      onClick={() => void handleSend(suggestion)}
+                    >
+                      {suggestion}
+                    </Button>
+                  ))}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
-          {messages.map((message) => (
+          {(messages ?? []).map((message) => (
             <AssistantMessage key={message.key} message={message} />
           ))}
 

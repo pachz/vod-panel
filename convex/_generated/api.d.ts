@@ -18,6 +18,7 @@ import type * as assistant_cleanup from "../assistant/cleanup.js";
 import type * as assistant_context from "../assistant/context.js";
 import type * as assistant_conversations from "../assistant/conversations.js";
 import type * as assistant_courseSearchRelevance from "../assistant/courseSearchRelevance.js";
+import type * as assistant_greeting from "../assistant/greeting.js";
 import type * as assistant_knowledgeFileProcessing from "../assistant/knowledgeFileProcessing.js";
 import type * as assistant_knowledgeFiles from "../assistant/knowledgeFiles.js";
 import type * as assistant_lib from "../assistant/lib.js";
@@ -100,6 +101,7 @@ declare const fullApi: ApiFromModules<{
   "assistant/context": typeof assistant_context;
   "assistant/conversations": typeof assistant_conversations;
   "assistant/courseSearchRelevance": typeof assistant_courseSearchRelevance;
+  "assistant/greeting": typeof assistant_greeting;
   "assistant/knowledgeFileProcessing": typeof assistant_knowledgeFileProcessing;
   "assistant/knowledgeFiles": typeof assistant_knowledgeFiles;
   "assistant/lib": typeof assistant_lib;
