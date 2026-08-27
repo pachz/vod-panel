@@ -21,6 +21,7 @@ import { containsArabic } from "./language";
 type AssistantChatProps = {
   threadId: string | null;
   onCreateThread: () => Promise<string>;
+  compact?: boolean;
 };
 
 const FALLBACK_SUGGESTION_KEYS = [
@@ -62,6 +63,7 @@ function isAwaitingAssistantReply(messages: UIMessage[]): boolean {
 export function AssistantChat({
   threadId,
   onCreateThread,
+  compact = false,
 }: AssistantChatProps) {
   const { t, isRTL, language } = useLanguage();
   const greeting = useQuery(api.assistant.settings.getAssistantGreeting);
@@ -182,10 +184,13 @@ export function AssistantChat({
   };
 
   return (
-    <div className={cn("flex h-full min-h-0 flex-col gap-4", isRTL && "assistant-rtl")} dir={isRTL ? "rtl" : "ltr"}>
+    <div className={cn("flex h-full min-h-0 flex-col", compact ? "gap-3" : "gap-4", isRTL && "assistant-rtl")} dir={isRTL ? "rtl" : "ltr"}>
       <ScrollArea
         ref={scrollAreaRef}
-        className="min-h-[420px] flex-1 rounded-2xl border border-border/60 bg-card/40 p-4"
+        className={cn(
+          "flex-1 rounded-2xl border border-border/60 bg-card/40",
+          compact ? "min-h-0 p-3" : "min-h-[420px] p-4",
+        )}
         onScrollCapture={handleScroll}
       >
         <div className="space-y-4 pb-4">
@@ -269,10 +274,14 @@ export function AssistantChat({
           onKeyDown={handleKeyDown}
           placeholder={t("assistantInputPlaceholder")}
           aria-label={t("assistantInputPlaceholder")}
-          rows={3}
+          rows={compact ? 2 : 3}
           disabled={isSending}
           dir={inputIsRtl ? "rtl" : "ltr"}
-          className={cn("min-h-[88px] resize-none", inputIsRtl && "assistant-rtl text-right")}
+          className={cn(
+            "resize-none",
+            compact ? "min-h-[64px]" : "min-h-[88px]",
+            inputIsRtl && "assistant-rtl text-right",
+          )}
         />
         <Button
           type="button"

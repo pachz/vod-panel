@@ -55,6 +55,7 @@ import { UserProfile } from "@/components/UserProfile";
 import UserLayout from "@/components/UserLayout";
 import { api } from "../convex/_generated/api";
 import AnalyticsListener from "@/components/AnalyticsListener";
+import { AssistantWidget } from "@/components/assistant/AssistantWidget";
 import { useLanguage } from "@/hooks/use-language";
 
 type LocationState = {
@@ -105,7 +106,12 @@ const PrivateRoute = () => {
     );
   }
 
-  return <Outlet />;
+  return (
+    <>
+      <Outlet />
+      <AssistantWidget />
+    </>
+  );
 };
 
 const AdminRoute = () => {

@@ -347,8 +347,12 @@ const translations = {
 
     // Assistant test page
     "assistantTagline": "Discover femininity courses and self-love, and become the feminine woman you deserve to be.",
+    "assistantTitle": "Reham Diva Assistant",
+    "assistantOpenChat": "Open assistant",
+    "assistantCloseChat": "Close assistant",
     "assistantNewConversation": "New conversation",
     "assistantConversationHistory": "Recent conversations",
+    "assistantNoConversations": "No conversations yet",
     "assistantEmptyState": "Ask me about courses, your subscription, or where to begin.",
     "assistantSuggestion1": "Help me find a course about self-love.",
     "assistantSuggestion2": "Which femininity course is suitable for a beginner?",
@@ -784,8 +788,12 @@ const translations = {
 
     // Assistant test page
     "assistantTagline": "اكتشفي دورات الأنوثة وحب الذات، وكوني المرأة الأنثوية التي تستحقين أن تكونيها.",
+    "assistantTitle": "مساعدة ريهام ديفا",
+    "assistantOpenChat": "فتح المساعدة",
+    "assistantCloseChat": "إغلاق المساعدة",
     "assistantNewConversation": "محادثة جديدة",
     "assistantConversationHistory": "المحادثات الأخيرة",
+    "assistantNoConversations": "لا توجد محادثات بعد",
     "assistantEmptyState": "اسأليني عن الدورات أو اشتراكك أو من أين تبدئين.",
     "assistantSuggestion1": "ساعديني في العثور على دورة عن حب الذات.",
     "assistantSuggestion2": "ما الدورة المناسبة للمبتدئات في الأنوثة؟",
