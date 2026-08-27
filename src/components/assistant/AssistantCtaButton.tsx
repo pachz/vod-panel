@@ -1,18 +1,21 @@
 import { ExternalLink } from "lucide-react";
 import { Link } from "react-router-dom";
 import { Button } from "@/components/ui/button";
-import { useLanguage } from "@/hooks/use-language";
+import { pathForLanguage, useLanguage, type Language } from "@/hooks/use-language";
 import { trackPosthogEvent } from "@/lib/posthog";
 import { isInternalAssistantPath } from "./assistantLinks";
 
 type AssistantCtaButtonProps = {
   text: string;
   url: string;
+  language?: Language;
 };
 
-export function AssistantCtaButton({ text, url }: AssistantCtaButtonProps) {
-  const { localizedPath } = useLanguage();
+export function AssistantCtaButton({ text, url, language }: AssistantCtaButtonProps) {
+  const { language: uiLanguage } = useLanguage();
+  const displayLanguage = language ?? uiLanguage;
   const isInternal = isInternalAssistantPath(url);
+  const href = isInternal ? pathForLanguage(url, displayLanguage) : url;
 
   const trackClick = () => {
     trackPosthogEvent("assistant_cta_clicked", { url, label: text });
@@ -24,7 +27,7 @@ export function AssistantCtaButton({ text, url }: AssistantCtaButtonProps) {
   if (isInternal) {
     return (
       <Button asChild variant="cta" size="lg" className={buttonClassName}>
-        <Link to={localizedPath(url)} aria-label={text} onClick={trackClick}>
+        <Link to={href} aria-label={text} onClick={trackClick}>
           <span className="text-balance text-center">{text}</span>
         </Link>
       </Button>
@@ -40,7 +43,7 @@ export function AssistantCtaButton({ text, url }: AssistantCtaButtonProps) {
       aria-label={text}
       onClick={() => {
         trackClick();
-        window.open(url, "_blank", "noopener,noreferrer");
+        window.open(href, "_blank", "noopener,noreferrer");
       }}
     >
       <ExternalLink className="h-5 w-5 shrink-0" />

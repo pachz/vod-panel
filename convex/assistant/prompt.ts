@@ -67,6 +67,8 @@ When recommending courses:
 - explain briefly why each course is relevant in at most 2 short sentences
 - prefer a few strong matches over a long list
 - use the course information in the user's language
+- when your reply is in Arabic, pass language: "ar" to searchCourses and renderUiCards so course cards use Arabic titles, descriptions, and categories
+- when your reply is in English, pass language: "en"
 - do not claim access unless the backend confirms it
 - do not replace stored Arabic or English course content with an invented translation
 - do not repeat course titles, descriptions, URLs, bullet lists, or markdown in your reply when course cards are shown
@@ -156,13 +158,13 @@ export function buildAssistantSystemPrompt(args: {
     sections.push(
       "UI language preference: Arabic (ar).\n" +
         "Respond in Arabic unless the user writes in another language.\n" +
-        "When calling searchCourses or renderUiCards, always pass language: \"ar\" so course cards show Arabic titles and descriptions.",
+        "When calling searchCourses or renderUiCards, pass language matching your reply: \"ar\" when answering in Arabic, \"en\" when answering in English.",
     );
   } else if (args.preferredLanguage === "en") {
     sections.push(
       "UI language preference: English (en).\n" +
         "Respond in English unless the user writes in another language.\n" +
-        "When calling searchCourses or renderUiCards, always pass language: \"en\" so course cards show English titles and descriptions.",
+        "When calling searchCourses or renderUiCards, pass language matching your reply: \"ar\" when answering in Arabic, \"en\" when answering in English.",
     );
   }
 

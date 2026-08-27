@@ -136,6 +136,11 @@ All colors MUST be HSL.
   [dir="rtl"] body {
     font-family: var(--font-almarai);
   }
+
+  .assistant-rtl {
+    font-family: var(--font-almarai);
+    text-align: right;
+  }
   
   body::before {
     content: '';

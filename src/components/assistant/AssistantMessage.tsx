@@ -8,7 +8,8 @@ import { AssistantCtaButton } from "./AssistantCtaButton";
 import { parseToolResultsFromMessage } from "./parseToolResults";
 import { AssistantRichText } from "./formatAssistantText";
 import { filterCallToActionsNotDuplicatedInText } from "./assistantLinks";
-import { useLanguage } from "@/hooks/use-language";
+import { translate, useLanguage } from "@/hooks/use-language";
+import { resolveAssistantContentLanguage } from "./language";
 
 type AssistantMessageProps = {
   message: UIMessage;
@@ -28,9 +29,15 @@ function AssistantText({ message }: { message: UIMessage }) {
 }
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
-  const { t, isRTL, language } = useLanguage();
+  const { language } = useLanguage();
   const isUser = message.role === "user";
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
+  const contentLanguage = resolveAssistantContentLanguage(
+    message.text,
+    language,
+    toolResults?.courses ?? [],
+  );
+  const isContentRtl = contentLanguage === "ar";
   const visibleCallToActions =
     toolResults?.callToActions.length
       ? filterCallToActionsNotDuplicatedInText(toolResults.callToActions, message.text)
@@ -38,15 +45,15 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const coursesCatalog = toolResults?.coursesCatalog
     ? {
         message:
-          language === "ar"
+          contentLanguage === "ar"
             ? toolResults.coursesCatalog.messageAr
             : toolResults.coursesCatalog.messageEn,
         buttonText:
-          language === "ar"
+          contentLanguage === "ar"
             ? toolResults.coursesCatalog.buttonTextAr
             : toolResults.coursesCatalog.buttonTextEn,
         url:
-          language === "ar"
+          contentLanguage === "ar"
             ? toolResults.coursesCatalog.urlAr
             : toolResults.coursesCatalog.urlEn,
       }
@@ -54,11 +61,11 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
   const whatsAppSupport = toolResults?.whatsAppSupport
     ? {
         message:
-          language === "ar"
+          contentLanguage === "ar"
             ? toolResults.whatsAppSupport.messageAr
             : toolResults.whatsAppSupport.messageEn,
         buttonText:
-          language === "ar"
+          contentLanguage === "ar"
             ? toolResults.whatsAppSupport.buttonTextAr
             : toolResults.whatsAppSupport.buttonTextEn,
         url: toolResults.whatsAppSupport.url,
@@ -66,17 +73,17 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     : null;
 
   return (
-    <div
-      className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}
-      dir={isRTL ? "rtl" : "ltr"}
-    >
+    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
       <div
         className={cn(
           "min-w-0 max-w-[92%] space-y-3 overflow-hidden rounded-2xl px-4 py-3 sm:max-w-[80%]",
           isUser
             ? "bg-primary text-primary-foreground"
             : "border border-border/60 bg-card/90 text-foreground",
+          isContentRtl ? "assistant-rtl text-right" : "text-left",
         )}
+        dir={isContentRtl ? "rtl" : "ltr"}
+        lang={contentLanguage}
       >
         {isUser ? (
           <p className="whitespace-pre-wrap text-sm leading-relaxed">{message.text}</p>
@@ -86,14 +93,22 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
             {toolResults?.courses.length ? (
               <div className="grid gap-3">
                 {toolResults.courses.map((course) => (
-                  <CourseRecommendationCard key={course.id} course={course} />
+                  <CourseRecommendationCard
+                    key={course.id}
+                    course={course}
+                    contentLanguage={contentLanguage}
+                  />
                 ))}
               </div>
             ) : null}
             {toolResults?.plans.length ? (
               <div className="grid gap-3">
                 {toolResults.plans.map((plan) => (
-                  <SubscriptionPlanCard key={plan.id} plan={plan} />
+                  <SubscriptionPlanCard
+                    key={plan.id}
+                    plan={plan}
+                    contentLanguage={contentLanguage}
+                  />
                 ))}
               </div>
             ) : null}
@@ -101,12 +116,13 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
               <SubscriptionSummaryCard
                 subscription={toolResults.subscription}
                 billingPortalUrl={toolResults.billingPortalUrl}
+                contentLanguage={contentLanguage}
               />
             ) : null}
             {!toolResults?.subscription && toolResults?.billingPortalUrl ? (
               <BillingPortalButton
                 url={toolResults.billingPortalUrl}
-                label={t("assistantManageSubscription")}
+                label={translate(contentLanguage, "assistantManageSubscription")}
               />
             ) : null}
             {visibleCallToActions.length ? (
@@ -116,6 +132,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                     key={`${cta.url}-${index}`}
                     text={cta.text}
                     url={cta.url}
+                    language={contentLanguage}
                   />
                 ))}
               </div>
@@ -125,7 +142,11 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {coursesCatalog.message}
                 </p>
-                <AssistantCtaButton text={coursesCatalog.buttonText} url={coursesCatalog.url} />
+                <AssistantCtaButton
+                  text={coursesCatalog.buttonText}
+                  url={coursesCatalog.url}
+                  language={contentLanguage}
+                />
               </div>
             ) : null}
             {whatsAppSupport ? (
@@ -133,7 +154,11 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
                 <p className="text-sm leading-relaxed text-muted-foreground">
                   {whatsAppSupport.message}
                 </p>
-                <AssistantCtaButton text={whatsAppSupport.buttonText} url={whatsAppSupport.url} />
+                <AssistantCtaButton
+                  text={whatsAppSupport.buttonText}
+                  url={whatsAppSupport.url}
+                  language={contentLanguage}
+                />
               </div>
             ) : null}
           </>

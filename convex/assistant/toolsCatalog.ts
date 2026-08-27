@@ -75,7 +75,7 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     label: "Search courses",
     summary: "Find published courses by topic, goal, or keywords.",
     defaultDescription:
-      "Search published Reham Diva courses by topic, goal, or keywords. Returns course facts (including ids) for your reasoning and text replies. Does not render UI cards—call renderUiCards with selected course ids when the user should see course cards. An empty list means nothing relevant was found.",
+      "Search published Reham Diva courses by topic, goal, or keywords. Returns course facts (including ids) for your reasoning and text replies. Does not render UI cards—call renderUiCards with selected course ids when the user should see course cards. An empty list means nothing relevant was found. Pass language \"ar\" when answering in Arabic so titles and descriptions are Arabic.",
   },
   searchKnowledgeBase: {
     label: "Search knowledge base",
@@ -111,7 +111,7 @@ export const ASSISTANT_TOOL_CATALOG: Record<
     label: "Render UI cards",
     summary: "Show course, plan, subscription, billing, or CTA buttons in the chat.",
     defaultDescription:
-      "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button), callToActions (array of { text, url } for large call-to-action buttons—use https URLs or site paths starting with /). Do not put URLs or markdown links in your text reply—use callToActions or other CTA tools instead. Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards or CTA buttons.",
+      "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), showSubscription (boolean for the user's subscription card), showBillingPortal (boolean to show the billing-management button), callToActions (array of { text, url } for large call-to-action buttons—use https URLs or site paths starting with /). Pass language \"ar\" when your reply is in Arabic so course cards use Arabic titles and descriptions. Do not put URLs or markdown links in your text reply—use callToActions or other CTA tools instead. Omit fields you do not want shown. Call at most once per turn, only when the user should see visual cards or CTA buttons.",
   },
   showCoursesCatalog: {
     label: "Show courses catalog",

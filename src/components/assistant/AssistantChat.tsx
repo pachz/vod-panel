@@ -14,7 +14,9 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
 import { useLanguage } from "@/hooks/use-language";
 import { trackPosthogEvent } from "@/lib/posthog";
+import { cn } from "@/lib/utils";
 import { AssistantMessage } from "./AssistantMessage";
+import { containsArabic } from "./language";
 
 type AssistantChatProps = {
   threadId: string | null;
@@ -100,6 +102,7 @@ export function AssistantChat({
   );
 
   const showThinking = isSending || isStreaming || isAwaitingReply;
+  const inputIsRtl = isRTL || containsArabic(input);
 
   useEffect(() => {
     if (!autoScroll) return;
@@ -151,7 +154,7 @@ export function AssistantChat({
   };
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-4" dir={isRTL ? "rtl" : "ltr"}>
+    <div className={cn("flex h-full min-h-0 flex-col gap-4", isRTL && "assistant-rtl")} dir={isRTL ? "rtl" : "ltr"}>
       <ScrollArea
         ref={scrollAreaRef}
         className="min-h-[420px] flex-1 rounded-2xl border border-border/60 bg-card/40 p-4"
@@ -182,7 +185,12 @@ export function AssistantChat({
           ))}
 
           {showThinking ? (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <div
+              className={cn(
+                "flex items-center gap-2 text-sm text-muted-foreground",
+                isRTL && "assistant-rtl",
+              )}
+            >
               <Loader2 className="h-4 w-4 animate-spin" />
               {t("assistantThinking")}
             </div>
@@ -216,8 +224,8 @@ export function AssistantChat({
           aria-label={t("assistantInputPlaceholder")}
           rows={3}
           disabled={isSending}
-          dir={isRTL ? "rtl" : "ltr"}
-          className="min-h-[88px] resize-none"
+          dir={inputIsRtl ? "rtl" : "ltr"}
+          className={cn("min-h-[88px] resize-none", inputIsRtl && "assistant-rtl text-right")}
         />
         <Button
           type="button"

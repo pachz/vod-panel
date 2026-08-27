@@ -3,26 +3,30 @@ import { Link } from "react-router-dom";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader, CardTitle } from "@/components/ui/card";
-import { useLanguage } from "@/hooks/use-language";
+import { pathForLanguage, translate, useLanguage, type Language } from "@/hooks/use-language";
 import { trackPosthogEvent } from "@/lib/posthog";
+import { cn } from "@/lib/utils";
 import { formatPrice } from "@/pages/Payments/utils";
 import type { ActiveSubscriptionPlan } from "./types";
 
 type SubscriptionPlanCardProps = {
   plan: ActiveSubscriptionPlan;
+  contentLanguage?: Language;
 };
 
-export function SubscriptionPlanCard({ plan }: SubscriptionPlanCardProps) {
-  const { language, t, localizedPath } = useLanguage();
-  const paymentsUrl = localizedPath("/payments");
+export function SubscriptionPlanCard({ plan, contentLanguage }: SubscriptionPlanCardProps) {
+  const { language } = useLanguage();
+  const displayLanguage = contentLanguage ?? language;
+  const isRtl = displayLanguage === "ar";
+  const paymentsUrl = pathForLanguage("/payments", displayLanguage);
 
-  const name = language === "ar" ? plan.nameAr || plan.nameEn : plan.nameEn || plan.nameAr;
+  const name = displayLanguage === "ar" ? plan.nameAr || plan.nameEn : plan.nameEn || plan.nameAr;
   const subtitle =
-    language === "ar"
+    displayLanguage === "ar"
       ? plan.priceSubtitleAr?.trim() || plan.priceSubtitleEn?.trim()
       : plan.priceSubtitleEn?.trim() || plan.priceSubtitleAr?.trim();
   const features =
-    language === "ar"
+    displayLanguage === "ar"
       ? plan.featureTitlesAr.length > 0
         ? plan.featureTitlesAr
         : plan.featureTitlesEn
@@ -37,33 +41,37 @@ export function SubscriptionPlanCard({ plan }: SubscriptionPlanCardProps) {
       : null;
   const intervalLabel =
     plan.billingInterval === "month"
-      ? t("assistantPlanBilledMonthly")
-      : t("assistantPlanBilledYearly");
+      ? translate(displayLanguage, "assistantPlanBilledMonthly")
+      : translate(displayLanguage, "assistantPlanBilledYearly");
 
   const statsParts: string[] = [];
   if (plan.courseCount !== undefined) {
-    statsParts.push(`${plan.courseCount} ${t("assistantPlanCourses")}`);
+    statsParts.push(`${plan.courseCount} ${translate(displayLanguage, "assistantPlanCourses")}`);
   }
   if (plan.lessonCount !== undefined) {
-    statsParts.push(`${plan.lessonCount} ${t("assistantPlanLessons")}`);
+    statsParts.push(`${plan.lessonCount} ${translate(displayLanguage, "assistantPlanLessons")}`);
   }
   if (plan.hours !== undefined) {
-    statsParts.push(`${plan.hours} ${t("assistantPlanHours")}`);
+    statsParts.push(`${plan.hours} ${translate(displayLanguage, "assistantPlanHours")}`);
   }
 
   return (
-    <Card className="border-border/60 bg-card/80">
+    <Card
+      className={cn("border-border/60 bg-card/80", isRtl && "assistant-rtl text-right")}
+      dir={isRtl ? "rtl" : "ltr"}
+      lang={displayLanguage}
+    >
       <CardHeader className="space-y-2">
         <div className="flex flex-wrap items-center gap-2">
           {plan.isCurrentPlan ? (
-            <Badge variant="default">{t("assistantPlanCurrent")}</Badge>
+            <Badge variant="default">{translate(displayLanguage, "assistantPlanCurrent")}</Badge>
           ) : null}
           {plan.isAtCapacity ? (
-            <Badge variant="secondary">{t("assistantPlanAtCapacity")}</Badge>
+            <Badge variant="secondary">{translate(displayLanguage, "assistantPlanAtCapacity")}</Badge>
           ) : null}
           <Badge variant="outline">{intervalLabel}</Badge>
         </div>
-        <CardTitle className="text-lg leading-snug">{name}</CardTitle>
+        <CardTitle className={cn("text-lg leading-snug", isRtl && "text-right")}>{name}</CardTitle>
         <div className="flex flex-wrap items-baseline gap-2">
           <span className="text-2xl font-semibold tracking-tight">{priceLabel}</span>
           {compareAtLabel ? (
@@ -96,7 +104,7 @@ export function SubscriptionPlanCard({ plan }: SubscriptionPlanCardProps) {
             }}
           >
             <ExternalLink className="h-4 w-4 me-2" />
-            {t("assistantViewPlans")}
+            {translate(displayLanguage, "assistantViewPlans")}
           </Link>
         </Button>
       </CardFooter>

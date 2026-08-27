@@ -883,6 +883,24 @@ const translations = {
   },
 } as const;
 
+export type TranslationKey = keyof typeof translations.en;
+
+export function translate(language: Language, key: TranslationKey): string {
+  return translations[language][key] || translations.en[key];
+}
+
+export function pathForLanguage(path: string, language: Language): string {
+  const [pathname, search = ""] = path.split("?");
+  const params = new URLSearchParams(search);
+  if (language === DEFAULT_LANGUAGE) {
+    params.delete("lang");
+  } else {
+    params.set("lang", language);
+  }
+  const query = params.toString();
+  return query ? `${pathname}?${query}` : pathname;
+}
+
 export function useLanguage() {
   const [searchParams, setSearchParams] = useSearchParams();
   
@@ -905,24 +923,14 @@ export function useLanguage() {
   );
 
   const t = useCallback(
-    (key: keyof typeof translations.en): string => {
-      return translations[language][key] || translations.en[key];
+    (key: TranslationKey): string => {
+      return translate(language, key);
     },
     [language]
   );
 
   const localizedPath = useCallback(
-    (path: string) => {
-      if (language === DEFAULT_LANGUAGE) {
-        return path;
-      }
-
-      const [pathname, search = ""] = path.split("?");
-      const params = new URLSearchParams(search);
-      params.set("lang", language);
-      const query = params.toString();
-      return query ? `${pathname}?${query}` : pathname;
-    },
+    (path: string) => pathForLanguage(path, language),
     [language],
   );
 

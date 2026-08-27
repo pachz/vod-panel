@@ -115,7 +115,9 @@ function createSearchCoursesTool(description: string) {
       language: z
         .enum(["en", "ar"])
         .optional()
-        .describe("Display language for course fields"),
+        .describe(
+          "Display language for course fields. Use \"ar\" when your reply is in Arabic, \"en\" when your reply is in English.",
+        ),
       limit: z
         .number()
         .int()
@@ -314,7 +316,9 @@ function createRenderUiCardsTool(description: string) {
       language: z
         .enum(["en", "ar"])
         .optional()
-        .describe("Display language for course card fields"),
+        .describe(
+          "Display language for course card fields. Use \"ar\" when your reply is in Arabic, \"en\" when your reply is in English.",
+        ),
     }),
     execute: async (ctx, input): Promise<RenderUiCardsResult> => {
       return await withToolCallLogging("renderUiCards", input, async () => {
