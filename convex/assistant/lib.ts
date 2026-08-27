@@ -11,16 +11,66 @@ type AccessStatus = "included" | "locked" | "unknown";
 
 const ACTIVE_SUBSCRIPTION_STATUSES = new Set(["active", "trialing"]);
 
-/** Admin (isGod) or tech staff may use the in-panel assistant. */
+const ASSISTANT_SETTINGS_KEY = "global" as const;
+
+export function resolveWidgetVisibility(settings: {
+  showWidgetToAdmins?: boolean;
+  showWidgetToUsers?: boolean;
+} | null): { showToAdmins: boolean; showToUsers: boolean } {
+  return {
+    showToAdmins: settings?.showWidgetToAdmins === true,
+    showToUsers: settings?.showWidgetToUsers === true,
+  };
+}
+
+export function userCanSeeAssistantWidget(
+  user: { isTech?: boolean; isGod?: boolean },
+  visibility: { showToAdmins: boolean; showToUsers: boolean },
+): boolean {
+  if (user.isTech) {
+    return true;
+  }
+  if (user.isGod) {
+    return visibility.showToAdmins;
+  }
+  return visibility.showToUsers;
+}
+
+async function loadAssistantSettingsDoc(ctx: QueryCtx | MutationCtx) {
+  return await ctx.db
+    .query("assistantSettings")
+    .withIndex("by_key", (q) => q.eq("key", ASSISTANT_SETTINGS_KEY))
+    .unique();
+}
+
+/**
+ * Tech and admin accounts may always use the assistant APIs (settings and test page).
+ * Members may use them only when the chat widget is enabled for users.
+ */
 export async function requireAssistantAccess(
   ctx: QueryCtx | MutationCtx,
 ): Promise<Id<"users">> {
-  await requireUser(ctx, { requireGodOrTech: true });
+  await requireUser(ctx);
   const userId = await getAuthUserId(ctx);
   if (!userId) {
     throw new Error("Authentication required");
   }
-  return userId as Id<"users">;
+
+  const user = await ctx.db.get(userId as Id<"users">);
+  if (!user || user.deletedAt !== undefined) {
+    throw new Error("Unauthorized");
+  }
+
+  if (user.isTech || user.isGod) {
+    return userId as Id<"users">;
+  }
+
+  const settings = await loadAssistantSettingsDoc(ctx);
+  if (resolveWidgetVisibility(settings).showToUsers) {
+    return userId as Id<"users">;
+  }
+
+  throw new Error("Unauthorized");
 }
 
 /** Tech staff may review all users' assistant conversations. */

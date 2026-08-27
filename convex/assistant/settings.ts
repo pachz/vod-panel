@@ -2,8 +2,13 @@ import { getAuthUserId } from "@convex-dev/auth/server";
 import { v } from "convex/values";
 import { internalQuery, mutation, query } from "../_generated/server";
 import type { MutationCtx, QueryCtx } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { requireUser } from "../utils/auth";
-import { requireAssistantAccess } from "./lib";
+import {
+  requireAssistantAccess,
+  resolveWidgetVisibility,
+  userCanSeeAssistantWidget,
+} from "./lib";
 import {
   ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
   ASSISTANT_FIXED_INSTRUCTIONS,
@@ -91,6 +96,11 @@ const whatsAppSupportSettingsValidator = v.object({
   buttonTextEn: v.string(),
   buttonTextAr: v.string(),
   url: v.string(),
+});
+
+const widgetVisibilityValidator = v.object({
+  showToAdmins: v.boolean(),
+  showToUsers: v.boolean(),
 });
 
 const cleanupSettingsValidator = v.object({
@@ -357,6 +367,29 @@ export const getAssistantGreeting = query({
   },
 });
 
+export const getAssistantWidgetAccess = query({
+  args: {},
+  returns: v.object({
+    showWidget: v.boolean(),
+  }),
+  handler: async (ctx) => {
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      return { showWidget: false };
+    }
+
+    const user = await ctx.db.get(userId as Id<"users">);
+    if (!user || user.deletedAt !== undefined) {
+      return { showWidget: false };
+    }
+
+    const settings = await getSettingsDoc(ctx);
+    return {
+      showWidget: userCanSeeAssistantWidget(user, resolveWidgetVisibility(settings)),
+    };
+  },
+});
+
 export const getAssistantSettings = query({
   args: {},
   returns: v.object({
@@ -368,6 +401,7 @@ export const getAssistantSettings = query({
     whatsAppSupport: whatsAppSupportSettingsValidator,
     greeting: assistantGreetingSettingsValidator,
     cleanup: cleanupSettingsValidator,
+    widget: widgetVisibilityValidator,
     updatedAt: v.optional(v.number()),
   }),
   handler: async (ctx) => {
@@ -463,6 +497,7 @@ export const getAssistantSettings = query({
       },
       greeting: buildGreetingSettingsResponse(settings),
       cleanup: buildCleanupSettingsResponse(settings),
+      widget: resolveWidgetVisibility(settings),
       updatedAt: settings?.updatedAt,
     };
   },
@@ -512,6 +547,60 @@ export const updateAssistantSettings = mutation({
     }
 
     return { updatedAt: now };
+  },
+});
+
+export const updateAssistantWidgetVisibility = mutation({
+  args: {
+    showToAdmins: v.optional(v.boolean()),
+    showToUsers: v.optional(v.boolean()),
+  },
+  returns: v.object({
+    updatedAt: v.number(),
+    widget: widgetVisibilityValidator,
+  }),
+  handler: async (ctx, args) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const userId = await getAuthUserId(ctx);
+    if (!userId) {
+      throw new Error("Authentication required");
+    }
+
+    if (args.showToAdmins === undefined && args.showToUsers === undefined) {
+      throw new Error("Provide at least one widget visibility option to update.");
+    }
+
+    const now = Date.now();
+    const existing = await getSettingsDoc(ctx);
+    const current = resolveWidgetVisibility(existing);
+    const showWidgetToAdmins = args.showToAdmins ?? current.showToAdmins;
+    const showWidgetToUsers = args.showToUsers ?? current.showToUsers;
+
+    if (existing) {
+      await ctx.db.patch(existing._id, {
+        showWidgetToAdmins,
+        showWidgetToUsers,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    } else {
+      await ctx.db.insert("assistantSettings", {
+        key: SETTINGS_KEY,
+        customInstructions: ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+        showWidgetToAdmins,
+        showWidgetToUsers,
+        updatedAt: now,
+        updatedBy: userId,
+      });
+    }
+
+    return {
+      updatedAt: now,
+      widget: {
+        showToAdmins: showWidgetToAdmins,
+        showToUsers: showWidgetToUsers,
+      },
+    };
   },
 });
 

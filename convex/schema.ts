@@ -687,6 +687,10 @@ export default defineSchema({
     cleanupModel: v.optional(v.string()),
     /** Second-pass CTA decision temperature (0–2). */
     cleanupCtaTemperature: v.optional(v.number()),
+    /** When true, admin (isGod) accounts see the chat widget on every page. */
+    showWidgetToAdmins: v.optional(v.boolean()),
+    /** When true, member accounts see the chat widget on every page. */
+    showWidgetToUsers: v.optional(v.boolean()),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),

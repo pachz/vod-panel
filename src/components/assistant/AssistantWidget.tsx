@@ -39,19 +39,20 @@ function storeThreadId(threadId: string | null) {
 export function AssistantWidget() {
   const location = useLocation();
   const { t, language, isRTL } = useLanguage();
-  const currentUser = useQuery(api.user.getCurrentUser);
+  const widgetAccess = useQuery(api.assistant.settings.getAssistantWidgetAccess);
   const [open, setOpen] = useState(false);
   const [threadId, setThreadId] = useState<string | null>(readStoredThreadId);
   const createThread = useMutation(api.assistant.threads.createAssistantThread);
-  const threads = usePaginatedQuery(
-    api.assistant.threads.listThreads,
-    open ? {} : "skip",
-    { initialNumItems: 8 },
-  );
 
-  const isTech = currentUser?.isTech === true;
   const isAssistantTestPage =
     location.pathname === "/assistant-test" || location.pathname.startsWith("/assistant-test/");
+  const showWidget = widgetAccess?.showWidget === true && !isAssistantTestPage;
+
+  const threads = usePaginatedQuery(
+    api.assistant.threads.listThreads,
+    open && showWidget ? {} : "skip",
+    { initialNumItems: 8 },
+  );
 
   useEffect(() => {
     storeThreadId(threadId);
@@ -87,7 +88,7 @@ export function AssistantWidget() {
     setThreadId(selectedThreadId);
   }, []);
 
-  if (!isTech || isAssistantTestPage) {
+  if (!showWidget) {
     return null;
   }
 

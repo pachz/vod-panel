@@ -68,6 +68,7 @@ const AssistantSettings = () => {
   );
   const updateAssistantGreeting = useMutation(api.assistant.settings.updateAssistantGreeting);
   const updateCleanupSettings = useMutation(api.assistant.settings.updateCleanupSettings);
+  const updateWidgetVisibility = useMutation(api.assistant.settings.updateAssistantWidgetVisibility);
   const isTech = currentUser?.isTech ?? false;
   const [customInstructions, setCustomInstructions] = useState("");
   const [addonDrafts, setAddonDrafts] = useState<Record<string, string>>({});
@@ -91,6 +92,7 @@ const AssistantSettings = () => {
   const [isSavingWhatsApp, setIsSavingWhatsApp] = useState(false);
   const [isSavingGreeting, setIsSavingGreeting] = useState(false);
   const [isSavingCleanup, setIsSavingCleanup] = useState(false);
+  const [togglingWidget, setTogglingWidget] = useState<"admins" | "users" | null>(null);
 
   useEffect(() => {
     if (settings?.customInstructions !== undefined) {
@@ -195,6 +197,31 @@ const AssistantSettings = () => {
 
   const handleReset = () => {
     setCustomInstructions(settings.defaultCustomInstructions);
+  };
+
+  const handleToggleWidget = async (
+    field: "admins" | "users",
+    checked: boolean,
+  ) => {
+    setTogglingWidget(field);
+    try {
+      await updateWidgetVisibility(
+        field === "admins" ? { showToAdmins: checked } : { showToUsers: checked },
+      );
+      toast.success(
+        field === "admins"
+          ? checked
+            ? "Chat widget enabled for admins"
+            : "Chat widget disabled for admins"
+          : checked
+            ? "Chat widget enabled for users"
+            : "Chat widget disabled for users",
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to update widget visibility");
+    } finally {
+      setTogglingWidget(null);
+    }
   };
 
   const handleToggleTool = async (tool: ToolKnowledgeItem, enabled: boolean) => {
@@ -516,6 +543,46 @@ const AssistantSettings = () => {
           </Button>
         </div>
       </div>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Chat widget</CardTitle>
+          <CardDescription>
+            The assistant appears as a chat button in the bottom-right corner. Tech users always see
+            it. Turn these on to show it to admins or members as well.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="show-widget-admins">Show widget to admins</Label>
+              <p className="text-sm text-muted-foreground">
+                Admin accounts see the chat widget on every page.
+              </p>
+            </div>
+            <Switch
+              id="show-widget-admins"
+              checked={settings.widget?.showToAdmins ?? false}
+              disabled={togglingWidget === "admins"}
+              onCheckedChange={(checked) => void handleToggleWidget("admins", checked)}
+            />
+          </div>
+          <div className="flex items-center justify-between gap-4">
+            <div className="space-y-1">
+              <Label htmlFor="show-widget-users">Show widget to users</Label>
+              <p className="text-sm text-muted-foreground">
+                Members see the chat widget on every page.
+              </p>
+            </div>
+            <Switch
+              id="show-widget-users"
+              checked={settings.widget?.showToUsers ?? false}
+              disabled={togglingWidget === "users"}
+              onCheckedChange={(checked) => void handleToggleWidget("users", checked)}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       <Card>
         <CardHeader>
