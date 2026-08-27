@@ -1340,6 +1340,48 @@ export const deletePersonalTestResult = mutation({
   },
 });
 
+export const reorderPersonalTestResults = mutation({
+  args: {
+    testId: v.id("personalTests"),
+    resultIds: v.array(v.id("personalTestResults")),
+  },
+  returns: v.null(),
+  handler: async (ctx, { testId, resultIds }) => {
+    await requireUser(ctx, { requireGodOrTech: true });
+    const test = await getTestOrThrow(ctx, testId);
+    await markUnpublishedChanges(ctx, test);
+
+    const results = await loadResults(ctx, testId);
+
+    if (
+      resultIds.length !== results.length ||
+      new Set(resultIds).size !== results.length
+    ) {
+      throw new ConvexError({
+        code: "INVALID_INPUT",
+        message: "Invalid result order.",
+      });
+    }
+
+    const resultIdSet = new Set(results.map((result) => result._id));
+    for (const id of resultIds) {
+      if (!resultIdSet.has(id)) {
+        throw new ConvexError({
+          code: "INVALID_INPUT",
+          message: "Invalid result order.",
+        });
+      }
+    }
+
+    for (let i = 0; i < resultIds.length; i++) {
+      await ctx.db.patch(resultIds[i]!, { displayOrder: i });
+    }
+
+    await ctx.db.patch(testId, { updatedAt: Date.now() });
+    return null;
+  },
+});
+
 export const savePersonalTestQuestionResultCorrelations = mutation({
   args: {
     testId: v.id("personalTests"),

@@ -204,6 +204,152 @@ type SortableQuestionRowProps = {
   onCorrelate: (item: QuestionRow) => void;
 };
 
+type SortableResultRowProps = {
+  result: ResultRow;
+  index: number;
+  onPreview: (result: ResultRow) => void;
+  onEdit: (result: ResultRow) => void;
+  onDelete: (result: ResultRow) => void;
+};
+
+const SortableResultRow = ({
+  result,
+  index,
+  onPreview,
+  onEdit,
+  onDelete,
+}: SortableResultRowProps) => {
+  const { attributes, listeners, setNodeRef, transform, transition, isDragging } =
+    useSortable({ id: result._id });
+
+  const style = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+  };
+
+  return (
+    <TableRow
+      ref={setNodeRef}
+      style={style}
+      className={cn(isDragging && "opacity-50 bg-muted/50")}
+    >
+      <TableCell className="w-10">
+        <button
+          type="button"
+          className="cursor-grab active:cursor-grabbing touch-none p-1"
+          aria-label="Reorder result"
+          {...attributes}
+          {...listeners}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </button>
+      </TableCell>
+      <TableCell className="w-12 text-center font-semibold text-muted-foreground">
+        {index + 1}
+      </TableCell>
+      <TableCell>
+        <div className="h-10 w-16 overflow-hidden rounded-md bg-muted">
+          {result.cover_image_url ? (
+            <img
+              src={result.cover_image_url}
+              alt=""
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
+              None
+            </div>
+          )}
+        </div>
+      </TableCell>
+      <TableCell>
+        <div className="flex items-start gap-2">
+          {result.color ? (
+            <span
+              className="mt-1 h-3 w-3 shrink-0 rounded-full border"
+              style={{ backgroundColor: result.color }}
+              title={result.color}
+            />
+          ) : null}
+          <div className="min-w-0">
+            <span
+              className="font-medium"
+              style={result.color ? { color: result.color } : undefined}
+            >
+              {result.title}
+            </span>
+            <span
+              className="mt-0.5 block text-xs text-muted-foreground"
+              dir="rtl"
+            >
+              {result.title_ar}
+            </span>
+            {result.recommendedCourseIds.length > 0 ? (
+              <span className="mt-1 block text-xs text-muted-foreground">
+                {result.recommendedCourseIds.length} recommended
+                {result.recommendedCourseIds.length === 1
+                  ? " course"
+                  : " courses"}
+              </span>
+            ) : null}
+          </div>
+        </div>
+      </TableCell>
+      <TableCell>
+        {result.ctaText && result.ctaUrl ? (
+          <div>
+            <span
+              className="text-sm font-medium"
+              style={result.color ? { color: result.color } : undefined}
+            >
+              {result.ctaText}
+            </span>
+            <span className="mt-0.5 block truncate text-xs text-muted-foreground">
+              {result.ctaUrl}
+            </span>
+          </div>
+        ) : (
+          <span className="text-sm text-muted-foreground">—</span>
+        )}
+      </TableCell>
+      <TableCell>
+        <div className="flex gap-1">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onPreview(result)}
+                aria-label="Preview result"
+              >
+                <Eye className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Preview result</TooltipContent>
+          </Tooltip>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onEdit(result)}
+            aria-label="Edit result"
+          >
+            <Pencil className="h-4 w-4" />
+          </Button>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-destructive"
+            onClick={() => onDelete(result)}
+            aria-label="Delete result"
+          >
+            <Trash2 className="h-4 w-4" />
+          </Button>
+        </div>
+      </TableCell>
+    </TableRow>
+  );
+};
+
 const SortableQuestionRow = ({
   item,
   index,
@@ -296,6 +442,7 @@ const PersonalTestDetail = () => {
   const saveQuestion = useMutation(api.personalTest.savePersonalTestQuestion);
   const deleteQuestion = useMutation(api.personalTest.deletePersonalTestQuestion);
   const reorderQuestions = useMutation(api.personalTest.reorderPersonalTestQuestions);
+  const reorderResults = useMutation(api.personalTest.reorderPersonalTestResults);
   const generateImageUploadUrl = useMutation(api.personalTest.generatePersonalTestImageUploadUrl);
   const updatePersonalTestThumbnail = useMutation(api.personalTest.updatePersonalTestThumbnail);
   const updatePersonalTestCover = useMutation(api.personalTest.updatePersonalTestCover);
@@ -393,6 +540,7 @@ const PersonalTestDetail = () => {
   const [isDeletingQuestion, setIsDeletingQuestion] = useState(false);
 
   const [orderedQuestions, setOrderedQuestions] = useState<QuestionRow[]>([]);
+  const [orderedResults, setOrderedResults] = useState<ResultRow[]>([]);
 
   const [resultDialogOpen, setResultDialogOpen] = useState(false);
   const [editingResult, setEditingResult] = useState<ResultRow | null>(null);
@@ -421,6 +569,7 @@ const PersonalTestDetail = () => {
     );
     setIsEnabled(data.test.status === "published");
     setOrderedQuestions(data.questions);
+    setOrderedResults(data.results);
     setThumbnailPreviewUrl(data.test.thumbnail_image_url ?? null);
     setCoverPreviewUrl(data.test.cover_image_url ?? null);
     setStartButtonColor(
@@ -930,6 +1079,33 @@ const PersonalTestDetail = () => {
     [orderedQuestions, reorderQuestions, testId, data?.questions],
   );
 
+  const handleResultDragEnd = useCallback(
+    async (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const oldIndex = orderedResults.findIndex((result) => result._id === active.id);
+      const newIndex = orderedResults.findIndex((result) => result._id === over.id);
+      if (oldIndex < 0 || newIndex < 0) return;
+
+      const reordered = [...orderedResults];
+      const [moved] = reordered.splice(oldIndex, 1);
+      reordered.splice(newIndex, 0, moved!);
+      setOrderedResults(reordered);
+
+      try {
+        await reorderResults({
+          testId,
+          resultIds: reordered.map((result) => result._id),
+        });
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "Failed to reorder.");
+        setOrderedResults(data?.results ?? []);
+      }
+    },
+    [orderedResults, reorderResults, testId, data?.results],
+  );
+
   if (data === undefined) {
     return <p className="text-muted-foreground">Loading test…</p>;
   }
@@ -1352,6 +1528,7 @@ const PersonalTestDetail = () => {
 
             <div className="rounded-xl border bg-card overflow-hidden">
               <DndContext
+                id="personal-test-questions"
                 sensors={sensors}
                 collisionDetection={closestCenter}
                 onDragEnd={handleDragEnd}
@@ -1406,8 +1583,9 @@ const PersonalTestDetail = () => {
               <div>
                 <h2 className="font-medium">Results</h2>
                 <p className="mt-1 text-sm text-muted-foreground">
-                  Outcome pages for this test. Map answers to them from the
-                  questions table. Test takers will see these in a later update.
+                  Outcome pages for this test. Drag to reorder — when scores are
+                  equal, the result higher in this list is chosen. Map answers to
+                  them from the questions table.
                 </p>
               </div>
               <Button
@@ -1423,139 +1601,56 @@ const PersonalTestDetail = () => {
             </div>
 
             <div className="rounded-xl border bg-card overflow-hidden">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-20">Cover</TableHead>
-                    <TableHead>Title</TableHead>
-                    <TableHead>Call to action</TableHead>
-                    <TableHead className="w-32">Actions</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {results.length === 0 ? (
+              <DndContext
+                id="personal-test-results"
+                sensors={sensors}
+                collisionDetection={closestCenter}
+                onDragEnd={handleResultDragEnd}
+              >
+                <Table>
+                  <TableHeader>
                     <TableRow>
-                      <TableCell
-                        colSpan={4}
-                        className="py-8 text-center text-muted-foreground"
-                      >
-                        No results yet. Add your first result.
-                      </TableCell>
+                      <TableHead className="w-10" />
+                      <TableHead className="w-12 text-center">#</TableHead>
+                      <TableHead className="w-20">Cover</TableHead>
+                      <TableHead>Title</TableHead>
+                      <TableHead>Call to action</TableHead>
+                      <TableHead className="w-32">Actions</TableHead>
                     </TableRow>
-                  ) : (
-                    results.map((result) => (
-                      <TableRow key={result._id}>
-                        <TableCell>
-                          <div className="h-10 w-16 overflow-hidden rounded-md bg-muted">
-                            {result.cover_image_url ? (
-                              <img
-                                src={result.cover_image_url}
-                                alt=""
-                                className="h-full w-full object-cover"
-                              />
-                            ) : (
-                              <div className="flex h-full w-full items-center justify-center text-[10px] text-muted-foreground">
-                                None
-                              </div>
-                            )}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-start gap-2">
-                            {result.color ? (
-                              <span
-                                className="mt-1 h-3 w-3 shrink-0 rounded-full border"
-                                style={{ backgroundColor: result.color }}
-                                title={result.color}
-                              />
-                            ) : null}
-                            <div className="min-w-0">
-                              <span
-                                className="font-medium"
-                                style={
-                                  result.color ? { color: result.color } : undefined
-                                }
-                              >
-                                {result.title}
-                              </span>
-                              <span
-                                className="mt-0.5 block text-xs text-muted-foreground"
-                                dir="rtl"
-                              >
-                                {result.title_ar}
-                              </span>
-                              {result.recommendedCourseIds.length > 0 ? (
-                                <span className="mt-1 block text-xs text-muted-foreground">
-                                  {result.recommendedCourseIds.length} recommended
-                                  {result.recommendedCourseIds.length === 1
-                                    ? " course"
-                                    : " courses"}
-                                </span>
-                              ) : null}
-                            </div>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          {result.ctaText && result.ctaUrl ? (
-                            <div>
-                              <span
-                                className="text-sm font-medium"
-                                style={
-                                  result.color ? { color: result.color } : undefined
-                                }
-                              >
-                                {result.ctaText}
-                              </span>
-                              <span className="mt-0.5 block truncate text-xs text-muted-foreground">
-                                {result.ctaUrl}
-                              </span>
-                            </div>
-                          ) : (
-                            <span className="text-sm text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex gap-1">
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  onClick={() => setPreviewingResult(result)}
-                                  aria-label="Preview result"
-                                >
-                                  <Eye className="h-4 w-4" />
-                                </Button>
-                              </TooltipTrigger>
-                              <TooltipContent>Preview result</TooltipContent>
-                            </Tooltip>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              onClick={() => {
-                                setEditingResult(result);
-                                setResultDialogOpen(true);
-                              }}
-                              aria-label="Edit result"
-                            >
-                              <Pencil className="h-4 w-4" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="text-destructive"
-                              onClick={() => setResultToDelete(result)}
-                              aria-label="Delete result"
-                            >
-                              <Trash2 className="h-4 w-4" />
-                            </Button>
-                          </div>
+                  </TableHeader>
+                  <TableBody>
+                    {orderedResults.length === 0 ? (
+                      <TableRow>
+                        <TableCell
+                          colSpan={6}
+                          className="py-8 text-center text-muted-foreground"
+                        >
+                          No results yet. Add your first result.
                         </TableCell>
                       </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+                    ) : (
+                      <SortableContext
+                        items={orderedResults.map((result) => result._id)}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        {orderedResults.map((result, index) => (
+                          <SortableResultRow
+                            key={result._id}
+                            result={result}
+                            index={index}
+                            onPreview={setPreviewingResult}
+                            onEdit={(row) => {
+                              setEditingResult(row);
+                              setResultDialogOpen(true);
+                            }}
+                            onDelete={setResultToDelete}
+                          />
+                        ))}
+                      </SortableContext>
+                    )}
+                  </TableBody>
+                </Table>
+              </DndContext>
             </div>
           </div>
         </TabsContent>
@@ -1768,7 +1863,7 @@ const PersonalTestDetail = () => {
             text: answer.text,
             resultIds: answer.resultIds,
           }))}
-          results={results.map((result) => ({
+          results={orderedResults.map((result) => ({
             _id: result._id,
             title: result.title,
             color: result.color,

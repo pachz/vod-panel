@@ -172,6 +172,8 @@ export async function computeRecommendedCourses(
     scored.push({ result, votes });
   }
 
+  // Highest vote count wins. Equal scores use admin list order (lower
+  // displayOrder first), then earlier createdAt.
   scored.sort((a, b) => {
     if (b.votes !== a.votes) {
       return b.votes - a.votes;
