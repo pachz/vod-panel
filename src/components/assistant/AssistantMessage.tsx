@@ -29,8 +29,9 @@ function AssistantText({ message }: { message: UIMessage }) {
 }
 
 export function AssistantMessage({ message }: AssistantMessageProps) {
-  const { language } = useLanguage();
+  const { language, isRTL } = useLanguage();
   const isUser = message.role === "user";
+  const bubbleOnRight = isUser ? !isRTL : isRTL;
   const toolResults = isUser ? null : parseToolResultsFromMessage(message);
   const contentLanguage = resolveAssistantContentLanguage(
     message.text,
@@ -73,7 +74,7 @@ export function AssistantMessage({ message }: AssistantMessageProps) {
     : null;
 
   return (
-    <div className={cn("flex w-full", isUser ? "justify-end" : "justify-start")}>
+    <div className={cn("flex w-full", bubbleOnRight ? "justify-end" : "justify-start")}>
       <div
         className={cn(
           "min-w-0 max-w-[92%] space-y-3 overflow-hidden rounded-2xl px-4 py-3 sm:max-w-[80%]",

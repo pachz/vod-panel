@@ -196,7 +196,7 @@ export function AssistantChat({
         <div className="space-y-4 pb-4">
           {showWelcome ? (
             <div className="space-y-3">
-              <div className="flex w-full justify-start">
+              <div className={cn("flex w-full", isRTL ? "justify-end" : "justify-start")}>
                 <div
                   className={cn(
                     "min-w-0 max-w-[92%] overflow-hidden rounded-2xl border border-border/60 bg-card/90 px-4 py-3 text-foreground sm:max-w-[80%]",
@@ -209,7 +209,7 @@ export function AssistantChat({
                 </div>
               </div>
               {showSuggestions && starterSuggestions.length > 0 ? (
-                <div className="flex flex-wrap gap-2">
+                <div className={cn("flex flex-wrap gap-2", isRTL && "justify-end")}>
                   {starterSuggestions.map((suggestion, index) => (
                     <Button
                       key={`${index}-${suggestion}`}
@@ -240,7 +240,7 @@ export function AssistantChat({
             <div
               className={cn(
                 "flex items-center gap-2 text-sm text-muted-foreground",
-                isRTL && "assistant-rtl",
+                isRTL ? "justify-end assistant-rtl" : "justify-start",
               )}
             >
               <Loader2 className="h-4 w-4 animate-spin" />
