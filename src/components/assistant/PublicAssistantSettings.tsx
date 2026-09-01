@@ -189,7 +189,7 @@ export function PublicAssistantSettings() {
   const siteUrl = convexSiteUrl();
   const embedSnippet = useMemo(
     () =>
-      `<script src="${siteUrl}/landing/public-assistant/widget.js" data-lang="ar" async></script>`,
+      `<script src="${siteUrl}/landing/public-assistant/widget.js?v=3" data-lang="ar" async></script>`,
     [siteUrl],
   );
   const nextSnippet = useMemo(
@@ -198,7 +198,7 @@ export function PublicAssistantSettings() {
 export function PublicAssistantWidget() {
   return (
     <Script
-      src="${siteUrl}/landing/public-assistant/widget.js"
+      src="${siteUrl}/landing/public-assistant/widget.js?v=3"
       data-lang="ar"
       strategy="afterInteractive"
     />

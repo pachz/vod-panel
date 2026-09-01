@@ -9,6 +9,7 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
   var SESSION_KEY = "reham-public-assistant-session";
   var THREAD_KEY = "reham-public-assistant-thread";
   var isAr = lang === "ar";
+  var brand = "#8b3a4a";
 
   function uuid() {
     if (window.crypto && crypto.randomUUID) return crypto.randomUUID();
@@ -67,35 +68,65 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
     });
   }
 
+  function formatPrice(amount, currency) {
+    var major = Number(amount || 0) / 100;
+    var code = String(currency || "USD").toUpperCase();
+    try {
+      return new Intl.NumberFormat(isAr ? "ar" : "en", {
+        style: "currency",
+        currency: code,
+        maximumFractionDigits: major % 1 === 0 ? 0 : 2
+      }).format(major);
+    } catch (e) {
+      return (major % 1 === 0 ? String(major) : major.toFixed(2)) + " " + code;
+    }
+  }
+
   var css = [
-    "#rd-asst{all:initial;font-family:ui-sans-serif,system-ui,-apple-system,Segoe UI,sans-serif;position:fixed;z-index:2147483000;bottom:20px;inset-inline-end:20px;}",
-    "#rd-asst *{box-sizing:border-box;}",
-    "#rd-asst-btn{width:56px;height:56px;border:0;border-radius:999px;background:#8b3a4a;color:#fff;cursor:pointer;box-shadow:0 10px 30px rgba(139,58,74,.35);display:flex;align-items:center;justify-content:center;}",
-    "#rd-asst-btn:hover{background:#732f3d;}",
-    "#rd-asst-panel{position:absolute;bottom:72px;inset-inline-end:0;width:min(380px,calc(100vw - 24px));height:min(640px,calc(100vh - 110px));background:#fff;border:1px solid #eadfe2;border-radius:18px;box-shadow:0 18px 50px rgba(40,16,24,.18);display:none;flex-direction:column;overflow:hidden;color:#2b1a1f;}",
-    "#rd-asst-panel.open{display:flex;}",
-    "#rd-asst-head{padding:14px 16px;background:#8b3a4a;color:#fff;display:flex;align-items:center;justify-content:space-between;gap:8px;}",
-    "#rd-asst-head h2{margin:0;font-size:15px;font-weight:650;}",
-    "#rd-asst-head button{background:transparent;border:0;color:#fff;cursor:pointer;font-size:18px;}",
-    "#rd-asst-msgs{flex:1;overflow:auto;padding:14px;display:flex;flex-direction:column;gap:10px;background:#faf6f7;}",
-    ".rd-msg{max-width:92%;padding:10px 12px;border-radius:16px;font-size:14px;line-height:1.5;white-space:pre-wrap;}",
-    ".rd-msg.user{align-self:flex-end;background:#8b3a4a;color:#fff;}",
-    ".rd-msg.asst{align-self:flex-start;background:#fff;border:1px solid #eadfe2;}",
-    ".rd-rtl .rd-msg.user{align-self:flex-start;}",
-    ".rd-rtl .rd-msg.asst{align-self:flex-end;}",
-    ".rd-card{margin-top:8px;border:1px solid #eadfe2;border-radius:12px;overflow:hidden;background:#fff;}",
-    ".rd-card img{width:100%;height:120px;object-fit:cover;display:block;}",
-    ".rd-card .body{padding:10px;}",
-    ".rd-card h3{margin:0 0 6px;font-size:14px;}",
-    ".rd-card p{margin:0 0 8px;font-size:12px;color:#6b5560;}",
-    ".rd-cta{display:block;margin-top:8px;text-align:center;background:#8b3a4a;color:#fff;text-decoration:none;border-radius:999px;padding:8px 12px;font-size:13px;font-weight:600;}",
-    ".rd-starters{display:flex;flex-wrap:wrap;gap:6px;margin-top:8px;}",
-    ".rd-chip{border:1px solid #eadfe2;background:#fff;border-radius:999px;padding:6px 10px;font-size:12px;cursor:pointer;color:#2b1a1f;}",
-    "#rd-asst-form{display:flex;gap:8px;padding:10px;border-top:1px solid #eadfe2;background:#fff;}",
-    "#rd-asst-form textarea{flex:1;border:1px solid #eadfe2;border-radius:12px;padding:8px 10px;font:inherit;resize:none;min-height:42px;max-height:90px;}",
-    "#rd-asst-form button{border:0;border-radius:12px;background:#8b3a4a;color:#fff;padding:0 14px;cursor:pointer;font-weight:650;}",
-    ".rd-think{font-size:12px;color:#6b5560;align-self:flex-start;}",
-    ".rd-err{color:#9f1239;font-size:12px;padding:0 12px 8px;}"
+    ":host, #rd-asst { all: initial; }",
+    "#rd-asst { font-family: ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif; color: #2b1a1f; }",
+    "#rd-asst *, #rd-asst *::before, #rd-asst *::after { box-sizing: border-box; font-family: inherit; }",
+    "#rd-asst button, #rd-asst a, #rd-asst textarea, #rd-asst input { appearance: none; -webkit-appearance: none; outline: none; box-shadow: none; }",
+    "#rd-asst a { color: inherit; text-decoration: none; }",
+    "#rd-asst-btn { width: 56px; height: 56px; border: 0; border-radius: 999px; background: " + brand + "; color: #fff; cursor: pointer; box-shadow: 0 10px 30px rgba(139,58,74,.35); display: flex; align-items: center; justify-content: center; }",
+    "#rd-asst-btn:hover { background: #732f3d; }",
+    "#rd-asst-btn svg { display: block; width: 26px; height: 26px; }",
+    "#rd-asst-panel { position: absolute; bottom: 72px; inset-inline-end: 0; width: min(380px, calc(100vw - 24px)); height: min(640px, calc(100vh - 110px)); background: #fff; border: 1px solid #eadfe2; border-radius: 18px; box-shadow: 0 18px 50px rgba(40,16,24,.18); display: none; flex-direction: column; overflow: hidden; }",
+    "#rd-asst-panel.open { display: flex; }",
+    "#rd-asst-head { padding: 12px 12px 12px 16px; background: " + brand + "; color: #fff; display: flex; align-items: center; justify-content: space-between; gap: 12px; }",
+    "#rd-asst-head h2 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.2; }",
+    "#rd-asst-head .rd-head-actions { display: flex; align-items: center; gap: 6px; flex-shrink: 0; }",
+    "#rd-asst-head button { width: 32px; height: 32px; padding: 0; border: 0; border-radius: 8px; background: transparent; color: #fff; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; }",
+    "#rd-asst-head button:hover { background: rgba(255,255,255,.16); }",
+    "#rd-asst-msgs { flex: 1; overflow: auto; padding: 14px; display: flex; flex-direction: column; gap: 12px; background: #faf6f7; }",
+    ".rd-turn { display: flex; flex-direction: column; gap: 8px; max-width: 100%; }",
+    ".rd-turn.user { align-items: flex-end; }",
+    ".rd-turn.asst { align-items: flex-start; }",
+    ".rd-rtl .rd-turn.user { align-items: flex-start; }",
+    ".rd-rtl .rd-turn.asst { align-items: flex-end; }",
+    ".rd-msg { max-width: 92%; padding: 10px 12px; border-radius: 16px; font-size: 14px; line-height: 1.5; white-space: pre-wrap; }",
+    ".rd-msg.user { background: " + brand + "; color: #fff; }",
+    ".rd-msg.asst { background: #fff; border: 1px solid #eadfe2; color: #2b1a1f; }",
+    ".rd-cards, .rd-actions { width: min(100%, 320px); max-width: 92%; display: flex; flex-direction: column; gap: 8px; }",
+    ".rd-card { border: 1px solid #eadfe2; border-radius: 14px; overflow: hidden; background: #fff; box-shadow: 0 1px 2px rgba(40,16,24,.06); }",
+    ".rd-card img { width: 100%; height: 120px; object-fit: cover; display: block; background: #f3e9ec; }",
+    ".rd-card .body { padding: 12px 14px; display: flex; flex-direction: column; gap: 4px; }",
+    ".rd-card h3 { margin: 0; font-size: 15px; font-weight: 650; line-height: 1.3; color: #2b1a1f; }",
+    ".rd-card .rd-price { margin: 0; font-size: 18px; font-weight: 650; color: #2b1a1f; }",
+    ".rd-card p { margin: 0; font-size: 12px; line-height: 1.45; color: #6b5560; }",
+    ".rd-cta { display: flex; align-items: center; justify-content: center; width: 100%; min-height: 40px; margin: 0; padding: 8px 14px; border: 0 !important; border-radius: 999px; background: " + brand + " !important; color: #fff !important; text-align: center; text-decoration: none !important; font-size: 13px; font-weight: 650; line-height: 1.3; cursor: pointer; box-shadow: none !important; outline: none !important; }",
+    ".rd-cta:hover { background: #732f3d !important; color: #fff !important; }",
+    ".rd-cta:focus-visible { box-shadow: 0 0 0 2px #fff, 0 0 0 4px " + brand + " !important; }",
+    ".rd-starters { display: flex; flex-wrap: wrap; gap: 8px; max-width: 92%; }",
+    ".rd-chip { border: 1px solid #eadfe2; background: #fff; border-radius: 999px; padding: 8px 12px; font-size: 12px; cursor: pointer; color: #2b1a1f; line-height: 1.35; }",
+    ".rd-chip:hover { background: #f7eef1; }",
+    "#rd-asst-form { display: flex; gap: 8px; padding: 12px; border-top: 1px solid #eadfe2; background: #fff; align-items: flex-end; }",
+    "#rd-asst-form textarea { flex: 1; border: 1px solid #eadfe2; border-radius: 12px; padding: 10px 12px; font: inherit; font-size: 14px; resize: none; min-height: 42px; max-height: 90px; color: #2b1a1f; background: #fff; }",
+    "#rd-asst-form textarea:focus { border-color: " + brand + "; }",
+    "#rd-asst-form button[type=submit] { border: 0; border-radius: 12px; background: " + brand + "; color: #fff; padding: 0 14px; min-height: 42px; cursor: pointer; font-weight: 650; font-size: 14px; }",
+    "#rd-asst-form button[type=submit]:hover { background: #732f3d; }",
+    ".rd-think { font-size: 12px; color: #6b5560; }",
+    ".rd-err { color: #9f1239; font-size: 12px; padding: 0 12px 8px; }"
   ].join("");
 
   var sessionId = getSessionId();
@@ -105,23 +136,32 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
   var sending = false;
 
   var root = el("div", { id: "rd-asst", dir: isAr ? "rtl" : "ltr" });
+  root.style.position = "relative";
   var style = el("style", { text: css });
-  var button = el("button", { id: "rd-asst-btn", type: "button", "aria-label": isAr ? "المساعد" : "Assistant" }, [
-    el("span", { html: '<svg width="26" height="26" viewBox="0 0 24 24" fill="none"><path d="M12 3c-1.7 0-3 1.4-3 3v.3C6.7 7 5 9 5 11.4V16c0 1.1.9 2 2 2h1v1.2c0 .7.8 1.1 1.4.7L12 18h5c1.1 0 2-.9 2-2v-4.6C19 9 17.3 7 14.9 6.3V6c0-1.6-1.3-3-2.9-3Z" fill="currentColor"/></svg>' })
-  ]);
+  var iconPlus = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>';
+  var iconClose = '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>';
+  var iconBot = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 8V4H8"/><rect width="16" height="12" x="4" y="8" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/></svg>';
+  var iconFabClose = '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6 6 18"/><path d="m6 6 12 12"/></svg>';
+  var button = el("button", { id: "rd-asst-btn", type: "button", "aria-label": isAr ? "المساعد" : "Assistant", html: iconBot });
   var panel = el("div", { id: "rd-asst-panel" });
   var title = isAr ? "مساعدة رحام ديفا" : "Reham Diva help";
   var head = el("div", { id: "rd-asst-head" }, [
     el("h2", { text: title }),
-    el("div", null, [
-      el("button", { type: "button", title: isAr ? "محادثة جديدة" : "New chat", onClick: function () { startNewChat(); } }, [el("span", { text: "+" })]),
-      el("button", { type: "button", title: isAr ? "إغلاق" : "Close", onClick: function () { closePanel(); } }, [el("span", { text: "×" })])
+    el("div", { class: "rd-head-actions" }, [
+      el("button", { type: "button", title: isAr ? "محادثة جديدة" : "New chat", "aria-label": isAr ? "محادثة جديدة" : "New chat", html: iconPlus, onClick: function () { startNewChat(); } }),
+      el("button", { type: "button", title: isAr ? "إغلاق" : "Close", "aria-label": isAr ? "إغلاق" : "Close", html: iconClose, onClick: function () { closePanel(); } })
     ])
   ]);
   var msgs = el("div", { id: "rd-asst-msgs", class: isAr ? "rd-rtl" : "" });
   var err = el("div", { class: "rd-err" });
   var form = el("form", { id: "rd-asst-form" });
-  var input = el("textarea", { rows: "1", placeholder: isAr ? "اكتبي رسالتك…" : "Type a message…" });
+  var input = el("textarea", {
+    rows: "1",
+    placeholder: isAr ? "اكتبي رسالتك…" : "Type a message…",
+    "data-gramm": "false",
+    "data-gramm_editor": "false",
+    "data-enable-grammarly": "false"
+  });
   var sendBtn = el("button", { type: "submit", text: isAr ? "إرسال" : "Send" });
   form.appendChild(input);
   form.appendChild(sendBtn);
@@ -132,12 +172,25 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
   root.appendChild(style);
   root.appendChild(panel);
   root.appendChild(button);
-  document.body.appendChild(root);
+
+  var host = el("div", { id: "rd-asst-host" });
+  host.style.cssText = "all:initial;position:fixed;z-index:2147483000;bottom:20px;inset-inline-end:20px;";
+  document.body.appendChild(host);
+  var mount = host;
+  if (host.attachShadow) {
+    mount = host.attachShadow({ mode: "open" });
+  }
+  mount.appendChild(root);
 
   function setError(message) { err.textContent = message || ""; }
 
-  function openPanel() { panel.classList.add("open"); refresh(); }
-  function closePanel() { panel.classList.remove("open"); stopPoll(); }
+  function setFabOpen(open) {
+    button.innerHTML = open ? iconFabClose : iconBot;
+    button.setAttribute("aria-label", open ? (isAr ? "إغلاق" : "Close") : (isAr ? "المساعد" : "Assistant"));
+  }
+
+  function openPanel() { panel.classList.add("open"); setFabOpen(true); refresh(); }
+  function closePanel() { panel.classList.remove("open"); setFabOpen(false); stopPoll(); }
   button.addEventListener("click", function () {
     if (panel.classList.contains("open")) closePanel(); else openPanel();
   });
@@ -167,12 +220,23 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
     return threadId;
   }
 
+  function ctaLink(href, label) {
+    return el("a", {
+      class: "rd-cta",
+      href: href,
+      target: "_blank",
+      rel: "noopener noreferrer",
+      text: label
+    });
+  }
+
   function renderWelcome() {
     msgs.innerHTML = "";
     if (!config) return;
     var welcome = isAr ? config.greeting.welcomeMessageAr : config.greeting.welcomeMessageEn;
-    var bubble = el("div", { class: "rd-msg asst", text: welcome });
-    msgs.appendChild(bubble);
+    var turn = el("div", { class: "rd-turn asst" });
+    turn.appendChild(el("div", { class: "rd-msg asst", text: welcome }));
+    msgs.appendChild(turn);
     var starters = config.greeting.starterSuggestions || [];
     if (starters.length) {
       var wrap = el("div", { class: "rd-starters" });
@@ -190,17 +254,20 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
 
   function cardHtml(course) {
     var img = course.imageUrl ? '<img src="' + escapeHtml(course.imageUrl) + '" alt="">' : "";
-    return '<div class="rd-card">' + img + '<div class="body"><h3>' + escapeHtml(course.title) + "</h3><p>" +
-      escapeHtml((course.description || "").slice(0, 180)) + '</p><a class="rd-cta" target="_blank" rel="noopener" href="' +
+    var desc = escapeHtml((course.description || "").slice(0, 180));
+    return '<div class="rd-card">' + img + '<div class="body"><h3>' + escapeHtml(course.title) + "</h3>" +
+      (desc ? "<p>" + desc + "</p>" : "") +
+      '<a class="rd-cta" target="_blank" rel="noopener noreferrer" href="' +
       escapeHtml(courseUrl(course.slug)) + '">' + (isAr ? "عرض الدورة" : "View course") + "</a></div></div>";
   }
 
   function planHtml(plan) {
     var name = isAr ? (plan.nameAr || plan.nameEn) : (plan.nameEn || plan.nameAr);
-    var price = (plan.priceAmount / 100).toFixed(plan.priceAmount % 100 === 0 ? 0 : 2);
-    return '<div class="rd-card"><div class="body"><h3>' + escapeHtml(name) + "</h3><p>" +
-      escapeHtml(price + " " + plan.priceCurrency) + '</p><a class="rd-cta" target="_blank" rel="noopener" href="' +
-      escapeHtml(packagesUrl()) + '">' + (isAr ? "عرض الباقات" : "View plans") + "</a></div></div>";
+    var interval = plan.billingInterval === "year"
+      ? (isAr ? "سنوي" : "Billed yearly")
+      : (isAr ? "شهري" : "Billed monthly");
+    return '<div class="rd-card"><div class="body"><h3>' + escapeHtml(name) + '</h3><p class="rd-price">' +
+      escapeHtml(formatPrice(plan.priceAmount, plan.priceCurrency)) + "</p><p>" + escapeHtml(interval) + "</p></div></div>";
   }
 
   function renderMessages(payload) {
@@ -210,40 +277,55 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
       renderWelcome();
     }
     list.forEach(function (message) {
-      var bubble = el("div", { class: "rd-msg " + (message.role === "user" ? "user" : "asst") });
-      if (message.text) bubble.textContent = message.text;
-      (message.courses || []).forEach(function (course) {
-        bubble.insertAdjacentHTML("beforeend", cardHtml(course));
-      });
-      (message.plans || []).forEach(function (plan) {
-        bubble.insertAdjacentHTML("beforeend", planHtml(plan));
-      });
+      var isUser = message.role === "user";
+      var turn = el("div", { class: "rd-turn " + (isUser ? "user" : "asst") });
+      if (message.text) {
+        turn.appendChild(el("div", { class: "rd-msg " + (isUser ? "user" : "asst"), text: message.text }));
+      }
+      var courses = message.courses || [];
+      var plans = message.plans || [];
+      if (courses.length || plans.length) {
+        var cards = el("div", { class: "rd-cards" });
+        courses.forEach(function (course) {
+          cards.insertAdjacentHTML("beforeend", cardHtml(course));
+        });
+        plans.forEach(function (plan) {
+          cards.insertAdjacentHTML("beforeend", planHtml(plan));
+        });
+        turn.appendChild(cards);
+      }
+      var actions = el("div", { class: "rd-actions" });
       (message.callToActions || []).forEach(function (cta) {
-        bubble.appendChild(el("a", { class: "rd-cta", href: cta.url, target: "_blank", rel: "noopener", text: cta.text }));
+        actions.appendChild(ctaLink(cta.url, cta.text));
       });
+      if (plans.length && !(message.callToActions || []).length) {
+        actions.appendChild(ctaLink(packagesUrl(), isAr ? "عرض الباقات" : "View plans"));
+      }
       if (message.coursesCatalog) {
         var catalog = message.coursesCatalog;
-        bubble.appendChild(el("p", { text: isAr ? catalog.messageAr : catalog.messageEn }));
-        bubble.appendChild(el("a", {
-          class: "rd-cta",
-          href: isAr ? catalog.urlAr : catalog.urlEn,
-          target: "_blank",
-          rel: "noopener",
-          text: isAr ? catalog.buttonTextAr : catalog.buttonTextEn
-        }));
+        if (catalog.messageEn || catalog.messageAr) {
+          turn.appendChild(el("div", {
+            class: "rd-msg asst",
+            text: isAr ? catalog.messageAr : catalog.messageEn
+          }));
+        }
+        actions.appendChild(ctaLink(
+          isAr ? catalog.urlAr : catalog.urlEn,
+          isAr ? catalog.buttonTextAr : catalog.buttonTextEn
+        ));
       }
       if (message.whatsAppSupport) {
         var wa = message.whatsAppSupport;
-        bubble.appendChild(el("p", { text: isAr ? wa.messageAr : wa.messageEn }));
-        bubble.appendChild(el("a", {
-          class: "rd-cta",
-          href: wa.url,
-          target: "_blank",
-          rel: "noopener",
-          text: isAr ? wa.buttonTextAr : wa.buttonTextEn
-        }));
+        if (wa.messageEn || wa.messageAr) {
+          turn.appendChild(el("div", {
+            class: "rd-msg asst",
+            text: isAr ? wa.messageAr : wa.messageEn
+          }));
+        }
+        actions.appendChild(ctaLink(wa.url, isAr ? wa.buttonTextAr : wa.buttonTextEn));
       }
-      msgs.appendChild(bubble);
+      if (actions.childNodes.length) turn.appendChild(actions);
+      if (turn.childNodes.length) msgs.appendChild(turn);
     });
     if (payload.pending) msgs.appendChild(el("div", { class: "rd-think", text: isAr ? "جاري التفكير…" : "Thinking…" }));
     msgs.scrollTop = msgs.scrollHeight;
@@ -302,10 +384,10 @@ export const PUBLIC_ASSISTANT_WIDGET_JS = String.raw`"use strict";
   api("/landing/public-assistant/config").then(function (data) {
     config = data;
     if (!data.enabled) {
-      root.remove();
+      host.remove();
     }
   }).catch(function () {
-    root.remove();
+    host.remove();
   });
 })();
 `;

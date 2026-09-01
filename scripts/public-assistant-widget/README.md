@@ -18,7 +18,7 @@ import Script from "next/script";
 export function PublicAssistantWidget() {
   return (
     <Script
-      src="https://YOUR_DEPLOYMENT.convex.site/landing/public-assistant/widget.js"
+      src="https://YOUR_DEPLOYMENT.convex.site/landing/public-assistant/widget.js?v=3"
       data-lang="ar"
       strategy="afterInteractive"
     />
