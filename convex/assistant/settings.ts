@@ -14,6 +14,7 @@ import {
   ASSISTANT_FIXED_INSTRUCTIONS,
   loadCustomInstructions,
 } from "./promptData";
+import { assistantAudienceValidator, settingsKeyForAudience } from "./audience";
 import {
   ASSISTANT_CLEANUP_CTA_SYSTEM,
   ASSISTANT_CLEANUP_CTA_USER_PROMPT_TEMPLATE,
@@ -56,18 +57,18 @@ import {
 } from "./greeting";
 
 const SETTINGS_KEY = "global" as const;
-const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
-const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
-const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
-const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
+export const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
+export const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
+export const MAX_COURSES_CATALOG_MESSAGE_LENGTH = 500;
+export const MAX_WHATSAPP_SUPPORT_MESSAGE_LENGTH = 500;
 const MAX_WHATSAPP_PREFILL_LENGTH = 300;
-const MAX_CLEANUP_PROMPT_LENGTH = 20_000;
+export const MAX_CLEANUP_PROMPT_LENGTH = 20_000;
 const MAX_CLEANUP_MODEL_LENGTH = 100;
 
 type ShowCoursesCatalogResult = Infer<typeof showCoursesCatalogResultValidator>;
 type SendWhatsAppSupportResult = Infer<typeof sendWhatsAppSupportResultValidator>;
 
-const toolKnowledgeItemValidator = v.object({
+export const toolKnowledgeItemValidator = v.object({
   toolId: assistantToolIdValidator,
   label: v.string(),
   summary: v.string(),
@@ -77,7 +78,12 @@ const toolKnowledgeItemValidator = v.object({
   effectiveDescription: v.string(),
 });
 
-const coursesCatalogSettingsValidator = v.object({
+const widgetVisibilityValidator = v.object({
+  showToAdmins: v.boolean(),
+  showToUsers: v.boolean(),
+});
+
+export const coursesCatalogSettingsValidator = v.object({
   messageEn: v.string(),
   messageAr: v.string(),
   defaultMessageEn: v.string(),
@@ -88,7 +94,7 @@ const coursesCatalogSettingsValidator = v.object({
   urlAr: v.string(),
 });
 
-const whatsAppSupportSettingsValidator = v.object({
+export const whatsAppSupportSettingsValidator = v.object({
   messageEn: v.string(),
   messageAr: v.string(),
   defaultMessageEn: v.string(),
@@ -98,12 +104,7 @@ const whatsAppSupportSettingsValidator = v.object({
   url: v.string(),
 });
 
-const widgetVisibilityValidator = v.object({
-  showToAdmins: v.boolean(),
-  showToUsers: v.boolean(),
-});
-
-const cleanupSettingsValidator = v.object({
+export const cleanupSettingsValidator = v.object({
   ctaSystemPrompt: v.string(),
   streamSystemPrompt: v.string(),
   ctaUserPromptTemplate: v.string(),
@@ -118,7 +119,7 @@ const cleanupSettingsValidator = v.object({
   defaultCtaTemperature: v.number(),
 });
 
-function resolveCleanupSettings(settings: {
+export function resolveCleanupSettings(settings: {
   cleanupCtaSystemPrompt?: string;
   cleanupStreamSystemPrompt?: string;
   cleanupCtaUserPromptTemplate?: string;
@@ -142,7 +143,7 @@ function resolveCleanupSettings(settings: {
   };
 }
 
-function buildCleanupSettingsResponse(settings: {
+export function buildCleanupSettingsResponse(settings: {
   cleanupCtaSystemPrompt?: string;
   cleanupStreamSystemPrompt?: string;
   cleanupCtaUserPromptTemplate?: string;
@@ -234,14 +235,17 @@ export function buildSendWhatsAppSupportResult(
   };
 }
 
-async function getSettingsDoc(ctx: QueryCtx | MutationCtx) {
+export async function getSettingsDoc(
+  ctx: QueryCtx | MutationCtx,
+  key: "global" | "public" = SETTINGS_KEY,
+) {
   return await ctx.db
     .query("assistantSettings")
-    .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+    .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
 }
 
-function normalizeToolOverrides(
+export function normalizeToolOverrides(
   raw: Record<string, AssistantToolOverride> | undefined,
 ): AssistantToolOverrides {
   if (!raw) {
@@ -261,12 +265,13 @@ function normalizeToolOverrides(
   return normalized;
 }
 
-function buildToolKnowledgeList(
+export function buildToolKnowledgeList(
   overrides: AssistantToolOverrides,
   knowledgeRuntimeDescription?: string | null,
   namedInstructionsRuntimeDescription?: string | null,
+  toolIds: ReadonlyArray<AssistantToolId> = ASSISTANT_TOOL_IDS,
 ) {
-  return ASSISTANT_TOOL_IDS.map((toolId) => {
+  return toolIds.map((toolId) => {
     const catalog = ASSISTANT_TOOL_CATALOG[toolId];
     const override = overrides[toolId];
     const descriptionAddon = override?.descriptionAddon ?? "";
@@ -299,15 +304,22 @@ function buildToolKnowledgeList(
 }
 
 export const getCustomInstructionsInternal = internalQuery({
-  args: {},
+  args: {
+    audience: v.optional(assistantAudienceValidator),
+  },
   returns: v.string(),
-  handler: async (ctx): Promise<string> => {
-    return await loadCustomInstructions(ctx);
+  handler: async (ctx, args): Promise<string> => {
+    return await loadCustomInstructions(
+      ctx,
+      settingsKeyForAudience(args.audience ?? "members"),
+    );
   },
 });
 
 export const getToolOverridesInternal = internalQuery({
-  args: {},
+  args: {
+    audience: v.optional(assistantAudienceValidator),
+  },
   returns: v.record(
     v.string(),
     v.object({
@@ -315,17 +327,25 @@ export const getToolOverridesInternal = internalQuery({
       descriptionAddon: v.string(),
     }),
   ),
-  handler: async (ctx): Promise<AssistantToolOverrides> => {
-    const settings = await getSettingsDoc(ctx);
+  handler: async (ctx, args): Promise<AssistantToolOverrides> => {
+    const settings = await getSettingsDoc(
+      ctx,
+      settingsKeyForAudience(args.audience ?? "members"),
+    );
     return normalizeToolOverrides(settings?.toolOverrides);
   },
 });
 
 export const getShowCoursesCatalogInternal = internalQuery({
-  args: {},
+  args: {
+    audience: v.optional(assistantAudienceValidator),
+  },
   returns: showCoursesCatalogResultValidator,
-  handler: async (ctx): Promise<ShowCoursesCatalogResult> => {
-    const settings = await getSettingsDoc(ctx);
+  handler: async (ctx, args): Promise<ShowCoursesCatalogResult> => {
+    const settings = await getSettingsDoc(
+      ctx,
+      settingsKeyForAudience(args.audience ?? "members"),
+    );
     return buildShowCoursesCatalogResult(settings);
   },
 });
@@ -333,16 +353,22 @@ export const getShowCoursesCatalogInternal = internalQuery({
 export const getSendWhatsAppSupportInternal = internalQuery({
   args: {
     text: v.optional(v.string()),
+    audience: v.optional(assistantAudienceValidator),
   },
   returns: sendWhatsAppSupportResultValidator,
   handler: async (ctx, args): Promise<SendWhatsAppSupportResult> => {
-    const settings = await getSettingsDoc(ctx);
+    const settings = await getSettingsDoc(
+      ctx,
+      settingsKeyForAudience(args.audience ?? "members"),
+    );
     return buildSendWhatsAppSupportResult(settings, args.text);
   },
 });
 
 export const getCleanupSettingsInternal = internalQuery({
-  args: {},
+  args: {
+    audience: v.optional(assistantAudienceValidator),
+  },
   returns: v.object({
     ctaSystemPrompt: v.string(),
     streamSystemPrompt: v.string(),
@@ -351,8 +377,11 @@ export const getCleanupSettingsInternal = internalQuery({
     model: v.string(),
     ctaTemperature: v.number(),
   }),
-  handler: async (ctx): Promise<CleanupRuntimeSettings> => {
-    const settings = await getSettingsDoc(ctx);
+  handler: async (ctx, args): Promise<CleanupRuntimeSettings> => {
+    const settings = await getSettingsDoc(
+      ctx,
+      settingsKeyForAudience(args.audience ?? "members"),
+    );
     return resolveCleanupSettings(settings);
   },
 });

@@ -8,8 +8,10 @@ import type { MessageDoc } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { internal } from "../_generated/api";
 import { internalAction } from "../_generated/server";
+import type { Id } from "../_generated/dataModel";
 import { buildAssistantTools, rehamDivaAgent } from "./agent";
 import type { AssistantToolOverrides } from "./toolsCatalog";
+import { assistantAudienceValidator } from "./audience";
 import { assistantLanguageValidator } from "./validators";
 import {
   buildCleanupCtaPrompt,
@@ -73,20 +75,25 @@ export const streamAssistantResponse = internalAction({
   args: {
     threadId: v.string(),
     promptMessageId: v.string(),
-    userId: v.id("users"),
+    userId: v.string(),
     language: v.optional(assistantLanguageValidator),
+    audience: v.optional(assistantAudienceValidator),
   },
   returns: v.null(),
   handler: async (ctx, args) => {
     const nowMs = Date.now();
+    const audience = args.audience ?? "members";
+    const memberUserId =
+      audience === "members" ? (args.userId as Id<"users">) : undefined;
     const [system, toolOverrides, knowledgeContext, namedInstructionsContext, cleanup] =
       await Promise.all([
         ctx.runQuery(internal.assistant.promptRuntime.getSystemInstructions, {
-          userId: args.userId,
+          userId: memberUserId,
           nowMs,
           language: args.language,
+          audience,
         }),
-        ctx.runQuery(internal.assistant.settings.getToolOverridesInternal, {}),
+        ctx.runQuery(internal.assistant.settings.getToolOverridesInternal, { audience }),
         ctx.runQuery(
           internal.assistant.knowledgeFiles.getActiveKnowledgeToolContextInternal,
           {},
@@ -95,13 +102,14 @@ export const streamAssistantResponse = internalAction({
           internal.assistant.namedInstructions.getNamedInstructionsToolContextInternal,
           {},
         ),
-        ctx.runQuery(internal.assistant.settings.getCleanupSettingsInternal, {}),
+        ctx.runQuery(internal.assistant.settings.getCleanupSettingsInternal, { audience }),
       ]);
 
     const tools = buildAssistantTools(
       toolOverrides as AssistantToolOverrides,
       knowledgeContext,
       namedInstructionsContext,
+      { audience },
     );
 
     // Pass 1: full agent with tools. Do NOT persist messages — otherwise the draft

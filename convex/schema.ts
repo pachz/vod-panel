@@ -628,9 +628,9 @@ export default defineSchema({
     .index("by_testId_status_completedAt", ["testId", "status", "completedAt"])
     .index("by_status_startedAt", ["status", "startedAt"]),
 
-  /** Singleton assistant prompt customization (editable section only). */
+  /** Assistant prompt customization. `global` = signed-in members; `public` = landing widget. */
   assistantSettings: defineTable({
-    key: v.literal("global"),
+    key: v.union(v.literal("global"), v.literal("public")),
     customInstructions: v.string(),
     /**
      * Per-tool knowledge overrides: enable/disable and description add-ons.
@@ -691,6 +691,8 @@ export default defineSchema({
     showWidgetToAdmins: v.optional(v.boolean()),
     /** When true, member accounts see the chat widget on every page. */
     showWidgetToUsers: v.optional(v.boolean()),
+    /** When true, the public website chat widget is available. Members settings ignore this. */
+    publicEnabled: v.optional(v.boolean()),
     updatedAt: v.number(),
     updatedBy: v.optional(v.id("users")),
   }).index("by_key", ["key"]),

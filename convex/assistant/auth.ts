@@ -2,6 +2,7 @@ import { getThreadMetadata } from "@convex-dev/agent";
 import type { Id } from "../_generated/dataModel";
 import type { ActionCtx, MutationCtx, QueryCtx } from "../_generated/server";
 import { components } from "../_generated/api";
+import { isPublicThreadUserId } from "./audience";
 
 export const DEFAULT_THREAD_TITLE = "New conversation";
 /** Max user messages while title can still be set automatically or via tool. */
@@ -14,11 +15,11 @@ type ToolLikeCtx = {
   runQuery: ActionCtx["runQuery"];
 };
 
-export async function resolveAssistantUserId(
+export async function resolveAssistantThreadOwnerId(
   ctx: ToolLikeCtx,
-): Promise<Id<"users"> | null> {
+): Promise<string | null> {
   if (ctx.userId) {
-    return ctx.userId as Id<"users">;
+    return ctx.userId;
   }
 
   if (!ctx.threadId) {
@@ -29,11 +30,18 @@ export async function resolveAssistantUserId(
     threadId: ctx.threadId,
   });
 
-  if (!thread?.userId) {
+  return thread?.userId ?? null;
+}
+
+export async function resolveAssistantUserId(
+  ctx: ToolLikeCtx,
+): Promise<Id<"users"> | null> {
+  const ownerId = await resolveAssistantThreadOwnerId(ctx);
+  if (!ownerId || isPublicThreadUserId(ownerId)) {
     return null;
   }
 
-  return thread.userId as Id<"users">;
+  return ownerId as Id<"users">;
 }
 
 export async function ensureThreadHasUserId(
@@ -94,7 +102,7 @@ export function titleFromUserMessage(text: string): string | null {
 export async function assertThreadOwnedByUser(
   ctx: QueryCtx | MutationCtx,
   threadId: string,
-  userId: Id<"users">,
+  userId: string,
 ): Promise<void> {
   const metadata = await getThreadMetadata(ctx, components.agent, { threadId });
   if (metadata.userId !== userId) {

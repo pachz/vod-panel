@@ -16,6 +16,26 @@ export const ASSISTANT_TOOL_IDS = [
 
 export type AssistantToolId = (typeof ASSISTANT_TOOL_IDS)[number];
 
+/** Tools available to anonymous website visitors. Account/billing/memory stay members-only. */
+export const PUBLIC_ASSISTANT_TOOL_IDS = [
+  "searchCourses",
+  "searchKnowledgeBase",
+  "getNamedInstructions",
+  "listActiveSubscriptionPlans",
+  "renderUiCards",
+  "showCoursesCatalog",
+  "sendWhatsAppSupport",
+  "updateConversationTitle",
+] as const;
+
+export type PublicAssistantToolId = (typeof PUBLIC_ASSISTANT_TOOL_IDS)[number];
+
+export const MEMBER_ONLY_ASSISTANT_TOOL_IDS = [
+  "getMySubscription",
+  "createBillingPortalSession",
+  "updateUserMemory",
+] as const;
+
 export const assistantToolIdValidator = v.union(
   v.literal("searchCourses"),
   v.literal("searchKnowledgeBase"),
@@ -142,6 +162,13 @@ export const ASSISTANT_TOOL_CATALOG: Record<
 export function isAssistantToolId(value: string): value is AssistantToolId {
   return (ASSISTANT_TOOL_IDS as ReadonlyArray<string>).includes(value);
 }
+
+export function isPublicAssistantToolId(value: string): value is PublicAssistantToolId {
+  return (PUBLIC_ASSISTANT_TOOL_IDS as ReadonlyArray<string>).includes(value);
+}
+
+export const PUBLIC_RENDER_UI_CARDS_DESCRIPTION =
+  "Render UI cards in the chat before your final reply. Pass only ids returned by prior tools in this conversation. Supported cards: courseIds (array of course ids from searchCourses), planIds (array of plan ids from listActiveSubscriptionPlans), callToActions (array of { text, url } for large call-to-action buttons—use https URLs or site paths starting with /). Pass language \"ar\" when your reply is in Arabic so course cards use Arabic titles and descriptions. Do not put URLs or markdown links in your text reply—use callToActions or other CTA tools instead. Omit fields you do not want shown. Never use showSubscription or showBillingPortal—this visitor is not signed in. Call at most once per turn, only when the visitor should see visual cards or CTA buttons.";
 
 export function resolveToolDescription(
   toolId: AssistantToolId,

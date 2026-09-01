@@ -18,14 +18,17 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Switch } from "@/components/ui/switch";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { PublicAssistantSettings } from "@/components/assistant/PublicAssistantSettings";
 import {
   MAX_STARTER_SUGGESTION_LENGTH,
   MAX_STARTER_SUGGESTIONS,
   MAX_WELCOME_MESSAGE_LENGTH,
 } from "../../convex/assistant/greeting";
+import { CUSTOM_INSTRUCTION_USER_NAME_VARIABLE } from "../../convex/assistant/prompt";
 
 const MAX_CUSTOM_INSTRUCTIONS_LENGTH = 20_000;
 const MAX_DESCRIPTION_ADDON_LENGTH = 4_000;
@@ -526,7 +529,8 @@ const AssistantSettings = () => {
         <div className="space-y-1">
           <h1 className="text-3xl font-bold tracking-tight">Assistant settings</h1>
           <p className="text-muted-foreground">
-            Customize the assistant prompt and which tools it can use. Core safety rules stay locked.
+            Members settings stay isolated from the public website assistant. Core safety rules stay
+            locked.
           </p>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -544,6 +548,12 @@ const AssistantSettings = () => {
         </div>
       </div>
 
+      <Tabs defaultValue="members" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="members">Members</TabsTrigger>
+          <TabsTrigger value="public">Public website</TabsTrigger>
+        </TabsList>
+        <TabsContent value="members" className="space-y-6">
       <Card>
         <CardHeader>
           <CardTitle>Chat widget</CardTitle>
@@ -826,8 +836,10 @@ const AssistantSettings = () => {
           <CardTitle>Editable prompt</CardTitle>
           <CardDescription>
             Brand voice, tone, and high-level behavior. User context and private memory are injected
-            automatically at runtime. Maximum {MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()}{" "}
-            characters.
+            automatically at runtime. Use{" "}
+            <code className="text-xs">{CUSTOM_INSTRUCTION_USER_NAME_VARIABLE}</code> for the
+            signed-in user&apos;s name (blank if the account has no name). Maximum{" "}
+            {MAX_CUSTOM_INSTRUCTIONS_LENGTH.toLocaleString()} characters.
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -1471,6 +1483,11 @@ const AssistantSettings = () => {
           />
         </CardContent>
       </Card>
+        </TabsContent>
+        <TabsContent value="public">
+          <PublicAssistantSettings />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 };

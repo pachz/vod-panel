@@ -2,7 +2,7 @@ import { Agent, createTool, stepCountIs } from "@convex-dev/agent";
 import { openai } from "@ai-sdk/openai";
 import { z } from "zod";
 import { components, internal } from "../_generated/api";
-import { resolveAssistantUserId } from "./auth";
+import { resolveAssistantThreadOwnerId, resolveAssistantUserId } from "./auth";
 import {
   buildKnowledgeSearchToolDescription,
 } from "./knowledgeFiles";
@@ -13,10 +13,14 @@ import {
 import { ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS } from "./prompt";
 import {
   ASSISTANT_TOOL_IDS,
+  PUBLIC_ASSISTANT_TOOL_IDS,
+  PUBLIC_RENDER_UI_CARDS_DESCRIPTION,
   isToolEnabled,
   resolveToolDescription,
+  type AssistantToolId,
   type AssistantToolOverrides,
 } from "./toolsCatalog";
+import type { AssistantAudience } from "./audience";
 import type {
   activeSubscriptionPlanValidator,
   billingPortalResultValidator,
@@ -273,7 +277,7 @@ function createBillingPortalSessionTool(description: string) {
   });
 }
 
-function createRenderUiCardsTool(description: string) {
+function createRenderUiCardsTool(description: string, publicMode: boolean) {
   return createTool({
     description,
     inputSchema: z.object({
@@ -351,7 +355,7 @@ function createRenderUiCardsTool(description: string) {
             : [];
 
         let subscription: SubscriptionToolResult | null = null;
-        if (input.showSubscription) {
+        if (input.showSubscription && !publicMode) {
           if (!userId) {
             subscription = {
               authenticated: false,
@@ -367,7 +371,7 @@ function createRenderUiCardsTool(description: string) {
         }
 
         let billingPortalUrl: string | null = null;
-        if (input.showBillingPortal) {
+        if (input.showBillingPortal && !publicMode) {
           if (userId) {
             try {
               const portal = await ctx.runAction(
@@ -400,19 +404,27 @@ function createRenderUiCardsTool(description: string) {
   });
 }
 
-function createShowCoursesCatalogTool(description: string) {
+function createShowCoursesCatalogTool(
+  description: string,
+  audience: AssistantAudience,
+) {
   return createTool({
     description,
     inputSchema: z.object({}),
     execute: async (ctx): Promise<ShowCoursesCatalogResult> => {
       return await withToolCallLogging("showCoursesCatalog", {}, async () => {
-        return await ctx.runQuery(internal.assistant.settings.getShowCoursesCatalogInternal, {});
+        return await ctx.runQuery(internal.assistant.settings.getShowCoursesCatalogInternal, {
+          audience,
+        });
       });
     },
   });
 }
 
-function createSendWhatsAppSupportTool(description: string) {
+function createSendWhatsAppSupportTool(
+  description: string,
+  audience: AssistantAudience,
+) {
   return createTool({
     description,
     inputSchema: z.object({
@@ -428,6 +440,7 @@ function createSendWhatsAppSupportTool(description: string) {
       return await withToolCallLogging("sendWhatsAppSupport", input, async () => {
         return await ctx.runQuery(internal.assistant.settings.getSendWhatsAppSupportInternal, {
           text: input.text,
+          audience,
         });
       });
     },
@@ -462,7 +475,7 @@ function createUpdateConversationTitleTool(description: string) {
           return { success: false, reason: "no_thread" };
         }
 
-        const userId = await resolveAssistantUserId(ctx);
+        const userId = await resolveAssistantThreadOwnerId(ctx);
         if (!userId) {
           return { success: false, reason: "not_authenticated" };
         }
@@ -512,7 +525,13 @@ export function buildAssistantTools(
   overrides?: AssistantToolOverrides | null,
   knowledgeContext?: ActiveKnowledgeToolContext | null,
   namedInstructionsContext?: NamedInstructionsToolContext | null,
+  options?: { audience?: AssistantAudience },
 ) {
+  const audience = options?.audience ?? "members";
+  const publicMode = audience === "public";
+  const toolIds: ReadonlyArray<AssistantToolId> = publicMode
+    ? PUBLIC_ASSISTANT_TOOL_IDS
+    : ASSISTANT_TOOL_IDS;
   const tools: {
     searchCourses?: ReturnType<typeof createSearchCoursesTool>;
     searchKnowledgeBase?: ReturnType<typeof createSearchKnowledgeBaseTool>;
@@ -527,7 +546,7 @@ export function buildAssistantTools(
     updateUserMemory?: ReturnType<typeof createUpdateUserMemoryTool>;
   } = {};
 
-  for (const toolId of ASSISTANT_TOOL_IDS) {
+  for (const toolId of toolIds) {
     if (!isToolEnabled(toolId, overrides)) {
       continue;
     }
@@ -553,11 +572,16 @@ export function buildAssistantTools(
         namedInstructionsContext,
         overrides?.[toolId]?.descriptionAddon,
       );
+    } else if (toolId === "renderUiCards" && publicMode) {
+      runtimeDescription = resolveToolDescription(
+        toolId,
+        overrides?.[toolId],
+        PUBLIC_RENDER_UI_CARDS_DESCRIPTION,
+      );
     }
 
     const description =
-      runtimeDescription ??
-      resolveToolDescription(toolId, overrides?.[toolId]);
+      runtimeDescription ?? resolveToolDescription(toolId, overrides?.[toolId]);
 
     switch (toolId) {
       case "searchCourses":
@@ -580,13 +604,13 @@ export function buildAssistantTools(
         tools.createBillingPortalSession = createBillingPortalSessionTool(description);
         break;
       case "renderUiCards":
-        tools.renderUiCards = createRenderUiCardsTool(description);
+        tools.renderUiCards = createRenderUiCardsTool(description, publicMode);
         break;
       case "showCoursesCatalog":
-        tools.showCoursesCatalog = createShowCoursesCatalogTool(description);
+        tools.showCoursesCatalog = createShowCoursesCatalogTool(description, audience);
         break;
       case "sendWhatsAppSupport":
-        tools.sendWhatsAppSupport = createSendWhatsAppSupportTool(description);
+        tools.sendWhatsAppSupport = createSendWhatsAppSupportTool(description, audience);
         break;
       case "updateConversationTitle":
         tools.updateConversationTitle = createUpdateConversationTitleTool(description);

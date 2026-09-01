@@ -115,7 +115,7 @@ export const saveUserMessage = internalMutation({
 export const updateConversationTitleInternal = internalMutation({
   args: {
     threadId: v.string(),
-    userId: v.id("users"),
+    userId: v.string(),
     title: v.string(),
   },
   returns: conversationTitleUpdateResultValidator,

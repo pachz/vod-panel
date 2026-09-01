@@ -34,6 +34,31 @@ export const ASSISTANT_GREETING_DEFAULTS = {
   ] satisfies StarterSuggestion[],
 } as const;
 
+export const PUBLIC_ASSISTANT_GREETING_DEFAULTS = {
+  welcomeMessageEn: "Welcome. Ask me about courses, plans, or how to get started.",
+  welcomeMessageAr: "مرحبًا. اسأليني عن الدورات أو الباقات أو من أين تبدئين.",
+  starterSuggestions: [
+    {
+      textEn: "Help me find a course about self-love.",
+      textAr: "ساعديني في العثور على دورة عن حب الذات.",
+    },
+    {
+      textEn: "Which femininity course is suitable for a beginner?",
+      textAr: "ما الدورة المناسبة للمبتدئات في الأنوثة؟",
+    },
+    {
+      textEn: "What subscription plans are available?",
+      textAr: "ما باقات الاشتراك المتوفرة؟",
+    },
+  ] satisfies StarterSuggestion[],
+} as const;
+
+type GreetingDefaults = {
+  welcomeMessageEn: string;
+  welcomeMessageAr: string;
+  starterSuggestions: ReadonlyArray<StarterSuggestion>;
+};
+
 export const assistantGreetingSettingsValidator = v.object({
   welcomeMessageEn: v.string(),
   welcomeMessageAr: v.string(),
@@ -56,7 +81,10 @@ type GreetingSettingsSource = {
   starterSuggestions?: StarterSuggestion[];
 } | null;
 
-export function resolveAssistantGreeting(settings: GreetingSettingsSource): {
+export function resolveAssistantGreeting(
+  settings: GreetingSettingsSource,
+  defaults: GreetingDefaults = ASSISTANT_GREETING_DEFAULTS,
+): {
   welcomeMessageEn: string;
   welcomeMessageAr: string;
   starterSuggestions: StarterSuggestion[];
@@ -66,7 +94,7 @@ export function resolveAssistantGreeting(settings: GreetingSettingsSource): {
 
   let starterSuggestions: StarterSuggestion[];
   if (settings?.starterSuggestions === undefined) {
-    starterSuggestions = ASSISTANT_GREETING_DEFAULTS.starterSuggestions.map((item) => ({
+    starterSuggestions = defaults.starterSuggestions.map((item) => ({
       textEn: item.textEn,
       textAr: item.textAr,
     }));
@@ -81,21 +109,24 @@ export function resolveAssistantGreeting(settings: GreetingSettingsSource): {
   }
 
   return {
-    welcomeMessageEn: welcomeMessageEn || ASSISTANT_GREETING_DEFAULTS.welcomeMessageEn,
-    welcomeMessageAr: welcomeMessageAr || ASSISTANT_GREETING_DEFAULTS.welcomeMessageAr,
+    welcomeMessageEn: welcomeMessageEn || defaults.welcomeMessageEn,
+    welcomeMessageAr: welcomeMessageAr || defaults.welcomeMessageAr,
     starterSuggestions,
   };
 }
 
-export function buildGreetingSettingsResponse(settings: GreetingSettingsSource) {
-  const resolved = resolveAssistantGreeting(settings);
+export function buildGreetingSettingsResponse(
+  settings: GreetingSettingsSource,
+  defaults: GreetingDefaults = ASSISTANT_GREETING_DEFAULTS,
+) {
+  const resolved = resolveAssistantGreeting(settings, defaults);
   return {
     welcomeMessageEn: resolved.welcomeMessageEn,
     welcomeMessageAr: resolved.welcomeMessageAr,
     starterSuggestions: resolved.starterSuggestions,
-    defaultWelcomeMessageEn: ASSISTANT_GREETING_DEFAULTS.welcomeMessageEn,
-    defaultWelcomeMessageAr: ASSISTANT_GREETING_DEFAULTS.welcomeMessageAr,
-    defaultStarterSuggestions: ASSISTANT_GREETING_DEFAULTS.starterSuggestions.map((item) => ({
+    defaultWelcomeMessageEn: defaults.welcomeMessageEn,
+    defaultWelcomeMessageAr: defaults.welcomeMessageAr,
+    defaultStarterSuggestions: defaults.starterSuggestions.map((item) => ({
       textEn: item.textEn,
       textAr: item.textAr,
     })),

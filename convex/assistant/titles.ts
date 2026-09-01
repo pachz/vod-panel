@@ -38,7 +38,7 @@ async function getEarlyUserMessages(
 export const maybeAutoTitleThread = internalAction({
   args: {
     threadId: v.string(),
-    userId: v.id("users"),
+    userId: v.string(),
   },
   returns: v.null(),
   handler: async (ctx, args) => {

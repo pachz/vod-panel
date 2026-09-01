@@ -5,11 +5,20 @@ import { pickPrimarySubscriptionForUserDisplay } from "../paymentInternal";
 import {
   ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
   ASSISTANT_FIXED_INSTRUCTIONS,
+  ASSISTANT_PUBLIC_DEFAULT_CUSTOM_INSTRUCTIONS,
+  ASSISTANT_PUBLIC_FIXED_INSTRUCTIONS,
+  applyCustomInstructionVariables,
   buildAssistantSystemPrompt,
 } from "./prompt";
-import { resolveAssistantGreeting } from "./greeting";
-
-const SETTINGS_KEY = "global" as const;
+import {
+  PUBLIC_ASSISTANT_GREETING_DEFAULTS,
+  resolveAssistantGreeting,
+} from "./greeting";
+import {
+  settingsKeyForAudience,
+  type AssistantAudience,
+  type AssistantSettingsKey,
+} from "./audience";
 
 function formatLoginMethods(hasPassword: boolean, hasGoogle: boolean): string {
   const methods: Array<string> = [];
@@ -25,11 +34,18 @@ function formatLoginMethods(hasPassword: boolean, hasGoogle: boolean): string {
   return methods.join(", ");
 }
 
-export async function loadCustomInstructions(ctx: QueryCtx): Promise<string> {
+export async function loadCustomInstructions(
+  ctx: QueryCtx,
+  key: AssistantSettingsKey = "global",
+): Promise<string> {
   const settings = await ctx.db
     .query("assistantSettings")
-    .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+    .withIndex("by_key", (q) => q.eq("key", key))
     .unique();
+
+  if (key === "public") {
+    return settings?.customInstructions ?? ASSISTANT_PUBLIC_DEFAULT_CUSTOM_INSTRUCTIONS;
+  }
 
   return settings?.customInstructions ?? ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS;
 }
@@ -106,18 +122,41 @@ export async function loadUserMemory(
 
 export async function buildRuntimeSystemInstructions(
   ctx: QueryCtx,
-  userId: Id<"users">,
+  userId: Id<"users"> | null,
   nowMs: number,
   preferredLanguage?: "en" | "ar",
+  audience: AssistantAudience = "members",
 ): Promise<string> {
+  const isPublic = audience === "public";
   const settings = await ctx.db
     .query("assistantSettings")
-    .withIndex("by_key", (q) => q.eq("key", SETTINGS_KEY))
+    .withIndex("by_key", (q) => q.eq("key", settingsKeyForAudience(audience)))
     .unique();
-  const customInstructions = settings?.customInstructions ?? ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS;
-  const greeting = resolveAssistantGreeting(settings);
-  const userContext = await loadUserContext(ctx, userId, nowMs);
-  const userMemory = await loadUserMemory(ctx, userId);
+  const greeting = resolveAssistantGreeting(
+    settings,
+    isPublic ? PUBLIC_ASSISTANT_GREETING_DEFAULTS : undefined,
+  );
+  let customInstructions =
+    settings?.customInstructions ??
+    (isPublic
+      ? ASSISTANT_PUBLIC_DEFAULT_CUSTOM_INSTRUCTIONS
+      : ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS);
+
+  let userName = "";
+  if (!isPublic && userId) {
+    const user = await ctx.db.get(userId);
+    if (user && user.deletedAt === undefined) {
+      userName = user.name?.trim() ?? "";
+    }
+  }
+  customInstructions = applyCustomInstructionVariables(customInstructions, { userName });
+  const userContext =
+    isPublic
+      ? "This visitor is not signed in. No account, subscription, or billing data is available."
+      : userId
+        ? await loadUserContext(ctx, userId, nowMs)
+        : "User record not found.";
+  const userMemory = !isPublic && userId ? await loadUserMemory(ctx, userId) : null;
 
   return buildAssistantSystemPrompt({
     customInstructions,
@@ -126,7 +165,15 @@ export async function buildRuntimeSystemInstructions(
     preferredLanguage,
     welcomeMessageEn: greeting.welcomeMessageEn,
     welcomeMessageAr: greeting.welcomeMessageAr,
+    fixedInstructions: isPublic
+      ? ASSISTANT_PUBLIC_FIXED_INSTRUCTIONS
+      : ASSISTANT_FIXED_INSTRUCTIONS,
   });
 }
 
-export { ASSISTANT_FIXED_INSTRUCTIONS, ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS };
+export {
+  ASSISTANT_FIXED_INSTRUCTIONS,
+  ASSISTANT_DEFAULT_CUSTOM_INSTRUCTIONS,
+  ASSISTANT_PUBLIC_FIXED_INSTRUCTIONS,
+  ASSISTANT_PUBLIC_DEFAULT_CUSTOM_INSTRUCTIONS,
+};

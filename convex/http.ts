@@ -2,8 +2,9 @@ import { httpRouter } from "convex/server";
 import { httpAction } from "./_generated/server";
 import { auth } from "./auth";
 import { ensureSeedAccount } from "./seed";
-import { internal } from "./_generated/api";
+import { api, internal } from "./_generated/api";
 import type { Id } from "./_generated/dataModel";
+import { PUBLIC_ASSISTANT_WIDGET_JS } from "./assistant/publicWidgetScript";
 
 const http = httpRouter();
 
@@ -807,6 +808,173 @@ http.route({
         },
       );
     }
+  }),
+});
+
+function publicAssistantCorsHeaders(request: Request): Record<string, string> {
+  const requestOrigin = request.headers.get("Origin");
+  const allowlist = (process.env.PUBLIC_ASSISTANT_ALLOWED_ORIGINS ?? "")
+    .split(",")
+    .map((item) => item.trim())
+    .filter(Boolean);
+  let allowOrigin = "*";
+  if (allowlist.length > 0) {
+    if (requestOrigin && (allowlist.includes(requestOrigin) || allowlist.includes("*"))) {
+      allowOrigin = requestOrigin;
+    } else {
+      allowOrigin = allowlist[0] ?? "*";
+    }
+  } else if (requestOrigin) {
+    allowOrigin = requestOrigin;
+  }
+  return {
+    "Access-Control-Allow-Origin": allowOrigin,
+    "Access-Control-Allow-Methods": "GET, POST, OPTIONS",
+    "Access-Control-Allow-Headers": "Content-Type",
+    "Access-Control-Max-Age": "86400",
+    Vary: "Origin",
+  };
+}
+
+function publicAssistantJson(request: Request, body: unknown, status = 200) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: {
+      ...publicAssistantCorsHeaders(request),
+      "Content-Type": "application/json",
+    },
+  });
+}
+
+const publicAssistantOptions = httpAction(async (_ctx, request) => {
+  return new Response(null, {
+    status: 204,
+    headers: publicAssistantCorsHeaders(request),
+  });
+});
+
+http.route({
+  path: "/landing/public-assistant/config",
+  method: "OPTIONS",
+  handler: publicAssistantOptions,
+});
+http.route({
+  path: "/landing/public-assistant/config",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const config = await ctx.runQuery(api.assistant.public.getPublicConfig, {});
+      return publicAssistantJson(request, config);
+    } catch (error) {
+      return publicAssistantJson(
+        request,
+        { error: error instanceof Error ? error.message : "Failed to load config" },
+        500,
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/public-assistant/thread",
+  method: "OPTIONS",
+  handler: publicAssistantOptions,
+});
+http.route({
+  path: "/landing/public-assistant/thread",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = (await request.json()) as {
+        sessionId?: string;
+        language?: "en" | "ar";
+      };
+      const threadId = await ctx.runMutation(api.assistant.public.createPublicThread, {
+        sessionId: body.sessionId ?? "",
+        language: body.language,
+      });
+      return publicAssistantJson(request, { threadId });
+    } catch (error) {
+      return publicAssistantJson(
+        request,
+        { error: error instanceof Error ? error.message : "Failed to create chat" },
+        400,
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/public-assistant/message",
+  method: "OPTIONS",
+  handler: publicAssistantOptions,
+});
+http.route({
+  path: "/landing/public-assistant/message",
+  method: "POST",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const body = (await request.json()) as {
+        sessionId?: string;
+        threadId?: string;
+        prompt?: string;
+        language?: "en" | "ar";
+      };
+      const messageId = await ctx.runMutation(api.assistant.public.sendPublicMessage, {
+        sessionId: body.sessionId ?? "",
+        threadId: body.threadId ?? "",
+        prompt: body.prompt ?? "",
+        language: body.language,
+      });
+      return publicAssistantJson(request, { messageId });
+    } catch (error) {
+      return publicAssistantJson(
+        request,
+        { error: error instanceof Error ? error.message : "Failed to send message" },
+        400,
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/public-assistant/messages",
+  method: "OPTIONS",
+  handler: publicAssistantOptions,
+});
+http.route({
+  path: "/landing/public-assistant/messages",
+  method: "GET",
+  handler: httpAction(async (ctx, request) => {
+    try {
+      const url = new URL(request.url);
+      const payload = await ctx.runQuery(api.assistant.public.listPublicMessages, {
+        sessionId: url.searchParams.get("sessionId") ?? "",
+        threadId: url.searchParams.get("threadId") ?? "",
+      });
+      return publicAssistantJson(request, payload);
+    } catch (error) {
+      return publicAssistantJson(
+        request,
+        { error: error instanceof Error ? error.message : "Failed to load messages" },
+        400,
+      );
+    }
+  }),
+});
+
+http.route({
+  path: "/landing/public-assistant/widget.js",
+  method: "GET",
+  handler: httpAction(async (_ctx, request) => {
+    return new Response(PUBLIC_ASSISTANT_WIDGET_JS, {
+      status: 200,
+      headers: {
+        ...publicAssistantCorsHeaders(request),
+        "Content-Type": "application/javascript; charset=utf-8",
+        "Cache-Control": "public, max-age=300",
+      },
+    });
   }),
 });
 

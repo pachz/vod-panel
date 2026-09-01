@@ -11,6 +11,7 @@
 import type * as ResendOTPPasswordReset from "../ResendOTPPasswordReset.js";
 import type * as activityLog from "../activityLog.js";
 import type * as assistant_agent from "../assistant/agent.js";
+import type * as assistant_audience from "../assistant/audience.js";
 import type * as assistant_auth from "../assistant/auth.js";
 import type * as assistant_billing from "../assistant/billing.js";
 import type * as assistant_chat from "../assistant/chat.js";
@@ -28,6 +29,9 @@ import type * as assistant_namedInstructions from "../assistant/namedInstruction
 import type * as assistant_prompt from "../assistant/prompt.js";
 import type * as assistant_promptData from "../assistant/promptData.js";
 import type * as assistant_promptRuntime from "../assistant/promptRuntime.js";
+import type * as assistant_public from "../assistant/public.js";
+import type * as assistant_publicSettings from "../assistant/publicSettings.js";
+import type * as assistant_publicWidgetScript from "../assistant/publicWidgetScript.js";
 import type * as assistant_search from "../assistant/search.js";
 import type * as assistant_settings from "../assistant/settings.js";
 import type * as assistant_subscription from "../assistant/subscription.js";
@@ -94,6 +98,7 @@ declare const fullApi: ApiFromModules<{
   ResendOTPPasswordReset: typeof ResendOTPPasswordReset;
   activityLog: typeof activityLog;
   "assistant/agent": typeof assistant_agent;
+  "assistant/audience": typeof assistant_audience;
   "assistant/auth": typeof assistant_auth;
   "assistant/billing": typeof assistant_billing;
   "assistant/chat": typeof assistant_chat;
@@ -111,6 +116,9 @@ declare const fullApi: ApiFromModules<{
   "assistant/prompt": typeof assistant_prompt;
   "assistant/promptData": typeof assistant_promptData;
   "assistant/promptRuntime": typeof assistant_promptRuntime;
+  "assistant/public": typeof assistant_public;
+  "assistant/publicSettings": typeof assistant_publicSettings;
+  "assistant/publicWidgetScript": typeof assistant_publicWidgetScript;
   "assistant/search": typeof assistant_search;
   "assistant/settings": typeof assistant_settings;
   "assistant/subscription": typeof assistant_subscription;
