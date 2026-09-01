@@ -546,9 +546,10 @@ export const copyPublicSettingsFromMembers = mutation({
     const publicToolOverrides: Record<string, AssistantToolOverride> = {};
     for (const toolId of PUBLIC_ASSISTANT_TOOL_IDS) {
       const fromMember = memberOverrides[toolId];
-      if (fromMember) {
-        publicToolOverrides[toolId] = fromMember;
-      }
+      publicToolOverrides[toolId] = {
+        enabled: fromMember?.enabled ?? true,
+        descriptionAddon: fromMember?.descriptionAddon ?? "",
+      };
     }
 
     const updatedAt = await upsertPublicSettings(ctx, userId, {

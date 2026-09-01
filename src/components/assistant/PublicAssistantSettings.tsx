@@ -17,6 +17,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { NamedInstructionsSection } from "@/components/assistant/NamedInstructionsSection";
 import {
   MAX_STARTER_SUGGESTION_LENGTH,
   MAX_STARTER_SUGGESTIONS,
@@ -432,6 +433,18 @@ export function PublicAssistantWidget() {
     setCopyingAll(true);
     try {
       await copyAllFromMembers({});
+      if (membersSettings) {
+        const publicToolIds = new Set(settings.tools.map((tool) => tool.toolId));
+        setAddonDrafts((previous) => {
+          const next = { ...previous };
+          for (const tool of membersSettings.tools) {
+            if (publicToolIds.has(tool.toolId)) {
+              next[tool.toolId] = tool.descriptionAddon;
+            }
+          }
+          return next;
+        });
+      }
       toast.success("Copied members assistant settings into the public assistant");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Failed to copy members settings");
@@ -823,6 +836,9 @@ export function PublicAssistantWidget() {
                     >
                       {savingToolId === tool.toolId ? "Saving..." : "Save guidance"}
                     </Button>
+                    {tool.toolId === "getNamedInstructions" ? (
+                      <NamedInstructionsSection sharedNotice="These packs are shared with the members assistant. Changes here apply to both." />
+                    ) : null}
                     {tool.toolId === "showCoursesCatalog" ? (
                       <div className="space-y-3 rounded-lg border p-4">
                         <div className="flex items-center justify-between gap-2">

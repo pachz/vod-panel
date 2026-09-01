@@ -65,7 +65,11 @@ function formFromInstruction(instruction: NamedInstruction): FormState {
   };
 }
 
-export function NamedInstructionsSection() {
+export function NamedInstructionsSection({
+  sharedNotice,
+}: {
+  sharedNotice?: string;
+} = {}) {
   const instructions = useQuery(api.assistant.namedInstructions.listNamedInstructions);
   const createInstruction = useMutation(api.assistant.namedInstructions.createNamedInstruction);
   const updateInstruction = useMutation(api.assistant.namedInstructions.updateNamedInstruction);
@@ -174,6 +178,7 @@ export function NamedInstructionsSection() {
             Named bodies the model can load on demand via this tool. Set{" "}
             <span className="font-medium">when to use</span> so the assistant knows when to fetch
             each pack.
+            {sharedNotice ? ` ${sharedNotice}` : null}
           </p>
         </div>
         <Button type="button" size="sm" onClick={openCreate}>
