@@ -14,6 +14,11 @@ import {
   authorizeThreadReadAccess,
   requireAssistantAccess,
 } from "./lib";
+import {
+  assistantAudienceValidator,
+  buildThreadSummary,
+  parseThreadSummary,
+} from "./audience";
 import { assistantLanguageValidator, conversationTitleUpdateResultValidator } from "./validators";
 import { rehamDivaAgent } from "./agent";
 import {
@@ -27,15 +32,25 @@ import {
 export const listThreads = query({
   args: {
     paginationOpts: paginationOptsValidator,
+    audience: v.optional(assistantAudienceValidator),
   },
   returns: v.any(),
   handler: async (ctx, args) => {
     const userId = await requireAssistantAccess(ctx);
+    const audience = args.audience ?? "members";
 
-    return await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
+    const result = await ctx.runQuery(components.agent.threads.listThreadsByUserId, {
       userId,
       paginationOpts: args.paginationOpts,
     });
+
+    const page = (
+      result.page as Array<{
+        summary?: string;
+      }>
+    ).filter((thread) => parseThreadSummary(thread.summary).audience === audience);
+
+    return { ...result, page };
   },
 });
 
@@ -43,15 +58,17 @@ export const createAssistantThread = mutation({
   args: {
     language: v.optional(assistantLanguageValidator),
     title: v.optional(v.string()),
+    audience: v.optional(assistantAudienceValidator),
   },
   returns: v.string(),
   handler: async (ctx, args) => {
     const userId = await requireAssistantAccess(ctx);
+    const audience = args.audience ?? "members";
 
     const threadId = await createThread(ctx, components.agent, {
       userId,
       title: args.title ?? "New conversation",
-      summary: args.language ? `lang:${args.language}` : undefined,
+      summary: buildThreadSummary({ language: args.language, audience }),
     });
 
     return threadId;
@@ -68,14 +85,7 @@ export const getThreadLanguage = query({
     const metadata = await getThreadMetadata(ctx, components.agent, {
       threadId: args.threadId,
     });
-    const summary = metadata.summary;
-    if (summary?.startsWith("lang:")) {
-      const lang = summary.slice("lang:".length);
-      if (lang === "en" || lang === "ar") {
-        return lang;
-      }
-    }
-    return null;
+    return parseThreadSummary(metadata.summary).language ?? null;
   },
 });
 

@@ -4,6 +4,7 @@ import { components, internal } from "../_generated/api";
 import { mutation, query } from "../_generated/server";
 import type { QueryCtx, MutationCtx } from "../_generated/server";
 import {
+  buildThreadSummary,
   parsePublicSessionId,
   publicThreadUserId,
 } from "./audience";
@@ -334,15 +335,11 @@ export const createPublicThread = mutation({
     await requirePublicEnabled(ctx);
     const sessionId = parsePublicSessionId(args.sessionId);
     const userId = publicThreadUserId(sessionId);
-    const summaryParts = ["audience:public"];
-    if (args.language) {
-      summaryParts.unshift(`lang:${args.language}`);
-    }
 
     return await createThread(ctx, components.agent, {
       userId,
       title: "New conversation",
-      summary: summaryParts.join("|"),
+      summary: buildThreadSummary({ language: args.language, audience: "public" }),
     });
   },
 });
@@ -380,7 +377,7 @@ export const sendPublicMessage = mutation({
     if (args.language) {
       await ctx.runMutation(components.agent.threads.updateThread, {
         threadId: args.threadId,
-        patch: { summary: `lang:${args.language}|audience:public` },
+        patch: { summary: buildThreadSummary({ language: args.language, audience: "public" }) },
       });
     }
 

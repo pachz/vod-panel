@@ -48,6 +48,7 @@ import {
 import type { Infer } from "convex/values";
 import {
   MAX_WELCOME_MESSAGE_LENGTH,
+  PUBLIC_ASSISTANT_GREETING_DEFAULTS,
   assistantGreetingPublicValidator,
   assistantGreetingSettingsValidator,
   buildGreetingSettingsResponse,
@@ -387,12 +388,18 @@ export const getCleanupSettingsInternal = internalQuery({
 });
 
 export const getAssistantGreeting = query({
-  args: {},
+  args: {
+    audience: v.optional(assistantAudienceValidator),
+  },
   returns: assistantGreetingPublicValidator,
-  handler: async (ctx) => {
+  handler: async (ctx, args) => {
     await requireAssistantAccess(ctx);
-    const settings = await getSettingsDoc(ctx);
-    return resolveAssistantGreeting(settings);
+    const audience = args.audience ?? "members";
+    const settings = await getSettingsDoc(ctx, settingsKeyForAudience(audience));
+    return resolveAssistantGreeting(
+      settings,
+      audience === "public" ? PUBLIC_ASSISTANT_GREETING_DEFAULTS : undefined,
+    );
   },
 });
 

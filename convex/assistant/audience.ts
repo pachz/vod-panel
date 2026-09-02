@@ -32,3 +32,46 @@ export function parsePublicSessionId(sessionId: string): string {
   }
   return trimmed;
 }
+
+export function parseThreadSummary(summary: string | undefined | null): {
+  language: "en" | "ar" | undefined;
+  audience: AssistantAudience;
+} {
+  const parts = (summary ?? "")
+    .split("|")
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+
+  let language: "en" | "ar" | undefined;
+  let audience: AssistantAudience = "members";
+
+  for (const part of parts) {
+    if (part.startsWith("lang:")) {
+      const value = part.slice("lang:".length);
+      if (value === "en" || value === "ar") {
+        language = value;
+      }
+    } else if (part.startsWith("audience:")) {
+      const value = part.slice("audience:".length);
+      if (value === "public" || value === "members") {
+        audience = value;
+      }
+    }
+  }
+
+  return { language, audience };
+}
+
+export function buildThreadSummary(options: {
+  language?: "en" | "ar";
+  audience?: AssistantAudience;
+}): string | undefined {
+  const parts: Array<string> = [];
+  if (options.language) {
+    parts.push(`lang:${options.language}`);
+  }
+  if (options.audience === "public") {
+    parts.push("audience:public");
+  }
+  return parts.length > 0 ? parts.join("|") : undefined;
+}

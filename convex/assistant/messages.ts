@@ -1,8 +1,10 @@
+import { getThreadMetadata } from "@convex-dev/agent";
 import { v } from "convex/values";
 import { components, internal } from "../_generated/api";
 import { mutation } from "../_generated/server";
 import { authorizeThreadAccess } from "./lib";
 import { ensureThreadHasUserId } from "./auth";
+import { buildThreadSummary, parseThreadSummary } from "./audience";
 import { assistantLanguageValidator } from "./validators";
 
 export const sendMessage = mutation({
@@ -21,10 +23,19 @@ export const sendMessage = mutation({
       throw new Error("Message cannot be empty");
     }
 
+    const metadata = await getThreadMetadata(ctx, components.agent, {
+      threadId: args.threadId,
+    });
+    const parsed = parseThreadSummary(metadata.summary);
     if (args.language) {
       await ctx.runMutation(components.agent.threads.updateThread, {
         threadId: args.threadId,
-        patch: { summary: `lang:${args.language}` },
+        patch: {
+          summary: buildThreadSummary({
+            language: args.language,
+            audience: parsed.audience,
+          }),
+        },
       });
     }
 
@@ -40,6 +51,7 @@ export const sendMessage = mutation({
       promptMessageId: messageId,
       userId,
       language: args.language,
+      audience: parsed.audience,
     });
 
     return messageId;

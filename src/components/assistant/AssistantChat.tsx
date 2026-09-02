@@ -22,6 +22,7 @@ type AssistantChatProps = {
   threadId: string | null;
   onCreateThread: () => Promise<string>;
   compact?: boolean;
+  audience?: "members" | "public";
 };
 
 const FALLBACK_SUGGESTION_KEYS = [
@@ -64,9 +65,10 @@ export function AssistantChat({
   threadId,
   onCreateThread,
   compact = false,
+  audience = "members",
 }: AssistantChatProps) {
   const { t, isRTL, language } = useLanguage();
-  const greeting = useQuery(api.assistant.settings.getAssistantGreeting);
+  const greeting = useQuery(api.assistant.settings.getAssistantGreeting, { audience });
   const [activeThreadId, setActiveThreadId] = useState<string | null>(threadId);
   const [input, setInput] = useState("");
   const [error, setError] = useState<string | null>(null);

@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useSearchParams } from "react-router-dom";
 import { useMutation, useQuery } from "convex/react";
 import type { FunctionReturnType } from "convex/server";
 import { MessagesSquare, Plus, Trash2 } from "lucide-react";
@@ -60,6 +60,8 @@ function draftsFromSuggestions(
 
 const AssistantSettings = () => {
   const currentUser = useQuery(api.user.getCurrentUser);
+  const [searchParams, setSearchParams] = useSearchParams();
+  const settingsTab = searchParams.get("tab") === "public" ? "public" : "members";
   const settings = useQuery(api.assistant.settings.getAssistantSettings);
   const updateSettings = useMutation(api.assistant.settings.updateAssistantSettings);
   const updateToolKnowledge = useMutation(api.assistant.settings.updateAssistantToolKnowledge);
@@ -543,12 +545,26 @@ const AssistantSettings = () => {
             </Button>
           ) : null}
           <Button asChild variant="outline">
-            <Link to="/assistant-test">Open assistant</Link>
+            <Link to={settingsTab === "public" ? "/assistant-test?tab=public" : "/assistant-test"}>
+              Open assistant
+            </Link>
           </Button>
         </div>
       </div>
 
-      <Tabs defaultValue="members" className="space-y-6">
+      <Tabs
+        value={settingsTab}
+        onValueChange={(value) => {
+          const nextParams = new URLSearchParams(searchParams);
+          if (value === "public") {
+            nextParams.set("tab", "public");
+          } else {
+            nextParams.delete("tab");
+          }
+          setSearchParams(nextParams, { replace: true });
+        }}
+        className="space-y-6"
+      >
         <TabsList>
           <TabsTrigger value="members">Members</TabsTrigger>
           <TabsTrigger value="public">Public website</TabsTrigger>
